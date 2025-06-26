@@ -24,14 +24,6 @@ The following attributes are available for this model:
 |---------------|--------|-----------|----------------------------|
 | `serial_number` | string | **Required** | The serial number of the specific Orbbec camera to use. The serial number of each plugged-in and available orbbec camera will be logged on module startup.  |
 
-#### Example Configuration
-
-```json
-{
-  "serial_number": "XXXXXXXXXXX"
-}
-```
-
 ## Troubleshooting
 
 **Unable to connect to camera**
