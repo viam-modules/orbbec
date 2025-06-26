@@ -1,0 +1,8 @@
+build/
+packaging/appimages/deploy
+packaging/appimages/appimage-build
+packaging/appimages/AppDir
+venv
+packaging/appimages/*.AppImage*
+module.tar.gz
+OrbbecSDK_*
