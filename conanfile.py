@@ -12,8 +12,7 @@ class orbbec(ConanFile):
     name = "viam-orbbec"
 
     license = "Apache-2.0"
-    url = "https://github.com/nicksanford/viam-orbbec"
-
+    url = "https://github.com/viam-modules/orbbec-camera" 
     package_type = "application"
     settings = "os", "compiler", "build_type", "arch"
 

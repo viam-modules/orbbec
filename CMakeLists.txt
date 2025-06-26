@@ -6,7 +6,7 @@ set(CMAKE_PROJECT_VERSION 0.0.1)
 set(CMAKE_CXX_STANDARD 17)
 project(viam-orbbec
     DESCRIPTION "Viam module for orbbec cameras"
-    HOMEPAGE_URL https://github.com/viam-modules/orbbec
+    HOMEPAGE_URL https://github.com/viam-modules/orbbec-camera
     LANGUAGES CXX
 )
 
