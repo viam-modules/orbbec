@@ -7,7 +7,15 @@
 set -euxo pipefail
 
 # NOTE: this is written under the assumption that it will be built in canon
-sudo apt -y update && sudo apt -y upgrade && sudo apt install -y cmake python3.11 python3.11-venv
+sudo apt -y update && sudo apt -y upgrade && sudo apt install -y cmake python3.11 python3.11-venv wget
+
+echo 
+
+rm -rf ${ORBBEC_SDK_DIR}.zip
+rm -rf ${ORBBEC_SDK_DIR}
+wget https://github.com/orbbec/OrbbecSDK_v2/releases/download/${ORBBEC_SDK_VERSION}/${ORBBEC_SDK_DIR}.zip
+unzip ${ORBBEC_SDK_DIR}.zip
+
 
 if [ ! -f "./venv/bin/activate" ]; then
   echo 'creating and sourceing virtual env'

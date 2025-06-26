@@ -4,6 +4,10 @@ OUTPUT_NAME = orbbec-module
 BIN := build-conan/build/RelWithDebInfo/orbbec-module
 TAG_VERSION?=latest
 APPIMAGE := packaging/appimages/deploy/$(OUTPUT_NAME)-$(TAG_VERSION)-$(ARCH).AppImage
+ORBBEC_SDK_VERSION=v2.4.3
+ORBBEC_SDK_TIMESTAMP=202505191331
+ORBBEC_SDK_COMMIT=045a0e76
+ORBBEC_SDK_DIR=OrbbecSDK_$(ORBBEC_SDK_VERSION)_$(ORBBEC_SDK_TIMESTAMP)_$(ORBBEC_SDK_COMMIT)_$(OS)_$(ARCH)
 
 .PHONY: build lint setup appimage
 
@@ -21,6 +25,8 @@ clean:
 	rm -rf packaging/appimages/deploy
 
 setup:
+	export ORBBEC_SDK_VERSION=$(ORBBEC_SDK_VERSION); \
+	export ORBBEC_SDK_DIR=$(ORBBEC_SDK_DIR); \
 	bin/setup.sh
 
 lint:
