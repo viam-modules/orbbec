@@ -41,14 +41,40 @@ namespace {
 
 namespace vsdk = ::viam::sdk;
 
+// CONSTANTS BEGIN
 constexpr char service_name[] = "viam_orbbec";
+const float mmToMeterMultiple = 0.001;
+// CONSTANTS END
+
+// STRUCTS BEGIN
 struct PointXYZRGB {
     float x, y, z;
     unsigned int rgb;
 };
 
-const float mmToMeterMultiple = 0.001;
+struct ViamOBDevice {
+    ~ViamOBDevice() {
+        VIAM_SDK_LOG(info) << "deleting ViamOBDevice " << serial_number << "\n";
+    }
+    std::string serial_number;
+    std::shared_ptr<ob::Device> device;
+    bool started;
+    std::shared_ptr<ob::Pipeline> pipe;
+    std::shared_ptr<ob::PointCloudFilter> pointCloudFilter;
+    std::shared_ptr<ob::Align> align;
+    std::shared_ptr<ob::Config> config;
+};
+// STRUCTS END
 
+// GLOBALS BEGIN
+std::mutex devices_by_serial_mu;
+std::unordered_map<std::string, std::unique_ptr<ViamOBDevice>> devices_by_serial;
+
+std::mutex frame_set_by_serial_mu;
+std::unordered_map<std::string, std::shared_ptr<ob::FrameSet>> frame_set_by_serial;
+// GLOBALS END
+
+// HELPERS BEGIN
 std::vector<unsigned char> RGBPointsToPCD(std::shared_ptr<ob::Frame> frame, float scale) {
     int numPoints = frame->dataSize() / sizeof(OBColorPoint);
 
@@ -110,56 +136,33 @@ std::vector<unsigned char> RGBPointsToPCD(std::shared_ptr<ob::Frame> frame, floa
         pcdBytes.push_back(rgb[3]);
     }
 
-    std::cout << "pointcloud size: " << pcdPoints.size() << "\n";
     return pcdBytes;
 }
-
-struct my_device {
-    ~my_device() {
-        std::cout << "deleting my_device " << serial_number << "\n";
-    }
-    std::string serial_number;
-    std::shared_ptr<ob::Device> device;
-    bool started;
-    std::shared_ptr<ob::Pipeline> pipe;
-    std::shared_ptr<ob::PointCloudFilter> pointCloudFilter;
-    std::shared_ptr<ob::Align> align;
-    std::shared_ptr<ob::Config> config;
-};
-
-std::mutex devices_by_serial_mu;
-std::unordered_map<std::string, std::unique_ptr<my_device>> devices_by_serial;
-
-std::mutex frame_set_by_serial_mu;
-std::unordered_map<std::string, std::shared_ptr<ob::FrameSet>> frame_set_by_serial;
 
 void printDeviceList(const std::shared_ptr<ob::DeviceList> devList) {
     int devCount = devList->getCount();
     for (size_t i = 0; i < devCount; i++) {
-        std::cout << "DeviceListElement:" << i << std::endl;
-        std::cout << "  Name:              " << devList->name(i) << std::endl;
-        std::cout << "  Serial Number:     " << devList->serialNumber(i) << std::endl;
-        std::cout << "  UID:               " << devList->uid(i) << std::endl;
-
-        std::cout << "  VID:               " << devList->vid(i) << std::endl;
-
-        std::cout << "  PID:               " << devList->pid(i) << std::endl;
-
-        std::cout << "  Connection Type:   " << devList->connectionType(i) << std::endl;
+        VIAM_SDK_LOG(info) << "DeviceListElement:" << i;
+        VIAM_SDK_LOG(info) << "  Name:              " << devList->name(i);
+        VIAM_SDK_LOG(info) << "  Serial Number:     " << devList->serialNumber(i);
+        VIAM_SDK_LOG(info) << "  UID:               " << devList->uid(i);
+        VIAM_SDK_LOG(info) << "  VID:               " << devList->vid(i);
+        VIAM_SDK_LOG(info) << "  PID:               " << devList->pid(i);
+        VIAM_SDK_LOG(info) << "  Connection Type:   " << devList->connectionType(i);
     }
 }
 void printDeviceInfo(const std::shared_ptr<ob::DeviceInfo> info) {
-    std::cout << "DeviceInfo:\n"
-              << "  Name:              " << info->name() << "\n"
-              << "  Serial Number:     " << info->serialNumber() << "\n"
-              << "  UID:               " << info->uid() << "\n"
-              << "  VID:               " << info->vid() << "\n"
-              << "  PID:               " << info->pid() << "\n"
-              << "  Connection Type:   " << info->connectionType() << "\n"
-              << "  Firmware Version:  " << info->firmwareVersion() << "\n"
-              << "  Hardware Version:  " << info->hardwareVersion() << "\n"
-              << "  Min SDK Version:   " << info->supportedMinSdkVersion() << "\n"
-              << "  ASIC::             " << info->asicName() << "\n";
+    VIAM_SDK_LOG(info) << "DeviceInfo:\n"
+                       << "  Name:              " << info->name() << "\n"
+                       << "  Serial Number:     " << info->serialNumber() << "\n"
+                       << "  UID:               " << info->uid() << "\n"
+                       << "  VID:               " << info->vid() << "\n"
+                       << "  PID:               " << info->pid() << "\n"
+                       << "  Connection Type:   " << info->connectionType() << "\n"
+                       << "  Firmware Version:  " << info->firmwareVersion() << "\n"
+                       << "  Hardware Version:  " << info->hardwareVersion() << "\n"
+                       << "  Min SDK Version:   " << info->supportedMinSdkVersion() << "\n"
+                       << "  ASIC::             " << info->asicName() << "\n";
 }
 
 // check if the given stream profiles support hardware depth-to-color
@@ -181,8 +184,8 @@ bool checkIfSupportHWD2CAlign(std::shared_ptr<ob::Pipeline> pipe,
         auto vsp = sp->as<ob::VideoStreamProfile>();
         if (vsp->getWidth() == depthVsp->getWidth() && vsp->getHeight() == depthVsp->getHeight() &&
             vsp->getFormat() == depthVsp->getFormat() && vsp->getFps() == depthVsp->getFps()) {
-            std::cout << "using width: " << vsp->getWidth() << " height: " << vsp->getHeight() << " format: " << vsp->getFormat()
-                      << " fps: " << vsp->getFps() << "\n";
+            VIAM_SDK_LOG(info) << "using width: " << vsp->getWidth() << " height: " << vsp->getHeight() << " format: " << vsp->getFormat()
+                               << " fps: " << vsp->getFps() << "\n";
             // Found a matching depth stream profile, it is means the given stream
             // profiles support hardware depth-to-color alignment
             return true;
@@ -243,7 +246,7 @@ void startDevice(std::string serialNumber) {
         throw std::invalid_argument(buffer.str());
     }
 
-    std::unique_ptr<my_device>& my_dev = devices_by_serial[serialNumber];
+    std::unique_ptr<ViamOBDevice>& my_dev = devices_by_serial[serialNumber];
     if (my_dev->started) {
         std::ostringstream buffer;
         buffer << service_name << ": unable to start already started device" << serialNumber;
@@ -284,7 +287,7 @@ void stopDevice(std::string serialNumber) {
         return;
     }
 
-    std::unique_ptr<my_device>& my_dev = devices_by_serial[serialNumber];
+    std::unique_ptr<ViamOBDevice>& my_dev = devices_by_serial[serialNumber];
     if (!my_dev->started) {
         VIAM_SDK_LOG(error) << service_name << ": unable to stop device that is not currently running " << serialNumber;
         return;
@@ -294,45 +297,12 @@ void stopDevice(std::string serialNumber) {
     my_dev->started = false;
 }
 
-void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
-    std::cout << "starting " << serialNumber << std::endl;
-    std::shared_ptr<ob::Pipeline> pipe = std::make_shared<ob::Pipeline>(dev);
-    pipe->enableFrameSync();
-    std::shared_ptr<ob::Config> config = createHwD2CAlignConfig(pipe);
-    if (config == nullptr) {
-        std::cerr << "Current device does not support hardware depth-to-color "
-                     "alignment."
-                  << std::endl;
-        return;
-    }
-
-    std::shared_ptr<ob::PointCloudFilter> pointCloudFilter = std::make_shared<ob::PointCloudFilter>();
-    // NOTE: Swap this to depth if you want to align to depth
-    std::shared_ptr<ob::Align> align = std::make_shared<ob::Align>(OB_STREAM_COLOR);
-
-    pointCloudFilter->setCreatePointFormat(OB_FORMAT_RGB_POINT);
-
-    {
-        std::lock_guard<std::mutex> lock(devices_by_serial_mu);
-        std::unique_ptr<my_device> my_dev = std::make_unique<my_device>();
-
-        my_dev->pipe = pipe;
-        my_dev->device = dev;
-        my_dev->serial_number = serialNumber;
-        my_dev->pointCloudFilter = pointCloudFilter;
-        my_dev->align = align;
-        my_dev->config = config;
-
-        devices_by_serial[serialNumber] = std::move(my_dev);
-    }
-}
-
 void stopStreams() {
     std::vector<std::shared_ptr<ob::Pipeline>> pipes;
     std::lock_guard<std::mutex> lock(devices_by_serial_mu);
-    for (auto& [key, my_device] : devices_by_serial) {
-        std::cout << "stop stream " << key << "\n";
-        my_device->pipe->stop();
+    for (auto& [key, ViamOBDevice] : devices_by_serial) {
+        VIAM_SDK_LOG(info) << "stop stream " << key << "\n";
+        ViamOBDevice->pipe->stop();
     }
     devices_by_serial.clear();
 }
@@ -341,7 +311,7 @@ void listDevices(const ob::Context& ctx) {
     try {
         auto devList = ctx.queryDeviceList();
         int devCount = devList->getCount();
-        std::cout << "devCount: " << devCount << "\n";
+        VIAM_SDK_LOG(info) << "devCount: " << devCount << "\n";
 
         std::shared_ptr<ob::Device> dev = nullptr;
         std::shared_ptr<ob::DeviceInfo> info = nullptr;
@@ -357,6 +327,19 @@ void listDevices(const ob::Context& ctx) {
                   << "\ntype:" << e.getExceptionType() << std::endl;
         throw e;
     }
+}
+// HELPERS END
+
+// RESOURCE BEGIN
+std::vector<std::string> validate(vsdk::ResourceConfig cfg) {
+    auto attrs = cfg.attributes();
+
+    if (attrs.count("serial_number")) {
+        if (!attrs["serial_number"].get<std::string>()) {
+            throw std::invalid_argument("serial_number must be a string");
+        }
+    }
+    return {};
 }
 
 class Orbbec : public vsdk::Camera, public vsdk::Reconfigurable {
@@ -454,7 +437,7 @@ class Orbbec : public vsdk::Camera, public vsdk::Reconfigurable {
                 throw std::invalid_argument(buffer.str());
             }
 
-            std::unique_ptr<my_device>& my_dev = devices_by_serial[serial_number];
+            std::unique_ptr<ViamOBDevice>& my_dev = devices_by_serial[serial_number];
             if (!my_dev->started) {
                 std::ostringstream buffer;
                 buffer << service_name << ": device with serial number " << serial_number << " is not longer started";
@@ -613,7 +596,7 @@ class Orbbec : public vsdk::Camera, public vsdk::Reconfigurable {
             throw std::invalid_argument("device is not connected");
         }
 
-        std::unique_ptr<my_device>& my_dev = devices_by_serial[serial_number];
+        std::unique_ptr<ViamOBDevice>& my_dev = devices_by_serial[serial_number];
         if (!my_dev->started) {
             throw std::invalid_argument("device is not started");
         }
@@ -659,6 +642,40 @@ class Orbbec : public vsdk::Camera, public vsdk::Reconfigurable {
         return state;
     }
 };
+// RESOURCE END
+
+// ORBBEC SDK DEVICE REGISTRY START
+void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
+    VIAM_SDK_LOG(info) << "starting " << serialNumber;
+    std::shared_ptr<ob::Pipeline> pipe = std::make_shared<ob::Pipeline>(dev);
+    pipe->enableFrameSync();
+    std::shared_ptr<ob::Config> config = createHwD2CAlignConfig(pipe);
+    if (config == nullptr) {
+        VIAM_SDK_LOG(error) << "Current device does not support hardware depth-to-color "
+                               "alignment.";
+        return;
+    }
+
+    std::shared_ptr<ob::PointCloudFilter> pointCloudFilter = std::make_shared<ob::PointCloudFilter>();
+    // NOTE: Swap this to depth if you want to align to depth
+    std::shared_ptr<ob::Align> align = std::make_shared<ob::Align>(OB_STREAM_COLOR);
+
+    pointCloudFilter->setCreatePointFormat(OB_FORMAT_RGB_POINT);
+
+    {
+        std::lock_guard<std::mutex> lock(devices_by_serial_mu);
+        std::unique_ptr<ViamOBDevice> my_dev = std::make_unique<ViamOBDevice>();
+
+        my_dev->pipe = pipe;
+        my_dev->device = dev;
+        my_dev->serial_number = serialNumber;
+        my_dev->pointCloudFilter = pointCloudFilter;
+        my_dev->align = align;
+        my_dev->config = config;
+
+        devices_by_serial[serialNumber] = std::move(my_dev);
+    }
+}
 
 void deviceChangedCallback(const std::shared_ptr<ob::DeviceList> removedList, const std::shared_ptr<ob::DeviceList> deviceList) {
     try {
@@ -666,7 +683,7 @@ void deviceChangedCallback(const std::shared_ptr<ob::DeviceList> removedList, co
         printDeviceList(removedList);
         for (size_t i = 0; i < devCount; i++) {
             if (i == 0) {
-                std::cout << " Devices Removed:\n";
+                VIAM_SDK_LOG(info) << " Devices Removed:\n";
             }
             std::lock_guard<std::mutex> lock(devices_by_serial_mu);
             std::string serial_number = removedList->serialNumber(i);
@@ -682,7 +699,7 @@ void deviceChangedCallback(const std::shared_ptr<ob::DeviceList> removedList, co
         devCount = deviceList->getCount();
         for (size_t i = 0; i < devCount; i++) {
             if (i == 0) {
-                std::cout << " Devices added:\n";
+                VIAM_SDK_LOG(info) << " Devices added:\n";
             }
             std::shared_ptr<ob::Device> dev = deviceList->getDevice(i);
             std::shared_ptr<ob::DeviceInfo> info = dev->getDeviceInfo();
@@ -703,7 +720,7 @@ void startOrbbecSDK(ob::Context& ctx) {
     int devCount = devList->getCount();
     for (size_t i = 0; i < devCount; i++) {
         if (i == 0) {
-            std::cout << "devCount: " << devCount << "\n";
+            VIAM_SDK_LOG(info) << "devCount: " << devCount << "\n";
         }
         std::shared_ptr<ob::Device> dev = devList->getDevice(i);
         std::shared_ptr<ob::DeviceInfo> info = dev->getDeviceInfo();
@@ -711,17 +728,7 @@ void startOrbbecSDK(ob::Context& ctx) {
         registerDevice(info->getSerialNumber(), dev);
     }
 }
-
-std::vector<std::string> validate(vsdk::ResourceConfig cfg) {
-    auto attrs = cfg.attributes();
-
-    if (attrs.count("serial_number")) {
-        if (!attrs["serial_number"].get<std::string>()) {
-            throw std::invalid_argument("serial_number must be a string");
-        }
-    }
-    return {};
-}
+// ORBBEC SDK DEVICE REGISTRY END
 
 int serve(int argc, char** argv) try {
     // Every Viam C++ SDK program must have one and only one Instance object
@@ -754,10 +761,10 @@ int serve(int argc, char** argv) try {
 
     return EXIT_SUCCESS;
 } catch (const std::exception& ex) {
-    std::cout << "ERROR: A std::exception was thrown from `serve`: " << ex.what() << std::endl;
+    std::cerr << "ERROR: A std::exception was thrown from `serve`: " << ex.what() << std::endl;
     return EXIT_FAILURE;
 } catch (...) {
-    std::cout << "ERROR: An unknown exception was thrown from `serve`" << std::endl;
+    std::cerr << "ERROR: An unknown exception was thrown from `serve`" << std::endl;
     return EXIT_FAILURE;
 }
 
