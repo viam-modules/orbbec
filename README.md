@@ -22,7 +22,7 @@ The following attributes are available for this model:
 
 | Name          | Type   | Inclusion | Description                |
 |---------------|--------|-----------|----------------------------|
-| `serial_number` | string | **Required** | The serial number of the specific Orbbec camera to use. To find your camera's serial number, the serial number of each plugged-in and available RealSense camera will be logged on module startup.  |
+| `serial_number` | string | **Required** | The serial number of the specific Orbbec camera to use. The serial number of each plugged-in and available orbbec camera will be logged on module startup.  |
 
 #### Example Configuration
 
