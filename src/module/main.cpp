@@ -64,6 +64,18 @@ struct ViamOBDevice {
     std::shared_ptr<ob::Align> align;
     std::shared_ptr<ob::Config> config;
 };
+
+struct raw_camera_image {
+    using deleter_type = void (*)(unsigned char*);
+    using uniq = std::unique_ptr<unsigned char[], deleter_type>;
+
+    static constexpr deleter_type free_deleter = [](unsigned char* ptr) { free(ptr); };
+
+    static constexpr deleter_type array_delete_deleter = [](unsigned char* ptr) { delete[] ptr; };
+
+    uniq bytes;
+    size_t size;
+};
 // STRUCTS END
 
 // GLOBALS BEGIN
@@ -328,6 +340,22 @@ void listDevices(const ob::Context& ctx) {
         throw e;
     }
 }
+
+raw_camera_image encodeDepthRAW(const unsigned char* data, const uint64_t width, const uint64_t height, const bool littleEndian) {
+    viam::sdk::Camera::depth_map m = xt::xarray<uint16_t>::from_shape({height, width});
+    std::copy(reinterpret_cast<const uint16_t*>(data), reinterpret_cast<const uint16_t*>(data) + height * width, m.begin());
+
+    for (size_t i = 0; i < m.size(); i++) {
+        m[i] = m[i] * mmToMeterMultiple;
+    }
+
+    std::vector<unsigned char> encodedData = viam::sdk::Camera::encode_depth_map(m);
+
+    unsigned char* rawBuf = new unsigned char[encodedData.size()];
+    std::memcpy(rawBuf, encodedData.data(), encodedData.size());
+
+    return raw_camera_image{raw_camera_image::uniq(rawBuf, raw_camera_image::array_delete_deleter), encodedData.size()};
+}
 // HELPERS END
 
 // RESOURCE BEGIN
@@ -381,174 +409,164 @@ class Orbbec : public vsdk::Camera, public vsdk::Reconfigurable {
     }
 
     vsdk::Camera::raw_image get_image(std::string mime_type, const vsdk::ProtoStruct& extra) {
-        VIAM_SDK_LOG(info) << "[get_image] start";
-        std::string serial_number;
-        {
-            const std::lock_guard<std::mutex> lock(state_mu_);
-            serial_number = state_->serial_number;
-        }
-        std::shared_ptr<ob::FrameSet> fs = nullptr;
-        {
-            std::lock_guard<std::mutex> lock(frame_set_by_serial_mu);
-            if (auto search = frame_set_by_serial.find(serial_number); search == frame_set_by_serial.end()) {
-                throw std::invalid_argument("no frame yet");
+        try {
+            VIAM_SDK_LOG(info) << "[get_image] start";
+            std::string serial_number;
+            {
+                const std::lock_guard<std::mutex> lock(state_mu_);
+                serial_number = state_->serial_number;
             }
-            fs = frame_set_by_serial[serial_number];
+            std::shared_ptr<ob::FrameSet> fs = nullptr;
+            {
+                std::lock_guard<std::mutex> lock(frame_set_by_serial_mu);
+                if (auto search = frame_set_by_serial.find(serial_number); search == frame_set_by_serial.end()) {
+                    throw std::invalid_argument("no frame yet");
+                }
+                fs = frame_set_by_serial[serial_number];
+            }
+            std::shared_ptr<ob::Frame> color = fs->getFrame(OB_FRAME_COLOR);
+            if (color == nullptr) {
+                throw std::invalid_argument("no color frame");
+            }
+
+            if (color->getFormat() != OB_FORMAT_MJPG) {
+                throw std::invalid_argument("color frame was not in jpeg format");
+            }
+
+            // VIAM_SDK_LOG(info) << "[get_image] color frame system timestamp: "
+            //                    << color->getSystemTimeStampUs();
+            // TODO: Returen error if frame timestamp is older than 5 seconds as that
+            // indicates we no longer have a working camera
+
+            unsigned char* colorData = (unsigned char*)color->getData();
+            uint32_t colorDataSize = color->dataSize();
+
+            vsdk::Camera::raw_image response;
+            response.source_name = "color";
+            response.mime_type = "image/jpeg";
+            response.bytes.assign(colorData, colorData + colorDataSize);
+            VIAM_SDK_LOG(info) << "[get_image] end";
+            return response;
+        } catch (const std::exception& e) {
+            VIAM_SDK_LOG(error) << "[get_image] error: " << e.what();
+            throw std::runtime_error("failed to create image: " + std::string(e.what()));
         }
-        std::shared_ptr<ob::Frame> color = fs->getFrame(OB_FRAME_COLOR);
-        if (color == nullptr) {
-            throw std::invalid_argument("no color frame");
-        }
-
-        if (color->getFormat() != OB_FORMAT_MJPG) {
-            throw std::invalid_argument("color frame was not in jpeg format");
-        }
-
-        // VIAM_SDK_LOG(info) << "[get_image] color frame system timestamp: "
-        //                    << color->getSystemTimeStampUs();
-        // TODO: Returen error if frame timestamp is older than 5 seconds as that
-        // indicates we no longer have a working camera
-
-        unsigned char* colorData = (unsigned char*)color->getData();
-        uint32_t colorDataSize = color->dataSize();
-
-        vsdk::Camera::raw_image response;
-        response.source_name = "color";
-        response.mime_type = "image/jpeg";
-        response.bytes.assign(colorData, colorData + colorDataSize);
-        return response;
     }
 
     vsdk::Camera::properties get_properties() {
-        VIAM_SDK_LOG(info) << "[get_properties] start";
+        try {
+            VIAM_SDK_LOG(info) << "[get_properties] start";
 
-        std::string serial_number;
-        {
-            const std::lock_guard<std::mutex> lock(state_mu_);
-            serial_number = state_->serial_number;
-        }
-
-        OBCameraIntrinsic props;
-        {
-            const std::lock_guard<std::mutex> lock(devices_by_serial_mu);
-            if (auto search = devices_by_serial.find(serial_number); search == devices_by_serial.end()) {
-                std::ostringstream buffer;
-                buffer << service_name << ": device with serial number " << serial_number << " is no longer connected";
-                throw std::invalid_argument(buffer.str());
+            std::string serial_number;
+            {
+                const std::lock_guard<std::mutex> lock(state_mu_);
+                serial_number = state_->serial_number;
             }
 
-            std::unique_ptr<ViamOBDevice>& my_dev = devices_by_serial[serial_number];
-            if (!my_dev->started) {
-                std::ostringstream buffer;
-                buffer << service_name << ": device with serial number " << serial_number << " is not longer started";
-                throw std::invalid_argument(buffer.str());
+            OBCameraIntrinsic props;
+            {
+                const std::lock_guard<std::mutex> lock(devices_by_serial_mu);
+                if (auto search = devices_by_serial.find(serial_number); search == devices_by_serial.end()) {
+                    std::ostringstream buffer;
+                    buffer << service_name << ": device with serial number " << serial_number << " is no longer connected";
+                    throw std::invalid_argument(buffer.str());
+                }
+
+                std::unique_ptr<ViamOBDevice>& my_dev = devices_by_serial[serial_number];
+                if (!my_dev->started) {
+                    std::ostringstream buffer;
+                    buffer << service_name << ": device with serial number " << serial_number << " is not longer started";
+                    throw std::invalid_argument(buffer.str());
+                }
+                props = my_dev->pipe->getCameraParam().rgbIntrinsic;
             }
-            props = my_dev->pipe->getCameraParam().rgbIntrinsic;
+
+            vsdk::Camera::properties p{};
+            p.supports_pcd = true;
+            p.intrinsic_parameters.width_px = props.width;
+            p.intrinsic_parameters.height_px = props.height;
+            p.intrinsic_parameters.focal_x_px = props.fx;
+            p.intrinsic_parameters.focal_y_px = props.fy;
+            p.intrinsic_parameters.center_x_px = props.cx;
+            p.intrinsic_parameters.center_y_px = props.cy;
+            // TODO: Set distortion parameters
+
+            VIAM_SDK_LOG(info) << "[get_properties] end";
+            return p;
+        } catch (const std::exception& e) {
+            VIAM_SDK_LOG(error) << "[get_properties] error: " << e.what();
+            throw std::runtime_error("failed to create properties: " + std::string(e.what()));
         }
-
-        vsdk::Camera::properties p{};
-        p.supports_pcd = true;
-        p.intrinsic_parameters.width_px = props.width;
-        p.intrinsic_parameters.height_px = props.height;
-        p.intrinsic_parameters.focal_x_px = props.fx;
-        p.intrinsic_parameters.focal_y_px = props.fy;
-        p.intrinsic_parameters.center_x_px = props.cx;
-        p.intrinsic_parameters.center_y_px = props.cy;
-        // TODO: Set distortion parameters
-
-        return p;
-    }
-    struct raw_camera_image {
-        using deleter_type = void (*)(unsigned char*);
-        using uniq = std::unique_ptr<unsigned char[], deleter_type>;
-
-        static constexpr deleter_type free_deleter = [](unsigned char* ptr) { free(ptr); };
-
-        static constexpr deleter_type array_delete_deleter = [](unsigned char* ptr) { delete[] ptr; };
-
-        uniq bytes;
-        size_t size;
-    };
-
-    raw_camera_image encodeDepthRAW(const unsigned char* data, const uint64_t width, const uint64_t height, const bool littleEndian) {
-        viam::sdk::Camera::depth_map m = xt::xarray<uint16_t>::from_shape({height, width});
-        std::copy(reinterpret_cast<const uint16_t*>(data), reinterpret_cast<const uint16_t*>(data) + height * width, m.begin());
-
-        for (size_t i = 0; i < m.size(); i++) {
-            m[i] = m[i] * mmToMeterMultiple;
-        }
-
-        std::vector<unsigned char> encodedData = viam::sdk::Camera::encode_depth_map(m);
-
-        unsigned char* rawBuf = new unsigned char[encodedData.size()];
-        std::memcpy(rawBuf, encodedData.data(), encodedData.size());
-
-        return raw_camera_image{raw_camera_image::uniq(rawBuf, raw_camera_image::array_delete_deleter), encodedData.size()};
     }
 
     vsdk::Camera::image_collection get_images() {
-        VIAM_SDK_LOG(info) << "[get_images] start";
-        std::string serial_number;
-        {
-            const std::lock_guard<std::mutex> lock(state_mu_);
-            serial_number = state_->serial_number;
-        }
-        std::shared_ptr<ob::FrameSet> fs = nullptr;
-        {
-            std::lock_guard<std::mutex> lock(frame_set_by_serial_mu);
-            if (auto search = frame_set_by_serial.find(serial_number); search == frame_set_by_serial.end()) {
-                throw std::invalid_argument("no frame yet");
+        try {
+            VIAM_SDK_LOG(info) << "[get_images] start";
+            std::string serial_number;
+            {
+                const std::lock_guard<std::mutex> lock(state_mu_);
+                serial_number = state_->serial_number;
             }
-            fs = frame_set_by_serial[serial_number];
+            std::shared_ptr<ob::FrameSet> fs = nullptr;
+            {
+                std::lock_guard<std::mutex> lock(frame_set_by_serial_mu);
+                if (auto search = frame_set_by_serial.find(serial_number); search == frame_set_by_serial.end()) {
+                    throw std::invalid_argument("no frame yet");
+                }
+                fs = frame_set_by_serial[serial_number];
+            }
+
+            std::shared_ptr<ob::Frame> color = fs->getFrame(OB_FRAME_COLOR);
+            if (color == nullptr) {
+                throw std::invalid_argument("no color frame");
+            }
+
+            if (color->getFormat() != OB_FORMAT_MJPG) {
+                throw std::invalid_argument("color frame was not in jpeg format");
+            }
+
+            unsigned char* colorData = (unsigned char*)color->getData();
+            uint32_t colorDataSize = color->dataSize();
+
+            vsdk::Camera::raw_image color_image;
+            color_image.source_name = "color";
+            color_image.mime_type = "image/jpeg";
+            color_image.bytes.assign(colorData, colorData + colorDataSize);
+
+            std::shared_ptr<ob::Frame> depth = fs->getFrame(OB_FRAME_DEPTH);
+            if (depth == nullptr) {
+                throw std::invalid_argument("no depth frame");
+            }
+
+            unsigned char* depthData = (unsigned char*)depth->getData();
+            auto depthVid = depth->as<ob::VideoFrame>();
+            raw_camera_image rci = encodeDepthRAW(depthData, depthVid->getWidth(), depthVid->getHeight(), false);
+
+            vsdk::Camera::raw_image depth_image;
+            depth_image.source_name = "depth";
+            depth_image.mime_type = "image/vnd.viam.dep";
+            depth_image.bytes.assign(rci.bytes.get(), rci.bytes.get() + rci.size);
+
+            vsdk::Camera::image_collection response;
+            response.images.emplace_back(std::move(color_image));
+            response.images.emplace_back(std::move(depth_image));
+
+            uint64_t colorTS = color->getSystemTimeStampUs();
+            uint64_t depthTS = depth->getSystemTimeStampUs();
+            if (colorTS != depthTS) {
+                VIAM_SDK_LOG(info) << "color and depth timestamps differ, defaulting to "
+                                      "color";
+                VIAM_SDK_LOG(info) << "color timestamp was " << colorTS << "depth timestamp was " << depthTS;
+            }
+            uint64_t timestamp = colorTS == 0 ? depthTS : colorTS;
+            std::chrono::microseconds latestTimestamp(timestamp);
+            response.metadata.captured_at = vsdk::time_pt{std::chrono::duration_cast<std::chrono::nanoseconds>(latestTimestamp)};
+            VIAM_SDK_LOG(info) << "[get_images] end";
+            return response;
+        } catch (const std::exception& e) {
+            VIAM_SDK_LOG(error) << "[get_images] error: " << e.what();
+            throw std::runtime_error("failed to create images: " + std::string(e.what()));
         }
-
-        std::shared_ptr<ob::Frame> color = fs->getFrame(OB_FRAME_COLOR);
-        if (color == nullptr) {
-            throw std::invalid_argument("no color frame");
-        }
-
-        if (color->getFormat() != OB_FORMAT_MJPG) {
-            throw std::invalid_argument("color frame was not in jpeg format");
-        }
-
-        unsigned char* colorData = (unsigned char*)color->getData();
-        uint32_t colorDataSize = color->dataSize();
-
-        vsdk::Camera::raw_image color_image;
-        color_image.source_name = "color";
-        color_image.mime_type = "image/jpeg";
-        color_image.bytes.assign(colorData, colorData + colorDataSize);
-
-        std::shared_ptr<ob::Frame> depth = fs->getFrame(OB_FRAME_DEPTH);
-        if (depth == nullptr) {
-            throw std::invalid_argument("no depth frame");
-        }
-
-        unsigned char* depthData = (unsigned char*)depth->getData();
-        auto depthVid = depth->as<ob::VideoFrame>();
-        raw_camera_image rci = encodeDepthRAW(depthData, depthVid->getWidth(), depthVid->getHeight(), false);
-
-        vsdk::Camera::raw_image depth_image;
-        depth_image.source_name = "depth";
-        depth_image.mime_type = "image/vnd.viam.dep";
-        depth_image.bytes.assign(rci.bytes.get(), rci.bytes.get() + rci.size);
-
-        vsdk::Camera::image_collection response;
-        response.images.emplace_back(std::move(color_image));
-        response.images.emplace_back(std::move(depth_image));
-
-        uint64_t colorTS = color->getSystemTimeStampUs();
-        uint64_t depthTS = depth->getSystemTimeStampUs();
-        if (colorTS != depthTS) {
-            VIAM_SDK_LOG(info) << "color and depth timestamps differ, defaulting to "
-                                  "color";
-            VIAM_SDK_LOG(info) << "color timestamp was " << colorTS << "depth timestamp was " << depthTS;
-        }
-        uint64_t timestamp = colorTS == 0 ? depthTS : colorTS;
-        std::chrono::microseconds latestTimestamp(timestamp);
-        response.metadata.captured_at = vsdk::time_pt{std::chrono::duration_cast<std::chrono::nanoseconds>(latestTimestamp)};
-        VIAM_SDK_LOG(info) << "[get_images] stop";
-        return response;
     }
 
     vsdk::ProtoStruct do_command(const vsdk::ProtoStruct& command) {
@@ -558,54 +576,59 @@ class Orbbec : public vsdk::Camera, public vsdk::Reconfigurable {
 
     std::string pointcloudMime = "pointcloud/pcd";
     vsdk::Camera::point_cloud get_point_cloud(std::string mime_type, const vsdk::ProtoStruct& extra) {
-        VIAM_SDK_LOG(info) << "[get_point_cloud] start";
-        std::string serial_number;
-        {
-            const std::lock_guard<std::mutex> lock(state_mu_);
-            serial_number = state_->serial_number;
-        }
-        std::shared_ptr<ob::FrameSet> fs = nullptr;
-        {
-            std::lock_guard<std::mutex> lock(frame_set_by_serial_mu);
-            if (auto search = frame_set_by_serial.find(serial_number); search == frame_set_by_serial.end()) {
-                throw std::invalid_argument("no frame yet");
+        try {
+            VIAM_SDK_LOG(info) << "[get_point_cloud] start";
+            std::string serial_number;
+            {
+                const std::lock_guard<std::mutex> lock(state_mu_);
+                serial_number = state_->serial_number;
             }
-            fs = frame_set_by_serial[serial_number];
+            std::shared_ptr<ob::FrameSet> fs = nullptr;
+            {
+                std::lock_guard<std::mutex> lock(frame_set_by_serial_mu);
+                if (auto search = frame_set_by_serial.find(serial_number); search == frame_set_by_serial.end()) {
+                    throw std::invalid_argument("no frame yet");
+                }
+                fs = frame_set_by_serial[serial_number];
+            }
+
+            std::shared_ptr<ob::Frame> color = fs->getFrame(OB_FRAME_COLOR);
+            if (color == nullptr) {
+                throw std::invalid_argument("no color frame");
+            }
+
+            unsigned char* colorData = (unsigned char*)color->getData();
+            uint32_t colorDataSize = color->dataSize();
+
+            std::shared_ptr<ob::Frame> depth = fs->getFrame(OB_FRAME_DEPTH);
+            if (depth == nullptr) {
+                throw std::invalid_argument("no depth frame");
+            }
+            std::shared_ptr<ob::DepthFrame> depthFrame = depth->as<ob::DepthFrame>();
+            float scale = depthFrame->getValueScale();
+
+            unsigned char* depthData = (unsigned char*)depth->getData();
+
+            // NOTE: UNDER LOCK
+            std::lock_guard<std::mutex> lock(devices_by_serial_mu);
+            if (auto search = devices_by_serial.find(serial_number); search == devices_by_serial.end()) {
+                throw std::invalid_argument("device is not connected");
+            }
+
+            std::unique_ptr<ViamOBDevice>& my_dev = devices_by_serial[serial_number];
+            if (!my_dev->started) {
+                throw std::invalid_argument("device is not started");
+            }
+
+            std::vector<unsigned char> data =
+                RGBPointsToPCD(my_dev->pointCloudFilter->process(my_dev->align->process(fs)), scale * mmToMeterMultiple);
+
+            VIAM_SDK_LOG(info) << "[get_point_cloud] end";
+            return vsdk::Camera::point_cloud{pointcloudMime, data};
+        } catch (const std::exception& e) {
+            VIAM_SDK_LOG(error) << "[get_point_cloud] error: " << e.what();
+            throw std::runtime_error("failed to create pointcloud: " + std::string(e.what()));
         }
-
-        std::shared_ptr<ob::Frame> color = fs->getFrame(OB_FRAME_COLOR);
-        if (color == nullptr) {
-            throw std::invalid_argument("no color frame");
-        }
-
-        unsigned char* colorData = (unsigned char*)color->getData();
-        uint32_t colorDataSize = color->dataSize();
-
-        std::shared_ptr<ob::Frame> depth = fs->getFrame(OB_FRAME_DEPTH);
-        if (depth == nullptr) {
-            throw std::invalid_argument("no depth frame");
-        }
-        std::shared_ptr<ob::DepthFrame> depthFrame = depth->as<ob::DepthFrame>();
-        float scale = depthFrame->getValueScale();
-
-        unsigned char* depthData = (unsigned char*)depth->getData();
-
-        // NOTE: UNDER LOCK
-        std::lock_guard<std::mutex> lock(devices_by_serial_mu);
-        if (auto search = devices_by_serial.find(serial_number); search == devices_by_serial.end()) {
-            throw std::invalid_argument("device is not connected");
-        }
-
-        std::unique_ptr<ViamOBDevice>& my_dev = devices_by_serial[serial_number];
-        if (!my_dev->started) {
-            throw std::invalid_argument("device is not started");
-        }
-
-        std::vector<unsigned char> data =
-            RGBPointsToPCD(my_dev->pointCloudFilter->process(my_dev->align->process(fs)), scale * mmToMeterMultiple);
-
-        VIAM_SDK_LOG(info) << "[get_point_cloud] stop";
-        return vsdk::Camera::point_cloud{pointcloudMime, data};
     }
 
     std::vector<vsdk::GeometryConfig> get_geometries(const vsdk::ProtoStruct& extra) {
@@ -771,6 +794,9 @@ int serve(int argc, char** argv) try {
 }  // namespace
 
 int main(int argc, char* argv[]) {
+    std::cout << "Orbbec C++ SDK version: " << ob::Version::getMajor() << "." << ob::Version::getMinor() << "." << ob::Version::getPatch()
+              << "\n";
+
     const std::string usage = "usage: orbbec /path/to/unix/socket";
 
     if (argc < 2) {
