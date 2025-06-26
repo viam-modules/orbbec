@@ -1,4 +1,4 @@
-# Module orbbec-camera 
+# Module orbbec 
 
 Use [Orbbec cameras](https://www.orbbec.com/products/) compatible with [v2 of the Orbbec CPP SDK](https://github.com/orbbec/OrbbecSDK_v2/).
 This module provides access to the color and depth sensors and creates pointclouds from them.
