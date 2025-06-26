@@ -13,7 +13,7 @@ ORBBEC_SDK_DIR=OrbbecSDK_$(ORBBEC_SDK_VERSION)_$(ORBBEC_SDK_TIMESTAMP)_$(ORBBEC_
 
 module.tar.gz: $(APPIMAGE) meta.json
 	cp $(APPIMAGE) $(OUTPUT_NAME).AppImage
-	tar -czvf module.tar.gz $(OUTPUT_NAME).AppImage meta.json
+	tar -czvf module.tar.gz $(OUTPUT_NAME).AppImage meta.json ./first_run.sh ./install_udev_rules.sh ./99-obsensor-libusb.rules
 	rm $(OUTPUT_NAME).AppImage
 
 build: $(BIN)
