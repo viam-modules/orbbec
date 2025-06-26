@@ -198,7 +198,7 @@ bool checkIfSupportHWD2CAlign(std::shared_ptr<ob::Pipeline> pipe,
             vsp->getFormat() == depthVsp->getFormat() && vsp->getFps() == depthVsp->getFps()) {
             VIAM_SDK_LOG(info) << "using width: " << vsp->getWidth() << " height: " << vsp->getHeight() << " format: " << vsp->getFormat()
                                << " fps: " << vsp->getFps() << "\n";
-            // Found a matching depth stream profile, it is means the given stream
+            // Found a matching depth stream profile, it means the given stream
             // profiles support hardware depth-to-color alignment
             return true;
         }
