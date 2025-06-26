@@ -22,7 +22,7 @@ $(BIN): lint conanfile.py src/* bin/*
 	bin/build.sh
 
 clean:
-	rm -rf packaging/appimages/deploy
+	rm -rf packaging/appimages/deploy module.tar.gz
 
 setup:
 	export ORBBEC_SDK_VERSION=$(ORBBEC_SDK_VERSION); \
