@@ -1,3 +1,6 @@
+// This is a command line utility to interact with the
+// orbbec SDK.
+// It is only intended as a viam developer debugging tool
 
 #include <math.h>
 #include <cstdio>
@@ -193,11 +196,7 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
                 hwD2CAlignConfig->enableStream(colorProfile);       // enable color stream
                 hwD2CAlignConfig->enableStream(depthProfile);       // enable depth stream
                 hwD2CAlignConfig->setAlignMode(ALIGN_D2C_HW_MODE);  // enable hardware depth-to-color alignment
-                hwD2CAlignConfig->setFrameAggregateOutputMode(OB_FRAME_AGGREGATE_OUTPUT_ALL_TYPE_FRAME_REQUIRE);  // output
-                                                                                                                  // frameset
-                                                                                                                  // with all
-                                                                                                                  // types of
-                                                                                                                  // frames
+                hwD2CAlignConfig->setFrameAggregateOutputMode(OB_FRAME_AGGREGATE_OUTPUT_ALL_TYPE_FRAME_REQUIRE);
                 return hwD2CAlignConfig;
             }
         }
@@ -235,7 +234,6 @@ void startStream(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
         my_dev->align = align;
 
         // start pipeline and pass the callback function to receive the frames
-        // HACK
         pipe->start(config, [serialNumber, align, pointCloudFilter](std::shared_ptr<ob::FrameSet> frameSet) {
             std::cout << "callback called\n";
             if (frameSet->getCount() != 2) {
@@ -248,27 +246,11 @@ void startStream(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
                 return;
             }
 
-            // void *colorData = color->getData();
-            // uint32_t colorDataSize = color->dataSize();
-            // std::ofstream colorOutFile("color.jpeg",
-            //                            std::ios::out | std::ios::binary);
-            // colorOutFile.write(reinterpret_cast<const char *>(colorData),
-            //                    colorDataSize);
-            // colorOutFile.close();
-
             std::shared_ptr<ob::Frame> depth = frameSet->getFrame(OB_FRAME_DEPTH);
             if (depth == nullptr) {
                 std::cerr << "no depth frame\n";
                 return;
             }
-
-            // void *depthData = depth->getData();
-            // uint32_t depthDataSize = depth->dataSize();
-            // std::ofstream depthOutFile("depth.y16", std::ios::out |
-            // std::ios::binary); depthOutFile.write(reinterpret_cast<const char
-            // *>(depthData),
-            //                    depthDataSize);
-            // depthOutFile.close();
 
             std::vector<unsigned char> data = RGBPointsToPCD(pointCloudFilter->process(align->process(frameSet)));
             std::ofstream outfile("my.pcd", std::ios::out | std::ios::binary);
@@ -320,8 +302,6 @@ int main() {
     ob::Context ctx;
     ctx.setLoggerSeverity(OB_LOG_SEVERITY_DEBUG);
 
-    // listDevices(ctx);
-
     ctx.setDeviceChangedCallback([](const std::shared_ptr<ob::DeviceList> removedList, const std::shared_ptr<ob::DeviceList> deviceList) {
         try {
             int devCount = removedList->getCount();
@@ -370,7 +350,7 @@ int main() {
         startStream(info->getSerialNumber(), dev);
     }
 
-    std::cout << "NICK! waiting for key press\n";
+    std::cout << "waiting for key press\n";
     std::cin.get();
     std::cout << "stopping orbbec program" << std::endl;
 
