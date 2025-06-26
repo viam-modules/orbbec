@@ -15,6 +15,7 @@ rm -rf ${ORBBEC_SDK_DIR}.zip
 rm -rf ${ORBBEC_SDK_DIR}
 wget https://github.com/orbbec/OrbbecSDK_v2/releases/download/${ORBBEC_SDK_VERSION}/${ORBBEC_SDK_DIR}.zip
 unzip ${ORBBEC_SDK_DIR}.zip
+cp ${ORBBEC_SDK_DIR}/shared/99-obsensor-libusb.rules .
 
 
 if [ ! -f "./venv/bin/activate" ]; then
