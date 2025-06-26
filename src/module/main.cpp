@@ -95,7 +95,7 @@ std::vector<unsigned char> RGBPointsToPCD(std::shared_ptr<ob::Frame> frame, floa
 
     for (int i = 0; i < numPoints; i++) {
         OBColorPoint& p = points[i];
-        unsigned int r = (unsigned int)(p.r);
+        unsigned int r = (unsigned int)p.r;
         unsigned int g = (unsigned int)p.g;
         unsigned int b = (unsigned int)p.b;
         unsigned int rgb = (r << 16) | (g << 8) | b;
@@ -208,15 +208,15 @@ bool checkIfSupportHWD2CAlign(std::shared_ptr<ob::Pipeline> pipe,
 
 // create a config for hardware depth-to-color alignment
 std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline> pipe) {
-    auto coloStreamProfiles = pipe->getStreamProfileList(OB_SENSOR_COLOR);
+    auto colorStreamProfiles = pipe->getStreamProfileList(OB_SENSOR_COLOR);
     auto depthStreamProfiles = pipe->getStreamProfileList(OB_SENSOR_DEPTH);
 
     // Iterate through all color and depth stream profiles to find a match for
     // hardware depth-to-color alignment
-    auto colorSpCount = coloStreamProfiles->getCount();
+    auto colorSpCount = colorStreamProfiles->getCount();
     auto depthSpCount = depthStreamProfiles->getCount();
     for (uint32_t i = 0; i < colorSpCount; i++) {
-        auto colorProfile = coloStreamProfiles->getProfile(i);
+        auto colorProfile = colorStreamProfiles->getProfile(i);
         auto colorVsp = colorProfile->as<ob::VideoStreamProfile>();
         for (uint32_t j = 0; j < depthSpCount; j++) {
             auto depthProfile = depthStreamProfiles->getProfile(j);
@@ -307,16 +307,6 @@ void stopDevice(std::string serialNumber) {
 
     my_dev->pipe->stop();
     my_dev->started = false;
-}
-
-void stopStreams() {
-    std::vector<std::shared_ptr<ob::Pipeline>> pipes;
-    std::lock_guard<std::mutex> lock(devices_by_serial_mu);
-    for (auto& [key, ViamOBDevice] : devices_by_serial) {
-        VIAM_SDK_LOG(info) << "stop stream " << key << "\n";
-        ViamOBDevice->pipe->stop();
-    }
-    devices_by_serial.clear();
 }
 
 void listDevices(const ob::Context& ctx) {
