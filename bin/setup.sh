@@ -17,7 +17,7 @@ cp ${ORBBEC_SDK_DIR}/shared/99-obsensor-libusb.rules .
 
 
 if [ ! -f "./venv/bin/activate" ]; then
-  echo 'creating and sourceing virtual env'
+  echo 'creating and sourcing virtual env'
   python3 -m venv venv && source ./venv/bin/activate 
 else
   echo 'sourcing virtual env'
