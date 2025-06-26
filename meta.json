@@ -1,6 +1,6 @@
 {
   "$schema": "https://dl.viam.dev/module.schema.json",
-  "module_id": "viam:orbbec-camera",
+  "module_id": "viam:orbbec",
   "visibility": "public",
   "url": "https://github.com/viam-modules/orbbec-camera",
   "description": "C++ camera module for Orbbec cameras",
