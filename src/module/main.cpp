@@ -350,10 +350,10 @@ raw_camera_image encodeDepthRAW(const unsigned char* data, const uint64_t width,
     return raw_camera_image{raw_camera_image::uniq(rawBuf, raw_camera_image::array_delete_deleter), encodedData.size()};
 }
 
-uint64_t getTimeSinceFrame(uint64_t imageTimeus) {
-    uint64_t imageTimeSeconds = imageTimeus * usToSecondsMutliple;
-    const auto now = std::chrono::system_clock::now();
-    uint64_t currentTimeSeconds = std::chrono::time_point_cast<std::chrono::seconds>(now).time_since_epoch().count();
+double getTimeSinceFrame(uint64_t imageTimeus) {
+    double imageTimeSeconds = imageTimeus * usToSecondsMutliple;
+    const auto now = std::chrono::system_clock::now().time_since_epoch();
+    double currentTimeSeconds = std::chrono::duration_cast<std::chrono::duration<double>>(now).count();
     return currentTimeSeconds - imageTimeSeconds;
 }
 // HELPERS END
