@@ -44,6 +44,9 @@ namespace vsdk = ::viam::sdk;
 // CONSTANTS BEGIN
 constexpr char service_name[] = "viam_orbbec";
 const float mmToMeterMultiple = 0.001;
+const double usToSecondsMutliple = 1e-6;
+const int maxFrameAgeSeconds = 1;
+
 // CONSTANTS END
 
 // STRUCTS BEGIN
@@ -346,6 +349,13 @@ raw_camera_image encodeDepthRAW(const unsigned char* data, const uint64_t width,
 
     return raw_camera_image{raw_camera_image::uniq(rawBuf, raw_camera_image::array_delete_deleter), encodedData.size()};
 }
+
+uint64_t getTimeSinceFrame(uint64_t imageTimeus) {
+    uint64_t imageTimeSeconds = imageTimeus * usToSecondsMutliple;
+    const auto now = std::chrono::system_clock::now();
+    uint64_t currentTimeSeconds = std::chrono::time_point_cast<std::chrono::seconds>(now).time_since_epoch().count();
+    return currentTimeSeconds - imageTimeSeconds;
+}
 // HELPERS END
 
 // RESOURCE BEGIN
@@ -423,10 +433,11 @@ class Orbbec : public vsdk::Camera, public vsdk::Reconfigurable {
                 throw std::invalid_argument("color frame was not in jpeg format");
             }
 
-            // VIAM_SDK_LOG(info) << "[get_image] color frame system timestamp: "
-            //                    << color->getSystemTimeStampUs();
-            // TODO: Returen error if frame timestamp is older than 5 seconds as that
-            // indicates we no longer have a working camera
+            // If the image's timestamp is older than a second throw error, this
+            // indicates we no longer have a working camera.
+            if (getTimeSinceFrame(color->getSystemTimeStampUs()) > maxFrameAgeSeconds) {
+                throw std::invalid_argument("no recent frames: check USB connection");
+            }
 
             unsigned char* colorData = (unsigned char*)color->getData();
             uint32_t colorDataSize = color->dataSize();
@@ -549,6 +560,12 @@ class Orbbec : public vsdk::Camera, public vsdk::Reconfigurable {
                 VIAM_SDK_LOG(info) << "color timestamp was " << colorTS << "depth timestamp was " << depthTS;
             }
             uint64_t timestamp = colorTS == 0 ? depthTS : colorTS;
+
+            // throw if frame is older than a second.
+            if (getTimeSinceFrame(timestamp) > maxFrameAgeSeconds) {
+                throw std::invalid_argument("no recent frames: check USB connection");
+            }
+
             std::chrono::microseconds latestTimestamp(timestamp);
             response.metadata.captured_at = vsdk::time_pt{std::chrono::duration_cast<std::chrono::nanoseconds>(latestTimestamp)};
             VIAM_SDK_LOG(info) << "[get_images] end";
@@ -587,6 +604,10 @@ class Orbbec : public vsdk::Camera, public vsdk::Reconfigurable {
                 throw std::invalid_argument("no color frame");
             }
 
+            if (getTimeSinceFrame(color->getSystemTimeStampUs()) > maxFrameAgeSeconds) {
+                throw std::invalid_argument("no recent color frames: check USB connection");
+            }
+
             unsigned char* colorData = (unsigned char*)color->getData();
             uint32_t colorDataSize = color->dataSize();
 
@@ -594,6 +615,11 @@ class Orbbec : public vsdk::Camera, public vsdk::Reconfigurable {
             if (depth == nullptr) {
                 throw std::invalid_argument("no depth frame");
             }
+
+            if (getTimeSinceFrame(depth->getSystemTimeStampUs()) > maxFrameAgeSeconds) {
+                throw std::invalid_argument("no recent depth frames: check USB connection");
+            }
+
             std::shared_ptr<ob::DepthFrame> depthFrame = depth->as<ob::DepthFrame>();
             float scale = depthFrame->getValueScale();
 
