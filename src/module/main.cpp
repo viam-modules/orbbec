@@ -44,7 +44,7 @@ namespace vsdk = ::viam::sdk;
 // CONSTANTS BEGIN
 constexpr char service_name[] = "viam_orbbec";
 const float mmToMeterMultiple = 0.001;
-const double usToSecondsMutliple = 1e-6;
+const double usToSecondsMultiple = 1e-6;
 const int maxFrameAgeSeconds = 1;
 
 // CONSTANTS END
@@ -351,7 +351,7 @@ raw_camera_image encodeDepthRAW(const unsigned char* data, const uint64_t width,
 }
 
 double getTimeSinceFrame(uint64_t imageTimeus) {
-    double imageTimeSeconds = imageTimeus * usToSecondsMutliple;
+    double imageTimeSeconds = imageTimeus * usToSecondsMultiple;
     const auto now = std::chrono::system_clock::now().time_since_epoch();
     double currentTimeSeconds = std::chrono::duration_cast<std::chrono::duration<double>>(now).count();
     return currentTimeSeconds - imageTimeSeconds;
