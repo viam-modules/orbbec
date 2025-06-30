@@ -44,7 +44,7 @@ namespace vsdk = ::viam::sdk;
 // CONSTANTS BEGIN
 constexpr char service_name[] = "viam_orbbec";
 const float mmToMeterMultiple = 0.001;
-const int maxFrameAgeUs = 1e6;
+const int maxFrameAgeUs = 1e6;  // time until a frame is considered stale, in microseconds (equal to 1 sec)
 
 // CONSTANTS END
 
@@ -351,7 +351,6 @@ raw_camera_image encodeDepthRAW(const unsigned char* data, const uint64_t width,
 
 uint64_t getTimeSinceFrame(uint64_t imageTimeUs) {
     auto nowUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-    VIAM_SDK_LOG(info) << abs(int(nowUs - imageTimeUs));
     return abs(int(nowUs - imageTimeUs));
 }
 // HELPERS END
