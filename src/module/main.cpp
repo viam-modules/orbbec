@@ -44,8 +44,7 @@ namespace vsdk = ::viam::sdk;
 // CONSTANTS BEGIN
 constexpr char service_name[] = "viam_orbbec";
 const float mmToMeterMultiple = 0.001;
-const double usToSecondsMultiple = 1e-6;
-const int maxFrameAgeSeconds = 1;
+const int maxFrameAgeUs = 1e6;
 
 // CONSTANTS END
 
@@ -350,11 +349,10 @@ raw_camera_image encodeDepthRAW(const unsigned char* data, const uint64_t width,
     return raw_camera_image{raw_camera_image::uniq(rawBuf, raw_camera_image::array_delete_deleter), encodedData.size()};
 }
 
-double getTimeSinceFrame(uint64_t imageTimeus) {
-    double imageTimeSeconds = imageTimeus * usToSecondsMultiple;
-    const auto now = std::chrono::system_clock::now().time_since_epoch();
-    double currentTimeSeconds = std::chrono::duration_cast<std::chrono::duration<double>>(now).count();
-    return currentTimeSeconds - imageTimeSeconds;
+uint64_t getTimeSinceFrame(uint64_t imageTimeUs) {
+    auto nowUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    VIAM_SDK_LOG(info) << abs(int(nowUs - imageTimeUs));
+    return abs(int(nowUs - imageTimeUs));
 }
 // HELPERS END
 
@@ -435,7 +433,7 @@ class Orbbec : public vsdk::Camera, public vsdk::Reconfigurable {
 
             // If the image's timestamp is older than a second throw error, this
             // indicates we no longer have a working camera.
-            if (getTimeSinceFrame(color->getSystemTimeStampUs()) > maxFrameAgeSeconds) {
+            if (getTimeSinceFrame(color->getSystemTimeStampUs()) > maxFrameAgeUs) {
                 throw std::invalid_argument("no recent frames: check USB connection");
             }
 
@@ -562,7 +560,7 @@ class Orbbec : public vsdk::Camera, public vsdk::Reconfigurable {
             uint64_t timestamp = colorTS == 0 ? depthTS : colorTS;
 
             // throw if frame is older than a second.
-            if (getTimeSinceFrame(timestamp) > maxFrameAgeSeconds) {
+            if (getTimeSinceFrame(timestamp) > maxFrameAgeUs) {
                 throw std::invalid_argument("no recent frames: check USB connection");
             }
 
@@ -604,7 +602,7 @@ class Orbbec : public vsdk::Camera, public vsdk::Reconfigurable {
                 throw std::invalid_argument("no color frame");
             }
 
-            if (getTimeSinceFrame(color->getSystemTimeStampUs()) > maxFrameAgeSeconds) {
+            if (getTimeSinceFrame(color->getSystemTimeStampUs()) > maxFrameAgeUs) {
                 throw std::invalid_argument("no recent color frames: check USB connection");
             }
 
@@ -616,7 +614,7 @@ class Orbbec : public vsdk::Camera, public vsdk::Reconfigurable {
                 throw std::invalid_argument("no depth frame");
             }
 
-            if (getTimeSinceFrame(depth->getSystemTimeStampUs()) > maxFrameAgeSeconds) {
+            if (getTimeSinceFrame(depth->getSystemTimeStampUs()) > maxFrameAgeUs) {
                 throw std::invalid_argument("no recent depth frames: check USB connection");
             }
 
