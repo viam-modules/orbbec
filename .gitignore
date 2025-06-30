@@ -6,3 +6,4 @@ venv
 packaging/appimages/*.AppImage*
 module.tar.gz
 OrbbecSDK_*
+CmakeUserPresets.json
