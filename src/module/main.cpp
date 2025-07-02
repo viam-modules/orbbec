@@ -86,13 +86,13 @@ std::mutex frame_set_by_serial_mu;
 std::unordered_map<std::string, std::shared_ptr<ob::FrameSet>> frame_set_by_serial;
 
 std::mutex& serial_by_resource_mu() {
-    static auto* mu = new std::mutex();
-    return *mu;
+    static std::mutex mu;
+    return mu;
 }
 
 std::unordered_map<std::string, std::string>& serial_by_resource() {
-    static auto* devices = new std::unordered_map<std::string, std::string>;
-    return *devices;
+    static std::unordered_map<std::string, std::string> devices;
+    return devices;
 }
 
 // GLOBALS END
