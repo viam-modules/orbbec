@@ -813,8 +813,11 @@ int serve(int argc, char** argv) try {
     vsdk::Instance inst;
 
     ob::Context ctx;
-    // TODO: Make this enabled when user boots at debug level
-    // ctx.setLoggerSeverity(OB_LOG_SEVERITY_DEBUG);
+    for (size_t i = 0; i < argc; i++) {
+        if (std::string(argv[i]) == "--log-level=debug") {
+            ctx.setLoggerSeverity(OB_LOG_SEVERITY_DEBUG);
+        }
+    }
     startOrbbecSDK(ctx);
 
     // Create a new model registration for the service.
