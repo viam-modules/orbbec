@@ -86,6 +86,17 @@ std::unordered_map<std::string, std::unique_ptr<ViamOBDevice>> devices_by_serial
 
 std::mutex frame_set_by_serial_mu;
 std::unordered_map<std::string, std::shared_ptr<ob::FrameSet>> frame_set_by_serial;
+
+std::mutex& serial_by_resource_mu() {
+    static std::mutex mu;
+    return mu;
+}
+
+std::unordered_map<std::string, std::string>& serial_by_resource() {
+    static std::unordered_map<std::string, std::string> devices;
+    return devices;
+}
+
 // GLOBALS END
 
 // HELPERS BEGIN
@@ -250,7 +261,7 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
     return nullptr;
 }
 
-void startDevice(std::string serialNumber) {
+void startDevice(std::string serialNumber, std::string resourceName) {
     VIAM_SDK_LOG(info) << service_name << ": starting device " << serialNumber;
     std::lock_guard<std::mutex> lock(devices_by_serial_mu);
 
@@ -293,7 +304,7 @@ void startDevice(std::string serialNumber) {
     VIAM_SDK_LOG(info) << service_name << ": device started " << serialNumber;
 }
 
-void stopDevice(std::string serialNumber) {
+void stopDevice(std::string serialNumber, std::string resourceName) {
     std::lock_guard<std::mutex> lock(devices_by_serial_mu);
 
     if (auto search = devices_by_serial.find(serialNumber); search == devices_by_serial.end()) {
@@ -309,6 +320,10 @@ void stopDevice(std::string serialNumber) {
 
     my_dev->pipe->stop();
     my_dev->started = false;
+    {
+        std::lock_guard<std::mutex> lock(serial_by_resource_mu());
+        serial_by_resource().erase(resourceName);
+    }
 }
 
 void listDevices(const ob::Context& ctx) {
@@ -371,37 +386,51 @@ class Orbbec : public vsdk::Camera, public vsdk::Reconfigurable {
    public:
     Orbbec(vsdk::Dependencies deps, vsdk::ResourceConfig cfg) : Camera(cfg.name()), state_(configure_(std::move(deps), std::move(cfg))) {
         VIAM_SDK_LOG(info) << "Orbbec constructor start " << state_->serial_number;
-        startDevice(state_->serial_number);
+        startDevice(state_->serial_number, state_->resource_name);
+        {
+            std::lock_guard<std::mutex> lock(serial_by_resource_mu());
+            serial_by_resource()[state_->resource_name] = state_->serial_number;
+        }
         VIAM_SDK_LOG(info) << "Orbbec constructor end " << state_->serial_number;
     }
 
     ~Orbbec() {
         VIAM_SDK_LOG(info) << "Orbbec destructor start " << state_->serial_number;
         std::string prev_serial_number;
+        std::string prev_resource_name;
         {
             const std::lock_guard<std::mutex> lock(state_mu_);
             prev_serial_number = state_->serial_number;
+            prev_resource_name = state_->resource_name;
         }
-        stopDevice(prev_serial_number);
+        stopDevice(prev_serial_number, prev_resource_name);
         VIAM_SDK_LOG(info) << "Orbbec destructor end " << state_->serial_number;
     }
 
     void reconfigure(const vsdk::Dependencies& deps, const vsdk::ResourceConfig& cfg) {
         VIAM_SDK_LOG(info) << "Orbbec reconfigure start";
         std::string prev_serial_number;
+        std::string prev_resource_name;
         {
             const std::lock_guard<std::mutex> lock(state_mu_);
             prev_serial_number = state_->serial_number;
+            prev_resource_name = state_->resource_name;
         }
-        stopDevice(prev_serial_number);
+        stopDevice(prev_serial_number, prev_resource_name);
         std::string new_serial_number;
+        std::string new_resource_name;
         {
             const std::lock_guard<std::mutex> lock(state_mu_);
             state_.reset();
             state_ = configure_(deps, cfg);
             new_serial_number = state_->serial_number;
+            new_resource_name = state_->resource_name;
         }
-        startDevice(new_serial_number);
+        startDevice(new_serial_number, new_resource_name);
+        {
+            std::lock_guard<std::mutex> lock(serial_by_resource_mu());
+            serial_by_resource()[state_->resource_name] = new_serial_number;
+        }
         VIAM_SDK_LOG(info) << "Orbbec reconfigure end";
     }
 
@@ -651,9 +680,11 @@ class Orbbec : public vsdk::Camera, public vsdk::Reconfigurable {
 
    private:
     struct state_ {
+        std::string resource_name;
         std::string serial_number;
 
-        explicit state_(std::string serial_number) : serial_number(serial_number) {}
+        explicit state_(std::string serial_number, std::string resource_name)
+            : serial_number(serial_number), resource_name(resource_name) {}
     };
     std::mutex state_mu_;
     std::unique_ptr<struct state_> state_;
@@ -673,7 +704,7 @@ class Orbbec : public vsdk::Camera, public vsdk::Reconfigurable {
 
         serial_number_from_config = *serial_val;
 
-        auto state = std::make_unique<struct state_>(serial_number_from_config);
+        auto state = std::make_unique<struct state_>(serial_number_from_config, configuration.name());
 
         return state;
     }
@@ -713,7 +744,7 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
     }
 }
 
-void deviceChangedCallback(const std::shared_ptr<ob::DeviceList> removedList, const std::shared_ptr<ob::DeviceList> deviceList) {
+void deviceChangedCallback(const std::shared_ptr<ob::DeviceList> removedList, const std::shared_ptr<ob::DeviceList> addedList) {
     try {
         int devCount = removedList->getCount();
         printDeviceList(removedList);
@@ -732,15 +763,24 @@ void deviceChangedCallback(const std::shared_ptr<ob::DeviceList> removedList, co
             devices_by_serial.erase(serial_number);
         }
 
-        devCount = deviceList->getCount();
+        devCount = addedList->getCount();
         for (size_t i = 0; i < devCount; i++) {
             if (i == 0) {
                 VIAM_SDK_LOG(info) << " Devices added:\n";
             }
-            std::shared_ptr<ob::Device> dev = deviceList->getDevice(i);
+            std::shared_ptr<ob::Device> dev = addedList->getDevice(i);
             std::shared_ptr<ob::DeviceInfo> info = dev->getDeviceInfo();
             printDeviceInfo(info);
             registerDevice(info->getSerialNumber(), dev);
+            {
+                std::lock_guard<std::mutex> lock(serial_by_resource_mu());
+                for (auto& [resource_name, serial_number] : serial_by_resource()) {
+                    if (serial_number == info->getSerialNumber()) {
+                        startDevice(serial_number, resource_name);
+                        serial_by_resource()[resource_name] = serial_number;
+                    }
+                }
+            }
         }
     } catch (ob::Error& e) {
         std::cerr << "setDeviceChangedCallback\n"
