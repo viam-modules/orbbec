@@ -13,7 +13,7 @@
     }
   ],
   "markdown_link": "README.md",
-  "entrypoint": "orbbec-module.AppImage",
+  "entrypoint": "orbbec-module",
   "first_run": "./first_run.sh",
   "build": {
     "setup": "make setup",

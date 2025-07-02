@@ -12,7 +12,7 @@ class orbbec(ConanFile):
     name = "viam-orbbec"
 
     license = "Apache-2.0"
-    url = "https://github.com/viam-modules/orbbec" 
+    url = "https://github.com/viam-modules/orbbec"
     package_type = "application"
     settings = "os", "compiler", "build_type", "arch"
 
@@ -46,6 +46,9 @@ class orbbec(ConanFile):
 
     def generate(self):
         tc = CMakeToolchain(self)
+        sdk_dir = os.environ.get("ORBBEC_SDK_DIR", "unknown")
+        sdk_lib_path = os.path.join(sdk_dir, "lib")
+        tc.cache_variables["ORBBEC_SDK_LIB_DIR"] = sdk_lib_path
         tc.generate()
         CMakeDeps(self).generate()
 

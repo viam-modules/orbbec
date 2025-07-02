@@ -6,19 +6,43 @@
 #
 set -euxo pipefail
 
-# NOTE: this is written under the assumption that it will be built in canon
-sudo apt -y update && sudo apt -y upgrade && sudo apt install -y cmake python3.11 python3.11-venv wget
+if [[ ${OS} == "darwin" ]]; then
+    echo "Detected MacOS ${ARCH}"
+
+  if ! command -v brew >/dev/null; then
+      echo "Installing Homebrew"
+      /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  fi
+  # Install required tools
+  brew install cmake python@3.11 wget unzip conan || true
+else
+  echo "Detected Linux $ARCH"
+  # NOTE: this is written under the assumption that it will be built in canon
+  sudo apt -y update && sudo apt -y upgrade && sudo apt install -y cmake python3.11 python3.11-venv wget
+fi
+
 
 rm -rf ${ORBBEC_SDK_DIR}.zip
 rm -rf ${ORBBEC_SDK_DIR}
 wget https://github.com/orbbec/OrbbecSDK_v2/releases/download/${ORBBEC_SDK_VERSION}/${ORBBEC_SDK_DIR}.zip
 unzip ${ORBBEC_SDK_DIR}.zip
-cp ${ORBBEC_SDK_DIR}/shared/99-obsensor-libusb.rules .
+
+# MacOS binary has a different top level dir name than the zip name
+#TODO fix error and remove true
+if [[ ${OS} == "darwin" ]]; then
+TOPDIR=$(unzip -Z1 "${ORBBEC_SDK_DIR}.zip" | head -1 | cut -d/ -f1) || true
+mv "${TOPDIR}" "${ORBBEC_SDK_DIR}"
+fi
+
+# lsusb rules only on linux
+if [[ ${OS} == "linux" ]]; then
+  cp ${ORBBEC_SDK_DIR}/shared/99-obsensor-libusb.rules .
+fi
 
 
 if [ ! -f "./venv/bin/activate" ]; then
   echo 'creating and sourcing virtual env'
-  python3 -m venv venv && source ./venv/bin/activate 
+  python3 -m venv venv && source ./venv/bin/activate
 else
   echo 'sourcing virtual env'
   source ./venv/bin/activate
@@ -26,7 +50,7 @@ fi
 
 # Set up conan
 if [ ! -f "./venv/bin/conan" ]; then
-  echo 'sourcing virtual env'
+  echo 'installing conan'
   python3 -m pip install conan
 fi
 
