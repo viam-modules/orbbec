@@ -11,13 +11,17 @@ ORBBEC_SDK_DIR=OrbbecSDK_$(ORBBEC_SDK_VERSION)_$(ORBBEC_SDK_TIMESTAMP)_$(ORBBEC_
 ifeq ($(OS),darwin)
   ORBBEC_SDK_TIMESTAMP = 202505192200
   ORBBEC_SDK_DIR = OrbbecSDK_$(ORBBEC_SDK_VERSION)_$(ORBBEC_SDK_TIMESTAMP)_$(ORBBEC_SDK_COMMIT)_macOS_beta
-# to do make sure its x86 and not arm64
 else ifeq ($(OS),linux)
-  ORBBEC_SDK_TIMESTAMP = 202505191331
-  ORBBEC_SDK_DIR = OrbbecSDK_$(ORBBEC_SDK_VERSION)_$(ORBBEC_SDK_TIMESTAMP)_$(ORBBEC_SDK_COMMIT)_linux_$(ARCH)
+  ifeq ($(ARCH),x86_64)
+    ORBBEC_SDK_TIMESTAMP = 202505191331
+    ORBBEC_SDK_DIR = OrbbecSDK_$(ORBBEC_SDK_VERSION)_$(ORBBEC_SDK_TIMESTAMP)_$(ORBBEC_SDK_COMMIT)_linux_$(ARCH)
+  else
+    $(error Unsupported architecture: $(ARCH))
+  endif
 else
   $(error Unsupported OS: $(OS))
 endif
+
 
 .PHONY: build lint setup appimage
 
@@ -36,18 +40,11 @@ else ifeq ($(OS),darwin)
 	if ! otool -l $(BIN) | grep -A2 LC_RPATH | grep -q "@executable_path/lib"; then \
 		install_name_tool -add_rpath @executable_path/lib $(BIN); \
 	fi
-
-	# Copy binary to a temp directory
-	mkdir -p tmp_pkg/lib
-	cp $(BIN) tmp_pkg/$(OUTPUT_NAME)
-	cp -R $(ORBBEC_SDK_DIR)/lib/* tmp_pkg/lib/
-	cp meta.json tmp_pkg/
-
-	# Create the tarball from the contents of tmp_pkg
-	tar -czvf module.tar.gz -C tmp_pkg .
-
-	# Clean up
-	# rm -rf tmp_pkg
+	tar -czvf module.tar.gz \
+	meta.json \
+    first_run.sh \
+	-C $(ORBBEC_SDK_DIR)/lib libOrbbecSDK.2.dylib \
+    -C ../../$(dir $(BIN)) $(OUTPUT_NAME)
 else
 	$(error Unsupported OS for module.tar.gz: $(OS))
 endif

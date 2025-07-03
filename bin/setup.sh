@@ -27,10 +27,9 @@ rm -rf ${ORBBEC_SDK_DIR}
 wget https://github.com/orbbec/OrbbecSDK_v2/releases/download/${ORBBEC_SDK_VERSION}/${ORBBEC_SDK_DIR}.zip
 unzip ${ORBBEC_SDK_DIR}.zip
 
-# MacOS binary has a different top level dir name than the zip name
-#TODO fix error and remove true
+# MacOS binary has a different top level dir name than the zip file name
 if [[ ${OS} == "darwin" ]]; then
-TOPDIR=$(unzip -Z1 "${ORBBEC_SDK_DIR}.zip" | head -1 | cut -d/ -f1) || true
+TOPDIR=$(ls -d *macOS*/ | head -1 | sed 's#/##')
 mv "${TOPDIR}" "${ORBBEC_SDK_DIR}"
 fi
 
