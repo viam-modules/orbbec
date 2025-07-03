@@ -51,7 +51,7 @@ endif
 
 build: $(BIN)
 
-$(BIN): conanfile.py src/* bin/*
+$(BIN): lint conanfile.py src/* bin/*
 	export ORBBEC_SDK_DIR=$(ORBBEC_SDK_DIR); \
 	bin/build.sh
 
@@ -75,4 +75,3 @@ $(APPIMAGE): $(BIN)
 	rm -f deploy/$(OUTPUT_NAME)* && \
 	appimage-builder --recipe $(OUTPUT_NAME)-$(ARCH).yml
 	cp ./packaging/appimages/$(OUTPUT_NAME)-$(TAG_VERSION)-$(ARCH).AppImage ./packaging/appimages/deploy/
-

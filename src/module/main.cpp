@@ -774,7 +774,7 @@ int serve(int argc, char** argv) try {
 
     ob::Context ctx;
     // TODO: Make this enabled when user boots at debug level
-    ctx.setLoggerSeverity(OB_LOG_SEVERITY_DEBUG);
+    //ctx.setLoggerSeverity(OB_LOG_SEVERITY_DEBUG);
     startOrbbecSDK(ctx);
 
     // Create a new model registration for the service.
