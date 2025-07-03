@@ -6,7 +6,6 @@ TAG_VERSION?=latest
 APPIMAGE := packaging/appimages/deploy/$(OUTPUT_NAME)-$(TAG_VERSION)-$(ARCH).AppImage
 ORBBEC_SDK_VERSION=v2.4.3
 ORBBEC_SDK_COMMIT=045a0e76
-ORBBEC_SDK_DIR=OrbbecSDK_$(ORBBEC_SDK_VERSION)_$(ORBBEC_SDK_TIMESTAMP)_$(ORBBEC_SDK_COMMIT)_$(OS)_$(ARCH)
 
 ifeq ($(OS),darwin)
   ORBBEC_SDK_TIMESTAMP = 202505192200
@@ -27,14 +26,13 @@ endif
 
 module.tar.gz: $(BIN) meta.json
 ifeq ($(OS),linux)
-	cp $(APPIMAGE) $(OUTPUT_NAME)
+	mv $(APPIMAGE) $(OUTPUT_NAME)
 	tar -czvf module.tar.gz \
 		$(OUTPUT_NAME).AppImage \
 		meta.json \
 		./first_run.sh \
 		./install_udev_rules.sh \
 		./99-obsensor-libusb.rules
-	rm -f $(OUTPUT_NAME).AppImage
 else ifeq ($(OS),darwin)
 	install_name_tool -change $(ORBBEC_SDK_DIR)/lib/libOrbbecSDK.2.dylib @executable_path/lib/libOrbbecSDK.2.dylib $(BIN)
 	if ! otool -l $(BIN) | grep -A2 LC_RPATH | grep -q "@executable_path/lib"; then \
