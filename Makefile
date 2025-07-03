@@ -28,7 +28,7 @@ module.tar.gz: $(BIN) meta.json
 ifeq ($(OS),linux)
 	mv $(APPIMAGE) $(OUTPUT_NAME)
 	tar -czvf module.tar.gz \
-		$(OUTPUT_NAME).AppImage \
+		$(OUTPUT_NAME) \
 		meta.json \
 		./first_run.sh \
 		./install_udev_rules.sh \
