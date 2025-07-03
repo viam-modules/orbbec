@@ -12,6 +12,7 @@ project(viam-orbbec
 
 add_executable(orbbec-cli src/cli/main.cpp)
 add_executable(orbbec-module src/module/main.cpp)
+add_executable(discovery src/discovery//main.cpp)
 
 set(OrbbecSDK_DIR OrbbecSDK_v2.4.3_202505191331_045a0e76_linux_x86_64/lib/orbbecsdk/lib)
 
