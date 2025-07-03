@@ -1,4 +1,4 @@
-# Module orbbec 
+# Module orbbec
 
 Use [Orbbec cameras](https://www.orbbec.com/products/) compatible with [v2 of the Orbbec CPP SDK](https://github.com/orbbec/OrbbecSDK_v2/).
 This module provides access to the color and depth sensors and creates pointclouds from them.
@@ -22,7 +22,7 @@ The following attributes are available for this model:
 
 | Name          | Type   | Inclusion | Description                |
 |---------------|--------|-----------|----------------------------|
-| `serial_number` | string | **Required** | The serial number of the specific Orbbec camera to use. The serial number of each plugged-in and available orbbec camera will be logged on module startup.  |
+| `serial_number` | string | **Required** | The serial number of the specific Orbbec camera to use. This number is printed on the device. The serial number of each plugged-in and available orbbec camera will be logged on module startup.  |
 
 ## Troubleshooting
 
