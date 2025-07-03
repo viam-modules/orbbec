@@ -45,8 +45,6 @@ else ifeq ($(OS),darwin)
     first_run.sh \
 	-C $(ORBBEC_SDK_DIR)/lib libOrbbecSDK.2.dylib \
     -C ../../$(dir $(BIN)) $(OUTPUT_NAME)
-else
-	$(error Unsupported OS for module.tar.gz: $(OS))
 endif
 
 build: $(BIN)
