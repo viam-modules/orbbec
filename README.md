@@ -29,6 +29,13 @@ The following attributes are available for this model:
 |---------------|--------|-----------|----------------------------|
 | `serial_number` | string | **Required** | The serial number of the specific Orbbec camera to use. This number is printed on the device. The serial number of each plugged-in and available orbbec camera will be logged on module startup.  |
 
+## Model viam:orbbec:discovery
+
+This model is used to locate orbbec cameras connected to your machine. No configuration is needed.
+Expand the test card or look at the discovery control card to obtain configurations for all connected Orbbecs.
+
+
+
 ## Troubleshooting
 
 **Unable to connect to camera**
