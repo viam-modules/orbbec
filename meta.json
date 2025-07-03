@@ -12,7 +12,7 @@
       "short_description": "Orbbec Astra2 driver return images, depth maps and pointclouds"
     }
   ],
-  "entrypoint": "orbbec-module",
+  "entrypoint": "orbbec-module.AppImage",
   "first_run": "./first_run.sh",
   "build": {
     "setup": "make setup",
