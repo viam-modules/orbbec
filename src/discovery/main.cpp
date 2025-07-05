@@ -3,13 +3,12 @@
 
 #include <viam/sdk/common/instance.hpp>
 #include <viam/sdk/common/proto_value.hpp>
-#include <viam/sdk/services/discovery.hpp>
 #include <viam/sdk/config/resource.hpp>
 #include <viam/sdk/module/service.hpp>
 #include <viam/sdk/registry/registry.hpp>
 #include <viam/sdk/resource/reconfigurable.hpp>
 #include <viam/sdk/rpc/server.hpp>
-
+#include <viam/sdk/services/discovery.hpp>
 
 namespace {
 namespace vsdk = ::viam::sdk;
