@@ -32,6 +32,11 @@ setup:
 lint:
 	./bin/run-clang-format.sh
 
+orbbec-test-bin:
+	cd tests && \
+	go test -c -o orbbec-test-bin ./ && \
+	mv orbbec-test-bin ../
+
 $(APPIMAGE): $(BIN)
 	export TAG_NAME=$(TAG_VERSION); \
 	cd packaging/appimages && \
