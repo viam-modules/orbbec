@@ -16,6 +16,7 @@ import (
 const (
 	componentName       = "astra2-cam"
 	testTimeoutDuration = 5 * time.Second
+	testTimestampBuffer = 1 * time.Second // buffer to account for driver clock skew
 	testTickDuration    = 100 * time.Millisecond
 )
 
@@ -95,7 +96,7 @@ func TestCameraServer(t *testing.T) {
 						continue
 					}
 					test.That(t, len(images), test.ShouldEqual, 2)
-					test.That(t, metadata.CapturedAt, test.ShouldHappenAfter, timeBeforeCall)
+					test.That(t, metadata.CapturedAt, test.ShouldHappenAfter, timeBeforeCall.Add(-testTimestampBuffer))
 					return
 				}
 			}
