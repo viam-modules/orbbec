@@ -50,3 +50,26 @@ canon make
 ```bash
 canon make build
 ```
+
+## Testing
+
+This module includes an automated test binary to verify camera functionality.
+
+### Running the test
+
+1.  **Build the module and test binary:**
+    ```bash
+    canon make setup
+    canon make build
+    canon make orbbec-test-bin
+    ```
+
+2.  **Run the test:**
+    The test binary requires the path to the module and the camera's serial number. Note that `make build` places the module binary in the `build-conan/build/RelWithDebInfo` directory.
+
+    ```bash
+    ./orbbec-test-bin --module <PATH_TO_LOCAL_MODULE> --serial_number <YOUR_CAMERA_SERIAL_NUMBER>
+    ```
+
+    -   `--module`: Path to the module executable.
+    -   `--serial_number`: The serial number of your Orbbec camera. This is written on a sticker on the Astra 2 devices and is also logged on module startup if you are unsure what it is.
