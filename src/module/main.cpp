@@ -56,7 +56,7 @@ struct PointXYZRGB {
 
 struct ViamOBDevice {
     ~ViamOBDevice() {
-        VIAM_SDK_LOG(info) << "deleting ViamOBDevice " << serial_number << "\n";
+        std::cout << "deleting ViamOBDevice " << serial_number << "\n";
     }
     std::string serial_number;
     std::shared_ptr<ob::Device> device;
