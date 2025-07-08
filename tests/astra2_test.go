@@ -13,8 +13,10 @@ import (
 )
 
 const (
-	componentName           = "astra2-cam"
-	maxGRPCMessageByteCount = 33554432 // update this if the gRPC config changes again
+	componentName = "astra2-cam"
+	// Update the message size limit if the gRPC config changes again
+	// https://github.com/viamrobotics/goutils/blob/f7e69a4f46114709e91fb4377d57f48d4092c666/rpc/const.go#L6-L7
+	maxGRPCMessageByteCount = 33554432
 	testTimeoutDuration     = 5 * time.Second
 	testTickDuration        = 100 * time.Millisecond
 )
@@ -89,14 +91,13 @@ func TestCameraServer(t *testing.T) {
 				case <-timeout:
 					t.Fatal("timed out waiting for Get images method (two images)")
 				case <-tick:
+					timeBeforeCall := time.Now()
 					images, metadata, err := cam.Images(timeoutCtx)
 					if err != nil || len(images) < 2 {
 						continue
 					}
-					test.That(t, images, test.ShouldNotBeNil)
-					test.That(t, metadata, test.ShouldNotBeNil)
 					test.That(t, len(images), test.ShouldEqual, 2)
-					test.That(t, metadata.CapturedAt, test.ShouldHappenBefore, time.Now())
+					test.That(t, metadata.CapturedAt, test.ShouldHappenAfter, timeBeforeCall)
 					return
 				}
 			}
