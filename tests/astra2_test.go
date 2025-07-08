@@ -10,15 +10,13 @@ import (
 	"go.viam.com/rdk/resource"
 	"go.viam.com/rdk/utils"
 	"go.viam.com/test"
+	"go.viam.com/utils/rpc"
 )
 
 const (
-	componentName = "astra2-cam"
-	// Update the message size limit if the gRPC config changes again
-	// https://github.com/viamrobotics/goutils/blob/f7e69a4f46114709e91fb4377d57f48d4092c666/rpc/const.go#L6-L7
-	maxGRPCMessageByteCount = 33554432
-	testTimeoutDuration     = 5 * time.Second
-	testTickDuration        = 100 * time.Millisecond
+	componentName       = "astra2-cam"
+	testTimeoutDuration = 5 * time.Second
+	testTickDuration    = 100 * time.Millisecond
 )
 
 func TestCameraServer(t *testing.T) {
@@ -140,7 +138,7 @@ func TestCameraServer(t *testing.T) {
 					}
 					test.That(t, err, test.ShouldBeNil)
 					test.That(t, pc, test.ShouldNotBeNil)
-					test.That(t, pc.Size(), test.ShouldBeBetween, 0, maxGRPCMessageByteCount)
+					test.That(t, pc.Size(), test.ShouldBeBetween, 0, rpc.MaxMessageSize)
 					return
 				}
 			}
