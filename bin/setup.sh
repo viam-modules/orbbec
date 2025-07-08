@@ -10,11 +10,11 @@ if [[ ${OS} == "darwin" ]]; then
     echo "Detected MacOS ${ARCH}"
 
   if ! command -v brew >/dev/null; then
-      echo "Installing Homebrew"
-      /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+     echo "Brew not installed. Please install brew!"
+     exit 1
   fi
   # Install required tools
-  brew install cmake python@3.11 wget unzip conan || true
+  brew install cmake python@3.11 wget unzip || true
 elif  [[ ${OS} == "linux" ]]; then
     echo "Detected Linux $ARCH"
     # NOTE: this is written under the assumption that it will be built in canon

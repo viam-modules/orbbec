@@ -35,9 +35,7 @@ ifeq ($(OS),linux)
 		./99-obsensor-libusb.rules
 else ifeq ($(OS),darwin)
 	install_name_tool -change $(ORBBEC_SDK_DIR)/lib/libOrbbecSDK.2.dylib @executable_path/lib/libOrbbecSDK.2.dylib $(BIN)
-	if ! otool -l $(BIN) | grep -A2 LC_RPATH | grep -q "@executable_path/lib"; then \
 		install_name_tool -add_rpath @executable_path/lib $(BIN); \
-	fi
 	tar -czvf module.tar.gz \
 	meta.json \
     first_run.sh \
