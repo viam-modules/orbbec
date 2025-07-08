@@ -75,7 +75,7 @@ func TestCameraServer(t *testing.T) {
 					if err != nil {
 						continue
 					}
-					test.That(t, img, test.ShouldNotBeNil) // wip
+					test.That(t, img, test.ShouldNotBeNil)
 					return
 				}
 			}
