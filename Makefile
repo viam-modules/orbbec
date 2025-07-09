@@ -37,8 +37,10 @@ else ifeq ($(OS),darwin)
  # update the rpath https://en.wikipedia.org/wiki/Rpath to look for the orbbec dynamic library
  # in the ./lib folder in the folder produced by the module.tar.gz on the computer that runs the module
  # rather than the build directory of the build machine
-	install_name_tool -delete_rpath $(ORBBEC_SDK_DIR)/lib $(BIN)
-		install_name_tool -add_rpath @executable_path/lib $(BIN); \
+	if otool -l $(BIN) | grep -A2 LC_RPATH | grep -q "path @executable_path/lib"; then \
+		install_name_tool -delete_rpath $(ORBBEC_SDK_DIR)/lib $(BIN); \
+	fi
+	install_name_tool -add_rpath @executable_path/lib $(BIN);
 	tar -czvf module.tar.gz \
 	meta.json \
     first_run.sh \
