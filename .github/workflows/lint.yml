@@ -1,6 +1,7 @@
 name: Lint
 
-on: pull_request
+on:
+  pull_request:
 
 jobs:
   lint-check:
@@ -9,6 +10,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Get clang-format
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y clang-format-19
+      
       - name: Run linter and check for changes
         run: |
           make lint
