@@ -4,15 +4,17 @@ OUTPUT_NAME = orbbec-module
 BIN := build-conan/build/RelWithDebInfo/orbbec-module
 TAG_VERSION?=latest
 APPIMAGE := packaging/appimages/deploy/$(OUTPUT_NAME)-$(TAG_VERSION)-$(ARCH).AppImage
-ORBBEC_SDK_VERSION=v2.4.3
-ORBBEC_SDK_COMMIT=045a0e76
 
 ifeq ($(OS),darwin)
-  ORBBEC_SDK_TIMESTAMP = 202505192200
+  ORBBEC_SDK_VERSION=v2.4.3
+  ORBBEC_SDK_COMMIT=045a0e76
+  ORBBEC_SDK_TIMESTAMP=202505192200
   ORBBEC_SDK_DIR = OrbbecSDK_$(ORBBEC_SDK_VERSION)_$(ORBBEC_SDK_TIMESTAMP)_$(ORBBEC_SDK_COMMIT)_macOS_beta
 else ifeq ($(OS),linux)
   ifeq ($(ARCH),x86_64)
-    ORBBEC_SDK_TIMESTAMP = 202505191331
+    ORBBEC_SDK_VERSION=v2.4.8
+    ORBBEC_SDK_COMMIT=ec8e3469
+    ORBBEC_SDK_TIMESTAMP = 202507031325
     ORBBEC_SDK_DIR = OrbbecSDK_$(ORBBEC_SDK_VERSION)_$(ORBBEC_SDK_TIMESTAMP)_$(ORBBEC_SDK_COMMIT)_linux_$(ARCH)
   else
     $(error Unsupported architecture: $(ARCH))
@@ -26,6 +28,7 @@ endif
 
 module.tar.gz: $(BIN) meta.json
 ifeq ($(OS),linux)
+	@make $(APPIMAGE)
 	mv $(APPIMAGE) $(OUTPUT_NAME)
 	tar -czvf module.tar.gz \
 		$(OUTPUT_NAME) \
