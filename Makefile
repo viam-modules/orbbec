@@ -44,8 +44,8 @@ else ifeq ($(OS),darwin)
 	tar -czvf module.tar.gz \
 	meta.json \
     first_run.sh \
-	-C $(ORBBEC_SDK_DIR)/lib libOrbbecSDK.2.dylib \
-    -C ../../$(dir $(BIN)) $(OUTPUT_NAME)
+	-C $(ORBBEC_SDK_DIR) lib/ \
+    -C ../$(dir $(BIN)) $(OUTPUT_NAME)
 endif
 
 build: $(BIN)
