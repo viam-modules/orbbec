@@ -1,0 +1,21 @@
+name: Lint
+
+on: pull_request
+
+jobs:
+  lint-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run linter and check for changes
+        run: |
+          make lint
+          LINT_DIFF=$(git status --porcelain)
+          if [ -n "$LINT_DIFF" ]; then
+            echo "::error::'make lint' resulted in uncommitted changes."
+            echo "The following changes were found:"
+            git diff
+            exit 1
+          fi
