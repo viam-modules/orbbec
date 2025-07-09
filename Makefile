@@ -26,7 +26,11 @@ endif
 
 .PHONY: build lint setup appimage
 
+ifeq ($(OS),linux)
+module.tar.gz: $(APPIMAGE) meta.json
+else
 module.tar.gz: $(BIN) meta.json
+endif
 ifeq ($(OS),linux)
 	@make $(APPIMAGE)
 	mv $(APPIMAGE) $(OUTPUT_NAME)
