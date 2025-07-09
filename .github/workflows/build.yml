@@ -10,14 +10,14 @@ jobs:
           - os: macos-latest
           - os: ubuntu-latest
             container:
-                image: ghcr.io/viamrobotics/antique2:amd64
+                image: ghcr.io/viamrobotics/rdk-devenv:amd64
                 options: --platform linux/amd64
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container }}
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up build environment
         run: |
