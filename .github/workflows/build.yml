@@ -1,0 +1,23 @@
+name: Build
+
+on: push
+
+jobs:
+  build-module:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+          - os: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up build environment
+        run: |
+          make setup
+
+      - name: Make module.tar.gz
+        run: |
+          make module.tar.gz
