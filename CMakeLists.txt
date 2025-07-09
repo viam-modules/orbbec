@@ -13,13 +13,13 @@ project(viam-orbbec
 add_executable(orbbec-cli src/cli/main.cpp)
 add_executable(orbbec-module src/module/main.cpp)
 
-set(OrbbecSDK_DIR OrbbecSDK_v2.4.3_202505191331_045a0e76_linux_x86_64/lib/orbbecsdk/lib)
+set(CMAKE_OSX_DEPLOYMENT_TARGET "14.5")
 
-include_directories(OrbbecSDK_v2.4.3_202505191331_045a0e76_linux_x86_64/include)
+set(OrbbecSDK_DIR  "${ORBBEC_SDK_DIR}/lib")
+include_directories("${ORBBEC_SDK_DIR}/include")
 
-find_package(OrbbecSDK REQUIRED
-    PATHS OrbbecSDK_v2.4.3_202505191331_045a0e76_linux_x86_64/lib
-    NO_DEFAULT_PATH)
+
+find_package(OrbbecSDK REQUIRED)
 find_package(viam-cpp-sdk REQUIRED)
 find_package(Threads REQUIRED)
 
