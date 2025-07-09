@@ -14,14 +14,15 @@ jobs:
         run: |
           sudo apt-get update -y
           sudo apt-get install -y clang-format-19
-      
-      - name: Run linter and check for changes
+
+      - name: Verify no uncommitted changes from "make lint"
         run: |
-          make lint
-          LINT_DIFF=$(git status --porcelain)
-          if [ -n "$LINT_DIFF" ]; then
-            echo "::error::'make lint' resulted in uncommitted changes."
-            echo "The following changes were found:"
-            git diff
-            exit 1
+          git init && git add . && make lint
+          GEN_DIFF=$(git status -s)
+          if [ -n "$GEN_DIFF" ]; then
+              echo '"make lint" resulted in the following untracked changes:' 1>&2
+              git diff
+              echo '"make lint" resulted in changes not in git' 1>&2
+              git status
+              exit 1
           fi
