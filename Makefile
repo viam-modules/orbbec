@@ -34,7 +34,10 @@ ifeq ($(OS),linux)
 		./install_udev_rules.sh \
 		./99-obsensor-libusb.rules
 else ifeq ($(OS),darwin)
-	install_name_tool -change $(ORBBEC_SDK_DIR)/lib/libOrbbecSDK.2.dylib @executable_path/lib/libOrbbecSDK.2.dylib $(BIN)
+ # update the rpath https://en.wikipedia.org/wiki/Rpath to look for the orbbec dynamic library
+ # in the ./lib folder in the folder produced by the module.tar.gz on the computer that runs the module
+ # rather than the build directory of the build machine
+	install_name_tool -delete_rpath $(ORBBEC_SDK_DIR)/lib $(BIN)
 		install_name_tool -add_rpath @executable_path/lib $(BIN); \
 	tar -czvf module.tar.gz \
 	meta.json \
