@@ -457,7 +457,7 @@ class Orbbec : public vsdk::Camera, public vsdk::Reconfigurable {
 
     vsdk::Camera::raw_image get_image(std::string mime_type, const vsdk::ProtoStruct& extra) {
         try {
-            VIAM_SDK_LOG(info) << "[get_image] start";
+            VIAM_SDK_LOG(info) << "[get_image] start asdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdf";
             std::string serial_number;
             {
                 const std::lock_guard<std::mutex> lock(state_mu_);
