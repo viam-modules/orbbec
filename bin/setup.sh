@@ -70,7 +70,7 @@ else
 fi
 
 # NOTE: If you change this version, also change it in the `conanfile.py` requirements
-git checkout releases/v0.14.0
+git checkout releases/v0.15.0
 
 # Build the C++ SDK repo
 #
