@@ -44,7 +44,7 @@ namespace vsdk = ::viam::sdk;
 // CONSTANTS BEGIN
 constexpr char service_name[] = "viam_orbbec";
 const float mmToMeterMultiple = 0.001;
-const int maxFrameAgeUs = 1e6;  // time until a frame is considered stale, in microseconds (equal to 1 sec)
+const int maxFrameAgeUs = 3e6;  // time until a frame is considered stale, in microseconds (equal to 3 sec)
 
 // CONSTANTS END
 
