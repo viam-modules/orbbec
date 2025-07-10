@@ -27,6 +27,7 @@
 #include <stdexcept>
 #include <vector>
 
+#include <libobsensor/ObSensor.hpp>
 #include <viam/sdk/common/instance.hpp>
 #include <viam/sdk/common/proto_value.hpp>
 #include <viam/sdk/components/camera.hpp>
@@ -36,9 +37,6 @@
 #include <viam/sdk/registry/registry.hpp>
 #include <viam/sdk/resource/reconfigurable.hpp>
 #include <viam/sdk/rpc/server.hpp>
-#include <viam/sdk/services/discovery.hpp>
-
-#include <libobsensor/ObSensor.hpp>
 
 namespace orbbec {
 
@@ -49,6 +47,8 @@ constexpr char service_name[] = "viam_orbbec";
 const float mmToMeterMultiple = 0.001;
 const int maxFrameAgeUs = 1e6;  // time until a frame is considered stale, in microseconds (equal to 1 sec)
 
+vsdk::GeometryConfig orbbec::Orbbec::geometry = vsdk::GeometryConfig(vsdk::pose{-37.5, 5.5, -18.1}, vsdk::box({145, 46, 39}), "box");
+vsdk::Model orbbec::Orbbec::model = vsdk::Model("viam", "orbbec", "astra2");
 // CONSTANTS END
 
 // STRUCTS BEGIN
@@ -59,7 +59,7 @@ struct PointXYZRGB {
 
 struct ViamOBDevice {
     ~ViamOBDevice() {
-        VIAM_SDK_LOG(info) << "deleting ViamOBDevice " << serial_number << "\n";
+        std::cout << "deleting ViamOBDevice " << serial_number << "\n";
     }
     std::string serial_number;
     std::shared_ptr<ob::Device> device;
@@ -119,8 +119,6 @@ std::unordered_map<std::string, std::shared_ptr<ob::FrameSet>>& frame_set_by_ser
     static std::unordered_map<std::string, std::shared_ptr<ob::FrameSet>> frame_sets;
     return frame_sets;
 }
-
-auto model = vsdk::Model{"viam", "orbbec", "astra2"};
 // GLOBALS END
 
 // HELPERS BEGIN
@@ -833,62 +831,3 @@ void startOrbbecSDK(ob::Context& ctx) {
 }
 }  // namespace orbbec
 // ORBBEC SDK DEVICE REGISTRY END
-
-// int serve(int argc, char** argv) try {
-//     // Every Viam C++ SDK program must have one and only one Instance object
-//     // which is created before any other C++ SDK objects and stays alive until
-//     // all Viam C++ SDK objects are destroyed.
-//     vsdk::Instance inst;
-
-//     ob::Context ctx;
-//     for (size_t i = 0; i < argc; i++) {
-//         if (std::string(argv[i]) == "--log-level=debug") {
-//             ctx.setLoggerSeverity(OB_LOG_SEVERITY_DEBUG);
-//         }
-//     }
-//     startOrbbecSDK(ctx);
-
-//     // Create a new model registration for the service.
-//     std::shared_ptr<vsdk::ModelRegistration> mr = std::make_shared<vsdk::ModelRegistration>(
-//         // Identify that this resource offers the Camera API
-//         vsdk::API::get<vsdk::Camera>(),
-
-//         // Declare a model triple for this service.
-//         vsdk::Model{"viam", "orbbec", "astra2"},
-
-//         // Define the factory for instances of the resource.
-//         [](vsdk::Dependencies deps, vsdk::ResourceConfig cfg) { return std::make_unique<Orbbec>(deps, cfg); },
-//         validate);
-
-//     std::vector<std::shared_ptr<vsdk::ModelRegistration>> mrs = {mr};
-//     auto module_service = std::make_shared<vsdk::ModuleService>(argc, argv, mrs);
-
-//     // Start the module service.
-//     module_service->serve();
-
-//     return EXIT_SUCCESS;
-// } catch (const std::exception& ex) {
-//     std::cerr << "ERROR: A std::exception was thrown from `serve`: " << ex.what() << std::endl;
-//     return EXIT_FAILURE;
-// } catch (...) {
-//     std::cerr << "ERROR: An unknown exception was thrown from `serve`" << std::endl;
-//     return EXIT_FAILURE;
-// }
-
-// }  // namespace
-
-// int main(int argc, char* argv[]) {
-//     std::cout << "Orbbec C++ SDK version: " << ob::Version::getMajor() << "." << ob::Version::getMinor() << "." <<
-//     ob::Version::getPatch()
-//               << "\n";
-
-//     const std::string usage = "usage: orbbec /path/to/unix/socket";
-
-//     if (argc < 2) {
-//         std::cout << "ERROR: insufficient arguments\n";
-//         std::cout << usage << "\n";
-//         return EXIT_FAILURE;
-//     }
-
-//     return serve(argc, argv);
-// }

@@ -7,7 +7,7 @@
   "models": [
     {
       "api": "rdk:component:camera",
-      "markdown_link": "README.md#Configuration",
+      "markdown_link": "README.md#model-viamorbbecastra2",
       "model": "viam:orbbec:astra2",
       "short_description": "Orbbec Astra2 driver return images, depth maps and pointclouds"
     },
@@ -18,15 +18,15 @@
       "short_description": "Orbbec Astra2 driver return images, depth maps and pointclouds"
     }
   ],
-  "markdown_link": "README.md",
-  "entrypoint": "orbbec-module.AppImage",
+  "entrypoint": "orbbec-module",
   "first_run": "./first_run.sh",
   "build": {
     "setup": "make setup",
     "build": "make module.tar.gz",
     "path": "module.tar.gz",
     "arch": [
-      "linux/amd64"
+      "linux/amd64",
+      "darwin/arm64"
     ]
   }
 }

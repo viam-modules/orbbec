@@ -13,5 +13,6 @@ class OrbbecDiscovery : public vsdk::Discovery, public vsdk::Reconfigurable {
     void reconfigure(const vsdk::Dependencies& despendencies, const vsdk::ResourceConfig& configuration) override;
     std::vector<vsdk::ResourceConfig> discover_resources(const vsdk::ProtoStruct& extra) override;
     vsdk::ProtoStruct do_command(const vsdk::ProtoStruct& command) override;
+    static vsdk::Model model;
 };
 }  // namespace discovery

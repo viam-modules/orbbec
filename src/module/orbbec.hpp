@@ -10,6 +10,7 @@ namespace vsdk = ::viam::sdk;
 namespace orbbec {
 
 void startOrbbecSDK(ob::Context& ctx);
+void printDeviceInfo(const std::shared_ptr<ob::DeviceInfo> info);
 
 class Orbbec final : public vsdk::Camera, public vsdk::Reconfigurable {
    public:
@@ -22,6 +23,9 @@ class Orbbec final : public vsdk::Camera, public vsdk::Reconfigurable {
     point_cloud get_point_cloud(std::string mime_type, const vsdk::ProtoStruct& extra) override;
     properties get_properties() override;
     std::vector<vsdk::GeometryConfig> get_geometries(const vsdk::ProtoStruct& extra) override;
+
+    static vsdk::GeometryConfig geometry;
+    static vsdk::Model model;
 
    private:
     struct state_;

@@ -12,7 +12,7 @@ class orbbec(ConanFile):
     name = "viam-orbbec"
 
     license = "Apache-2.0"
-    url = "https://github.com/viam-modules/orbbec" 
+    url = "https://github.com/viam-modules/orbbec"
     package_type = "application"
     settings = "os", "compiler", "build_type", "arch"
 
@@ -42,10 +42,12 @@ class orbbec(ConanFile):
     def requirements(self):
         # NOTE: If you update the `viam-cpp-sdk` dependency here, it
         # should also be updated in `bin/setup.{sh,ps1}`.
-        self.requires("viam-cpp-sdk/0.14.0")
+        self.requires("viam-cpp-sdk/0.15.0")
 
     def generate(self):
         tc = CMakeToolchain(self)
+        sdk_dir = os.environ.get("ORBBEC_SDK_DIR", "unknown")
+        tc.cache_variables["ORBBEC_SDK_DIR"] = sdk_dir
         tc.generate()
         CMakeDeps(self).generate()
 

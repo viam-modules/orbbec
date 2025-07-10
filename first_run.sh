@@ -2,7 +2,11 @@
 
 set -euo pipefail
 
-cd $(dirname $0)
+OS=$(uname)
 
-# Install udev rules
-sudo ./install_udev_rules.sh
+if [[ "$OS" == 'Linux' ]]; then
+    cd $(dirname $0)
+
+    # Install udev rules
+    sudo ./install_udev_rules.sh
+fi

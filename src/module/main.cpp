@@ -1,3 +1,6 @@
+#include "discovery.hpp"
+#include "orbbec.hpp"
+
 #include <viam/sdk/common/instance.hpp>
 #include <viam/sdk/components/camera.hpp>
 #include <viam/sdk/module/service.hpp>
@@ -6,16 +9,14 @@
 #include <iostream>
 
 #include <libobsensor/ObSensor.hpp>
-#include "discovery.hpp"
-#include "orbbec.hpp"
 
 namespace vsdk = ::viam::sdk;
 
 template <typename ResourceType, typename ResourceImpl>
-std::vector<std::shared_ptr<vsdk::ModelRegistration>> create_model_registrations_for_models(const std::vector<vsdk::Model>& models) {
+std::vector<std::shared_ptr<vsdk::ModelRegistration>> create_model_registrations(const std::vector<vsdk::Model>& models) {
     using namespace std::placeholders;
 
-    constexpr auto factory = [](vsdk::Model model, const vsdk::Dependencies& deps, const vsdk::ResourceConfig& config) {
+    constexpr auto factory = [](const vsdk::Dependencies& deps, const vsdk::ResourceConfig& config) {
         return std::make_unique<ResourceImpl>(deps, config);
     };
 
@@ -23,23 +24,22 @@ std::vector<std::shared_ptr<vsdk::ModelRegistration>> create_model_registrations
 
     std::vector<std::shared_ptr<vsdk::ModelRegistration>> registrations;
     for (const auto& model : models) {
-        registrations.push_back(std::make_shared<vsdk::ModelRegistration>(api, model, std::bind(factory, model, _1, _2)));
+        registrations.push_back(std::make_shared<vsdk::ModelRegistration>(api, model, std::bind(factory, _1, _2)));
     }
 
     return registrations;
 }
 
-std::vector<std::shared_ptr<vsdk::ModelRegistration>> create_model_registrations() {
+std::vector<std::shared_ptr<vsdk::ModelRegistration>> create_all_model_registrations() {
     std::vector<std::shared_ptr<vsdk::ModelRegistration>> registrations;
 
-    std::vector<std::shared_ptr<vsdk::ModelRegistration>> camera_regs =
-        create_model_registrations_for_models<vsdk::Camera, orbbec::Orbbec>({
-            vsdk::Model{"viam", "orbbec", "astra2"},
-        });
+    std::vector<std::shared_ptr<vsdk::ModelRegistration>> camera_regs = create_model_registrations<vsdk::Camera, orbbec::Orbbec>({
+        orbbec::Orbbec::model,
+    });
 
     std::vector<std::shared_ptr<vsdk::ModelRegistration>> discovery_reg =
-        create_model_registrations_for_models<vsdk::Discovery, discovery::OrbbecDiscovery>({
-            vsdk::Model{"viam", "orbbec", "discovery"},
+        create_model_registrations<vsdk::Discovery, discovery::OrbbecDiscovery>({
+            discovery::OrbbecDiscovery::model,
         });
 
     registrations.insert(registrations.end(), camera_regs.begin(), camera_regs.end());
@@ -61,7 +61,7 @@ int serve(int argc, char** argv) try {
         }
     }
     orbbec::startOrbbecSDK(ctx);
-    std::make_shared<vsdk::ModuleService>(argc, argv, create_model_registrations())->serve();
+    std::make_shared<vsdk::ModuleService>(argc, argv, create_all_model_registrations())->serve();
 
     return EXIT_SUCCESS;
 } catch (const std::exception& ex) {
