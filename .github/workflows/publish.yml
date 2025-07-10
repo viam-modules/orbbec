@@ -1,0 +1,43 @@
+name: Build & publish module to registry
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    strategy:
+      matrix:
+        include:
+          - platform: linux/amd64
+            os: ubuntu-latest
+            container:
+              image: ghcr.io/viamrobotics/rdk-devenv:amd64
+              options: --platform linux/amd64
+          - platform: darwin/amd64
+            os: macos-latest
+
+    runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up build environment
+      run: |
+        make setup
+
+    - name: Build module
+      run: |
+        make module.tar.gz
+
+    - name: Upload viamrtsp module to registry
+      uses: viamrobotics/upload-module@v1
+      with:
+        meta-path: meta.json
+        module-path: module.tar.gz
+        platform: ${{ matrix.platform }}
+        version: ${{ github.ref_name }}
+        key-id: ${{ secrets.VIAM_DEV_API_KEY_ID }}
+        key-value: ${{ secrets.VIAM_DEV_API_KEY }}
