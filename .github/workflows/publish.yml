@@ -8,7 +8,7 @@ on:
     types: [published]
 
 jobs:
-  publish:
+  build:
     strategy:
       matrix:
         include:
@@ -17,30 +17,63 @@ jobs:
             container:
               image: ghcr.io/viamrobotics/rdk-devenv:amd64
               options: --platform linux/amd64
+            artifact-name: module-linux-amd64
           - platform: darwin/arm64
             os: macos-latest
+            artifact-name: module-darwin-arm64
 
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container }}
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up build environment
-      run: |
-        make setup
+      - name: Set up build environment
+        run: |
+          make setup
 
-    - name: Build module
-      run: |
-        make module.tar.gz
+      - name: Build module
+        run: |
+          make module.tar.gz
 
-    - name: Upload viamrtsp module to registry
-      uses: viamrobotics/upload-module@v1
-      with:
-        meta-path: meta.json
-        module-path: module.tar.gz
-        platform: ${{ matrix.platform }}
-        version: 0.0.1
-        key-id: ${{ secrets.SEANORG_KEY_ID }}
-        key-value: ${{ secrets.SEANORG_KEY }}
+      - name: Upload module artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          path: module.tar.gz
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/viamrobotics/rdk-devenv:amd64
+      options: --platform linux/amd64
+    strategy:
+      matrix:
+        include:
+          - platform: linux/amd64
+            artifact-name: module-linux-amd64
+            artifact-path: ./artifacts/linux-amd64/
+          - platform: darwin/arm64
+            artifact-name: module-darwin-arm64
+            artifact-path: ./artifacts/darwin-arm64/
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download module
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          path: ${{ matrix.artifact-path }}
+
+      - name: Upload module to registry
+        uses: viamrobotics/upload-module@v1
+        with:
+          meta-path: meta.json
+          module-path: ${{ matrix.artifact-path }}/module.tar.gz
+          platform: ${{ matrix.platform }}
+          version: 0.0.1
+          key-id: ${{ secrets.SEANORG_KEY_ID }}
+          key-value: ${{ secrets.SEANORG_KEY }}
