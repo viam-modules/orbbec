@@ -32,7 +32,6 @@ else
 module.tar.gz: $(BIN) meta.json
 endif
 ifeq ($(OS),linux)
-	@make $(APPIMAGE)
 	mv $(APPIMAGE) $(OUTPUT_NAME)
 	tar -czvf module.tar.gz \
 		$(OUTPUT_NAME) \
