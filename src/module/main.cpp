@@ -701,9 +701,9 @@ class Orbbec : public vsdk::Camera, public vsdk::Reconfigurable {
 
     std::vector<vsdk::GeometryConfig> get_geometries(const vsdk::ProtoStruct& extra) {
         // see https://github.com/viam-modules/orbbec/pull/16 for explantation of geometry config values
+        // If we add support for models other than the astra 2 these values can't be hardcoded.
         return {vsdk::GeometryConfig(vsdk::pose{-37.5, 5.5, -18.1}, vsdk::box({145, 46, 39}), "box")};
     }
-
    private:
     struct state_ {
         std::string resource_name;
