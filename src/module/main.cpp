@@ -704,7 +704,7 @@ class Orbbec : public vsdk::Camera, public vsdk::Reconfigurable {
         /// X: depth camera is 36.3 mm to the left of the center of the box
         // Y: Depth camrra is 10.95mm above the center of the box - substracting whole cam+mount - cam and center of that / 2
         // Z: 0 is at front of the glass - so half the widith of the camera
-        return {vsdk::GeometryConfig(vsdk::pose{-36.3, 5.475, -18.1}, vsdk::box({144.54, 45.35, 38.64}), "box")};
+        return {vsdk::GeometryConfig(vsdk::pose{-36.3, 5.475, -18.1}, vsdk::box({145, 46, 39}), "box")};
     }
 
    private:
