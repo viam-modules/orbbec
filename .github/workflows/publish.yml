@@ -1,6 +1,9 @@
 name: Build & publish module to registry
 
 on:
+  push:
+    branches:
+      - RSDK-11076
   release:
     types: [published]
 
@@ -38,6 +41,6 @@ jobs:
         meta-path: meta.json
         module-path: module.tar.gz
         platform: ${{ matrix.platform }}
-        version: ${{ github.ref_name }}
-        key-id: ${{ secrets.VIAM_DEV_API_KEY_ID }}
-        key-value: ${{ secrets.VIAM_DEV_API_KEY }}
+        version: 0.0.1
+        key-id: ${{ secrets.SEANORG_KEY_ID }}
+        key-value: ${{ secrets.SEANORG_KEY }}
