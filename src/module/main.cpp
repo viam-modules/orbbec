@@ -700,11 +700,8 @@ class Orbbec : public vsdk::Camera, public vsdk::Reconfigurable {
     }
 
     std::vector<vsdk::GeometryConfig> get_geometries(const vsdk::ProtoStruct& extra) {
-        /// Pose: offset from center of box to the origin of the depth camera.
-        /// X: depth camera is 36.3 mm to the left of the center of the box
-        // Y: Depth camrra is 10.95mm above the center of the box - substracting whole cam+mount - cam and center of that / 2
-        // Z: 0 is at front of the glass - so half the widith of the camera
-        return {vsdk::GeometryConfig(vsdk::pose{-36.3, 5.475, -18.1}, vsdk::box({145, 46, 39}), "box")};
+        // see https://github.com/viam-modules/orbbec/pull/16 for explantation of geometry config values
+        return {vsdk::GeometryConfig(vsdk::pose{-37.5, 5.5, -18.1}, vsdk::box({145, 46, 39}), "box")};
     }
 
    private:
