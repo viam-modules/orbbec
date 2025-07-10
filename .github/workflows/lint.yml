@@ -1,0 +1,28 @@
+name: Lint
+
+on:
+  pull_request:
+
+jobs:
+  lint-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get clang-format
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y clang-format-19
+
+      - name: Verify no uncommitted changes from "make lint"
+        run: |
+          git init && git add . && make lint
+          GEN_DIFF=$(git status -s)
+          if [ -n "$GEN_DIFF" ]; then
+              echo '"make lint" resulted in the following untracked changes:' 1>&2
+              git diff
+              echo '"make lint" resulted in changes not in git' 1>&2
+              git status
+              exit 1
+          fi
