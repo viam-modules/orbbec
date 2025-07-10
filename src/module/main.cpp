@@ -853,7 +853,7 @@ int serve(int argc, char** argv) try {
         vsdk::API::get<vsdk::Camera>(),
 
         // Declare a model triple for this service.
-        vsdk::Model{"seanorg", "ignorebec", "astra2"},
+        vsdk::Model{"viam", "orbbec", "astra2"},
 
         // Define the factory for instances of the resource.
         [](vsdk::Dependencies deps, vsdk::ResourceConfig cfg) { return std::make_unique<Orbbec>(deps, cfg); },
