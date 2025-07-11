@@ -299,6 +299,7 @@ void startDevice(std::string serialNumber, std::string resourceName) {
     }
 
     auto frameCallback = [serialNumber](std::shared_ptr<ob::FrameSet> frameSet) {
+        auto nowUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
         if (frameSet->getCount() != 2) {
             std::cerr << "got non 2 frame count: " << frameSet->getCount() << "\n";
             return;
@@ -314,6 +315,9 @@ void startDevice(std::string serialNumber, std::string resourceName) {
             std::cerr << "no depth frame\n";
             return;
         }
+        std::cout << "nowUS: " << nowUs << " colorUs: " << color->getSystemTimeStampUs() << " depthUs: " << depth->getSystemTimeStampUs()
+                  << " color diff: " << int(nowUs - color->getSystemTimeStampUs())
+                  << " depth diff: " << int(nowUs - depth->getSystemTimeStampUs()) << "\n";
 
         std::lock_guard<std::mutex> lock(frame_set_by_serial_mu());
         frame_set_by_serial()[serialNumber] = frameSet;
