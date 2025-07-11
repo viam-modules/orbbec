@@ -18,6 +18,12 @@ jobs:
           - platform: darwin/arm64
             os: macos-latest
             artifact-name: module-darwin-arm64
+          - platform: linux/arm64
+            os: buildjet-8vcpu-ubuntu-2204-arm
+            container:
+              image: ghcr.io/viamrobotics/rdk-devenv:arm64
+              options: --platform linux/arm64
+            artifact-name: module-linux-arm64
 
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container }}
@@ -55,6 +61,9 @@ jobs:
           - platform: darwin/arm64
             artifact-name: module-darwin-arm64
             artifact-path: ./artifacts/darwin-arm64/
+          - platform: linux/arm64
+            artifact-name: module-linux-arm64
+            artifact-path: ./artifacts/linux-arm64/
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
