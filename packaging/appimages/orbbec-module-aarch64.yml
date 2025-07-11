@@ -4,7 +4,7 @@ script:
  - rm -rf AppDir | true
  - mkdir -p $TARGET_APPDIR/usr/bin $TARGET_APPDIR/usr/lib
  - cp ../../build-conan/build/RelWithDebInfo/orbbec-module $TARGET_APPDIR/usr/bin/
-  - cp -r ../../OrbbecSDK_v2.4.8_202507031325_ec8e3469_linux_aarch64/lib/ $TARGET_APPDIR/usr/lib/
+ - cp -r ../../OrbbecSDK_v2.4.8_202507031330_ec8e3469_linux_aarch64/lib/ $TARGET_APPDIR/usr/lib/
  - mkdir -p $TARGET_APPDIR/usr/share/icons/viam/256x256/apps/
  - cp ./viam-server.png $TARGET_APPDIR/usr/share/icons/viam/256x256/apps/viam-server.png
  - go install github.com/Otterverse/aix@latest
