@@ -1,0 +1,28 @@
+name: Build
+
+on: push
+
+jobs:
+  build-module:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+          - os: ubuntu-latest
+            container:
+                image: ghcr.io/viamrobotics/rdk-devenv:amd64
+                options: --platform linux/amd64
+    runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up build environment
+        run: |
+          make setup
+
+      - name: Make module.tar.gz
+        run: |
+          make module.tar.gz
