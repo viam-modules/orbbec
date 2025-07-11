@@ -13,7 +13,7 @@
     },
       {
       "api": "rdk:service:discovery",
-      "markdown_link": "README.md#Configuration",
+      "markdown_link": "README.md#model-viamorbbecdiscovery",
       "model": "viam:orbbec:discovery",
       "short_description": "Orbbec Astra2 driver return images, depth maps and pointclouds"
     }

@@ -19,17 +19,9 @@
 namespace discovery {
 
 namespace vsdk = ::viam::sdk;
-constexpr char service_name[] = "orbbec_discovery";
 vsdk::Model OrbbecDiscovery::model = vsdk::Model("viam", "orbbec", "discovery");
 
-std::vector<std::string> validate(vsdk::ResourceConfig cfg) {
-    return {};
-}
-
-OrbbecDiscovery::OrbbecDiscovery(vsdk::Dependencies dependencies, vsdk::ResourceConfig configuration) : Discovery(configuration.name()) {
-    VIAM_SDK_LOG(info) << "[constructor] start";
-    VIAM_SDK_LOG(info) << "[constructor] end";
-}
+OrbbecDiscovery::OrbbecDiscovery(vsdk::Dependencies dependencies, vsdk::ResourceConfig configuration) : Discovery(configuration.name()) {}
 
 void OrbbecDiscovery::reconfigure(const vsdk::Dependencies& despendencies, const vsdk::ResourceConfig& configuration) {}
 
@@ -52,17 +44,14 @@ std::vector<vsdk::ResourceConfig> OrbbecDiscovery::discover_resources(const vsdk
         std::shared_ptr<ob::DeviceInfo> info = dev->getDeviceInfo();
         orbbec::printDeviceInfo(info);
 
-        vsdk::ProtoStruct attributes;
-        attributes.emplace("serial_number", info->serialNumber());
-
-        vsdk::orientation_vector_degrees o{0, 0, 1, 0};
-        vsdk::translation t{0.0, 0.0, 0.0};
-        vsdk::LinkConfig link(t, o, orbbec::Orbbec::geometry, "world");
-
         char name[10];
         sprintf(name, "orbbec-%d", i + 1);
 
-        vsdk::ResourceConfig config("camera", name, "viam", attributes, "rdk:component:camera", orbbec::Orbbec::model, link);
+        vsdk::ProtoStruct attributes;
+        attributes.emplace("serial_number", info->serialNumber());
+
+
+        vsdk::ResourceConfig config("camera", name, "viam", attributes, "rdk:component:camera", orbbec::Orbbec::model);
         configs.push_back(config);
     }
     return configs;

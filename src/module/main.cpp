@@ -21,8 +21,8 @@ std::vector<std::shared_ptr<vsdk::ModelRegistration>> create_model_registrations
     };
 
     const auto api = vsdk::API::get<ResourceType>();
-
     std::vector<std::shared_ptr<vsdk::ModelRegistration>> registrations;
+
     for (const auto& model : models) {
         registrations.push_back(std::make_shared<vsdk::ModelRegistration>(api, model, std::bind(factory, _1, _2)));
     }
