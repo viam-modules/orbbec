@@ -44,7 +44,7 @@ namespace vsdk = ::viam::sdk;
 // CONSTANTS BEGIN
 constexpr char service_name[] = "viam_orbbec";
 const float mmToMeterMultiple = 0.001;
-const int maxFrameAgeUs = 1e6;  // time until a frame is considered stale, in microseconds (equal to 1 sec)
+const uint64_t maxFrameAgeUs = 1e6;  // time until a frame is considered stale, in microseconds (equal to 1 sec)
 
 // CONSTANTS END
 
@@ -119,6 +119,18 @@ std::unordered_map<std::string, std::shared_ptr<ob::FrameSet>>& frame_set_by_ser
 // GLOBALS END
 
 // HELPERS BEGIN
+//
+uint64_t getNowUs() {
+    return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+}
+
+uint64_t timeSinceFrameUs(uint64_t nowUs, uint64_t imageTimeUs) {
+    if (nowUs > imageTimeUs) {
+        return nowUs - imageTimeUs;
+    }
+    return 0;
+}
+
 std::vector<unsigned char> RGBPointsToPCD(std::shared_ptr<ob::Frame> frame, float scale) {
     int numPoints = frame->dataSize() / sizeof(OBColorPoint);
 
@@ -316,6 +328,35 @@ void startDevice(std::string serialNumber, std::string resourceName) {
         }
 
         std::lock_guard<std::mutex> lock(frame_set_by_serial_mu());
+        uint64_t nowUs = getNowUs();
+        uint64_t diff = timeSinceFrameUs(nowUs, color->getSystemTimeStampUs());
+        if (diff > maxFrameAgeUs) {
+            std::cerr << "color frame is " << diff << "us older than now, nowUs: " << nowUs << " frameTimeUs "
+                      << color->getSystemTimeStampUs() << "\n";
+        }
+        diff = timeSinceFrameUs(nowUs, depth->getSystemTimeStampUs());
+        if (diff > maxFrameAgeUs) {
+            std::cerr << "depth frame is " << diff << "us older than now, nowUs: " << nowUs << " frameTimeUs "
+                      << depth->getSystemTimeStampUs() << "\n";
+        }
+
+        auto it = frame_set_by_serial().find(serialNumber);
+        if (it != frame_set_by_serial().end()) {
+            std::shared_ptr<ob::Frame> prevColor = frameSet->getFrame(OB_FRAME_COLOR);
+            std::shared_ptr<ob::Frame> prevDepth = frameSet->getFrame(OB_FRAME_DEPTH);
+            if (prevColor != nullptr && prevDepth != nullptr) {
+                diff = timeSinceFrameUs(color->getSystemTimeStampUs(), prevColor->getSystemTimeStampUs());
+                if (diff > maxFrameAgeUs) {
+                    std::cerr << "previous color frame is " << diff << "us older than current color frame. nowUs: " << nowUs
+                              << " frameTimeUs " << color->getSystemTimeStampUs() << "\n";
+                }
+                diff = timeSinceFrameUs(depth->getSystemTimeStampUs(), prevDepth->getSystemTimeStampUs());
+                if (diff > maxFrameAgeUs) {
+                    std::cerr << "previous depth frame is " << diff << "us older than current depth frame. nowUs: " << nowUs
+                              << " frameTimeUs " << depth->getSystemTimeStampUs() << "\n";
+                }
+            }
+        }
         frame_set_by_serial()[serialNumber] = frameSet;
     };
 
@@ -385,10 +426,6 @@ raw_camera_image encodeDepthRAW(const unsigned char* data, const uint64_t width,
     return raw_camera_image{raw_camera_image::uniq(rawBuf, raw_camera_image::array_delete_deleter), encodedData.size()};
 }
 
-uint64_t getTimeSinceFrame(uint64_t imageTimeUs) {
-    auto nowUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-    return abs(int(nowUs - imageTimeUs));
-}
 // HELPERS END
 
 // RESOURCE BEGIN
@@ -483,8 +520,12 @@ class Orbbec : public vsdk::Camera, public vsdk::Reconfigurable {
 
             // If the image's timestamp is older than a second throw error, this
             // indicates we no longer have a working camera.
-            if (getTimeSinceFrame(color->getSystemTimeStampUs()) > maxFrameAgeUs) {
-                throw std::invalid_argument("no recent frames: check USB connection");
+            uint64_t nowUs = getNowUs();
+            uint64_t diff = timeSinceFrameUs(nowUs, color->getSystemTimeStampUs());
+            if (diff > maxFrameAgeUs) {
+                std::ostringstream buffer;
+                buffer << "no recent color frame: check USB connection, diff: " << diff << "us";
+                throw std::invalid_argument(buffer.str());
             }
 
             unsigned char* colorData = (unsigned char*)color->getData();
@@ -572,8 +613,27 @@ class Orbbec : public vsdk::Camera, public vsdk::Reconfigurable {
                 throw std::invalid_argument("no color frame");
             }
 
+            uint64_t nowUs = getNowUs();
+            uint64_t diff = timeSinceFrameUs(nowUs, color->getSystemTimeStampUs());
+            if (diff > maxFrameAgeUs) {
+                std::ostringstream buffer;
+                buffer << "no recent color frame: check USB connection, diff: " << diff << "us";
+                throw std::invalid_argument(buffer.str());
+            }
+
             if (color->getFormat() != OB_FORMAT_MJPG) {
                 throw std::invalid_argument("color frame was not in jpeg format");
+            }
+
+            std::shared_ptr<ob::Frame> depth = fs->getFrame(OB_FRAME_DEPTH);
+            if (depth == nullptr) {
+                throw std::invalid_argument("no depth frame");
+            }
+
+            diff = timeSinceFrameUs(nowUs, depth->getSystemTimeStampUs());
+            if (diff > maxFrameAgeUs) {
+                std::ostringstream buffer;
+                buffer << "no recent depth frame: check USB connection, diff: " << diff << "us";
             }
 
             unsigned char* colorData = (unsigned char*)color->getData();
@@ -583,11 +643,6 @@ class Orbbec : public vsdk::Camera, public vsdk::Reconfigurable {
             color_image.source_name = "color";
             color_image.mime_type = "image/jpeg";
             color_image.bytes.assign(colorData, colorData + colorDataSize);
-
-            std::shared_ptr<ob::Frame> depth = fs->getFrame(OB_FRAME_DEPTH);
-            if (depth == nullptr) {
-                throw std::invalid_argument("no depth frame");
-            }
 
             unsigned char* depthData = (unsigned char*)depth->getData();
             auto depthVid = depth->as<ob::VideoFrame>();
@@ -606,15 +661,11 @@ class Orbbec : public vsdk::Camera, public vsdk::Reconfigurable {
             uint64_t depthTS = depth->getSystemTimeStampUs();
             if (colorTS != depthTS) {
                 VIAM_SDK_LOG(info) << "color and depth timestamps differ, defaulting to "
-                                      "color";
-                VIAM_SDK_LOG(info) << "color timestamp was " << colorTS << "depth timestamp was " << depthTS;
+                                      "older of the two"
+                                   << "color timestamp was " << colorTS << " depth timestamp was " << depthTS;
             }
-            uint64_t timestamp = colorTS == 0 ? depthTS : colorTS;
-
-            // throw if frame is older than a second.
-            if (getTimeSinceFrame(timestamp) > maxFrameAgeUs) {
-                throw std::invalid_argument("no recent frames: check USB connection");
-            }
+            // use the older of the two timestamps
+            uint64_t timestamp = (colorTS > depthTS) ? depthTS : colorTS;
 
             std::chrono::microseconds latestTimestamp(timestamp);
             response.metadata.captured_at = vsdk::time_pt{std::chrono::duration_cast<std::chrono::nanoseconds>(latestTimestamp)};
@@ -655,21 +706,28 @@ class Orbbec : public vsdk::Camera, public vsdk::Reconfigurable {
                 throw std::invalid_argument("no color frame");
             }
 
-            if (getTimeSinceFrame(color->getSystemTimeStampUs()) > maxFrameAgeUs) {
-                throw std::invalid_argument("no recent color frames: check USB connection");
+            uint64_t nowUs = getNowUs();
+            uint64_t diff = timeSinceFrameUs(nowUs, color->getSystemTimeStampUs());
+            if (diff > maxFrameAgeUs) {
+                std::ostringstream buffer;
+                buffer << "no recent color frame: check USB connection, diff: " << diff << "us";
+                throw std::invalid_argument(buffer.str());
             }
-
-            unsigned char* colorData = (unsigned char*)color->getData();
-            uint32_t colorDataSize = color->dataSize();
 
             std::shared_ptr<ob::Frame> depth = fs->getFrame(OB_FRAME_DEPTH);
             if (depth == nullptr) {
                 throw std::invalid_argument("no depth frame");
             }
 
-            if (getTimeSinceFrame(depth->getSystemTimeStampUs()) > maxFrameAgeUs) {
-                throw std::invalid_argument("no recent depth frames: check USB connection");
+            diff = timeSinceFrameUs(nowUs, depth->getSystemTimeStampUs());
+            if (diff > maxFrameAgeUs) {
+                std::ostringstream buffer;
+                buffer << "no recent depth frame: check USB connection, diff: " << diff << "us";
+                throw std::invalid_argument(buffer.str());
             }
+
+            unsigned char* colorData = (unsigned char*)color->getData();
+            uint32_t colorDataSize = color->dataSize();
 
             std::shared_ptr<ob::DepthFrame> depthFrame = depth->as<ob::DepthFrame>();
             float scale = depthFrame->getValueScale();
