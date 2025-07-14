@@ -1,14 +1,14 @@
 {
   "$schema": "https://dl.viam.dev/module.schema.json",
-  "module_id": "viam:orbbec",
+  "module_id": "seanorg:ignorebec",
   "visibility": "public",
   "url": "https://github.com/viam-modules/orbbec",
-  "description": "C++ camera module for Orbbec cameras",
+  "description": "ignore and change this desc back locally later",
   "models": [
     {
       "api": "rdk:component:camera",
       "markdown_link": "README.md#model-viamorbbecastra2",
-      "model": "viam:orbbec:astra2",
+      "model": "seanorg:ignorebec:astra2",
       "short_description": "Orbbec Astra2 driver return images, depth maps and pointclouds"
     }
   ],
