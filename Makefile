@@ -65,6 +65,13 @@ $(BIN): lint conanfile.py src/* bin/*
 clean:
 	rm -rf packaging/appimages/deploy module.tar.gz
 
+clean-all: clean
+	rm -rf build-conan
+	rm -rf tmp_cpp_sdk  
+	rm -rf venv
+	rm -f orbbec-test-bin
+	rm -f $(OUTPUT_NAME)
+
 setup:
 	export ORBBEC_SDK_VERSION=$(ORBBEC_SDK_VERSION); \
 	export ORBBEC_SDK_DIR=$(ORBBEC_SDK_DIR); \
