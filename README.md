@@ -40,6 +40,8 @@ If there is an issue, try copying `99-obsensor-libusb.rules` in the root directo
 sudo udevadm control --reload-rules && sudo udevadm trigger
 ```
 
+When running on macos, `viam-server` must be run with `sudo` in order to have sufficient permissions to call `uvc_open`.
+
 
 ## Setup
 ```bash
