@@ -1,4 +1,5 @@
 #include "discovery.hpp"
+#include "orbbec.hpp"
 
 #include <iostream>
 #include <string>
@@ -16,6 +17,7 @@
 #include <libobsensor/ObSensor.hpp>
 
 namespace discovery {
+
 namespace vsdk = ::viam::sdk;
 vsdk::Model OrbbecDiscovery::model = vsdk::Model("viam", "orbbec", "discovery");
 
@@ -29,10 +31,15 @@ std::vector<vsdk::ResourceConfig> OrbbecDiscovery::discover_resources(const vsdk
     ob::Context ctx;
     std::shared_ptr<ob::DeviceList> devList = ctx.queryDeviceList();
     int devCount = devList->getCount();
+
+    if (devCount == 0) {
+        VIAM_SDK_LOG(warn) << "No Orbbec devices found during discovery";
+        return {};
+    }
+
+    VIAM_SDK_LOG(info) << "Discovered " << devCount << " devices";
+
     for (size_t i = 0; i < devCount; i++) {
-        if (i == 0) {
-            VIAM_SDK_LOG(info) << "devCount: " << devCount << "\n";
-        }
         std::shared_ptr<ob::Device> dev = devList->getDevice(i);
         std::shared_ptr<ob::DeviceInfo> info = dev->getDeviceInfo();
         orbbec::printDeviceInfo(info);
