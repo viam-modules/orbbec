@@ -16,6 +16,10 @@ jobs:
             container:
                 image: ghcr.io/viamrobotics/rdk-devenv:amd64
                 options: --platform linux/amd64
+          - os: buildjet-8vcpu-ubuntu-2204-arm
+            container:
+              image: ghcr.io/viamrobotics/rdk-devenv:arm64
+              options: --platform linux/arm64
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container }}
 

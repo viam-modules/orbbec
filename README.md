@@ -3,6 +3,11 @@
 Use [Orbbec cameras](https://www.orbbec.com/products/) compatible with [v2 of the Orbbec CPP SDK](https://github.com/orbbec/OrbbecSDK_v2/).
 This module provides access to the color and depth sensors and creates pointclouds from them.
 
+## Supported Platforms
+- **Darwin ARM64**
+- **Linux x64**: Ubuntu 24.04
+- **Linux ARM64**: NVIDIA Jetson AGX Orin, NVIDIA Jetson Orin NX, NVIDIA Jetson Orin Nano, NVIDIA Jetson AGX Xavier, NVIDIA Jetson Xavier NX
+
 ## Model viam:orbbec:astra2
 
 Use [Orbbec cameras](https://www.orbbec.com/products/structured-light-camera/astra-2/).

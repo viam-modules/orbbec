@@ -11,11 +11,13 @@ ifeq ($(OS),darwin)
   ORBBEC_SDK_TIMESTAMP=202505192200
   ORBBEC_SDK_DIR = OrbbecSDK_$(ORBBEC_SDK_VERSION)_$(ORBBEC_SDK_TIMESTAMP)_$(ORBBEC_SDK_COMMIT)_macOS_beta
 else ifeq ($(OS),linux)
+   ORBBEC_SDK_VERSION=v2.4.8
+   ORBBEC_SDK_COMMIT=ec8e3469
+   ORBBEC_SDK_DIR = OrbbecSDK_$(ORBBEC_SDK_VERSION)_$(ORBBEC_SDK_TIMESTAMP)_$(ORBBEC_SDK_COMMIT)_linux_$(ARCH)
   ifeq ($(ARCH),x86_64)
-    ORBBEC_SDK_VERSION=v2.4.8
-    ORBBEC_SDK_COMMIT=ec8e3469
     ORBBEC_SDK_TIMESTAMP = 202507031325
-    ORBBEC_SDK_DIR = OrbbecSDK_$(ORBBEC_SDK_VERSION)_$(ORBBEC_SDK_TIMESTAMP)_$(ORBBEC_SDK_COMMIT)_linux_$(ARCH)
+   else ifeq ($(ARCH), aarch64)
+	ORBBEC_SDK_TIMESTAMP = 202507031330
   else
     $(error Unsupported architecture: $(ARCH))
   endif
@@ -62,6 +64,13 @@ $(BIN): lint conanfile.py src/* bin/*
 
 clean:
 	rm -rf packaging/appimages/deploy module.tar.gz
+
+clean-all: clean
+	rm -rf build-conan
+	rm -rf tmp_cpp_sdk  
+	rm -rf venv
+	rm -f orbbec-test-bin
+	rm -f $(OUTPUT_NAME)
 
 setup:
 	export ORBBEC_SDK_VERSION=$(ORBBEC_SDK_VERSION); \
