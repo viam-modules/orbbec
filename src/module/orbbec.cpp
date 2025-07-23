@@ -766,7 +766,8 @@ std::vector<vsdk::GeometryConfig> Orbbec::get_geometries(const vsdk::ProtoStruct
     return {vsdk::GeometryConfig(vsdk::pose{-37.5, 5.5, -18.1}, vsdk::box({145, 46, 39}), "box")};
 }
 
-std::unique_ptr<orbbec::resource_properties_> Orbbec::configure_(vsdk::Dependencies dependencies, vsdk::ResourceConfig configuration) {
+std::unique_ptr<orbbec::resource_properties> Orbbec::configure_(vsdk::Dependencies dependencies,
+                                                              vsdk::ResourceConfig configuration) {
     auto attrs = configuration.attributes();
 
     std::string serial_number_from_config;
@@ -781,7 +782,8 @@ std::unique_ptr<orbbec::resource_properties_> Orbbec::configure_(vsdk::Dependenc
 
     serial_number_from_config = *serial_val;
 
-    auto state = std::make_unique<orbbec::resource_properties_>(serial_number_from_config, configuration.name());
+    auto state =
+        std::make_unique<orbbec::resource_properties>(serial_number_from_config, configuration.name());
 
     return state;
 }
