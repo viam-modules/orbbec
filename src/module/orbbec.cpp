@@ -445,27 +445,27 @@ std::vector<std::string> validate(vsdk::ResourceConfig cfg) {
 }
 
 Orbbec::Orbbec(vsdk::Dependencies deps, vsdk::ResourceConfig cfg)
-    : Camera(cfg.name()), props_(configure_(std::move(deps), std::move(cfg))) {
-    VIAM_SDK_LOG(info) << "Orbbec constructor start " << props_->serial_number;
-    startDevice(props_->serial_number, props_->resource_name);
+    : Camera(cfg.name()), config_(configure_(std::move(deps), std::move(cfg))) {
+    VIAM_SDK_LOG(info) << "Orbbec constructor start " << config_->serial_number;
+    startDevice(config_->serial_number, config_->resource_name);
     {
         std::lock_guard<std::mutex> lock(serial_by_resource_mu());
-        serial_by_resource()[props_->resource_name] = props_->serial_number;
+        serial_by_resource()[config_->resource_name] = config_->serial_number;
     }
-    VIAM_SDK_LOG(info) << "Orbbec constructor end " << props_->serial_number;
+    VIAM_SDK_LOG(info) << "Orbbec constructor end " << config_->serial_number;
 }
 
 Orbbec::~Orbbec() {
-    VIAM_SDK_LOG(info) << "Orbbec destructor start " << props_->serial_number;
+    VIAM_SDK_LOG(info) << "Orbbec destructor start " << config_->serial_number;
     std::string prev_serial_number;
     std::string prev_resource_name;
     {
-        const std::lock_guard<std::mutex> lock(props_mu_);
-        prev_serial_number = props_->serial_number;
-        prev_resource_name = props_->resource_name;
+        const std::lock_guard<std::mutex> lock(config_mu_);
+        prev_serial_number = config_->serial_number;
+        prev_resource_name = config_->resource_name;
     }
     stopDevice(prev_serial_number, prev_resource_name);
-    VIAM_SDK_LOG(info) << "Orbbec destructor end " << props_->serial_number;
+    VIAM_SDK_LOG(info) << "Orbbec destructor end " << config_->serial_number;
 }
 
 void Orbbec::reconfigure(const vsdk::Dependencies& deps, const vsdk::ResourceConfig& cfg) {
@@ -473,24 +473,24 @@ void Orbbec::reconfigure(const vsdk::Dependencies& deps, const vsdk::ResourceCon
     std::string prev_serial_number;
     std::string prev_resource_name;
     {
-        const std::lock_guard<std::mutex> lock(props_mu_);
-        prev_serial_number = props_->serial_number;
-        prev_resource_name = props_->resource_name;
+        const std::lock_guard<std::mutex> lock(config_mu_);
+        prev_serial_number = config_->serial_number;
+        prev_resource_name = config_->resource_name;
     }
     stopDevice(prev_serial_number, prev_resource_name);
     std::string new_serial_number;
     std::string new_resource_name;
     {
-        const std::lock_guard<std::mutex> lock(props_mu_);
-        props_.reset();
-        props_ = configure_(deps, cfg);
-        new_serial_number = props_->serial_number;
-        new_resource_name = props_->resource_name;
+        const std::lock_guard<std::mutex> lock(config_mu_);
+        config_.reset();
+        config_ = configure_(deps, cfg);
+        new_serial_number = config_->serial_number;
+        new_resource_name = config_->resource_name;
     }
     startDevice(new_serial_number, new_resource_name);
     {
         std::lock_guard<std::mutex> lock(serial_by_resource_mu());
-        serial_by_resource()[props_->resource_name] = new_serial_number;
+        serial_by_resource()[config_->resource_name] = new_serial_number;
     }
     VIAM_SDK_LOG(info) << "Orbbec reconfigure end";
 }
@@ -500,8 +500,8 @@ vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::Pro
         VIAM_SDK_LOG(info) << "[get_image] start";
         std::string serial_number;
         {
-            const std::lock_guard<std::mutex> lock(props_mu_);
-            serial_number = props_->serial_number;
+            const std::lock_guard<std::mutex> lock(config_mu_);
+            serial_number = config_->serial_number;
         }
         std::shared_ptr<ob::FrameSet> fs = nullptr;
         {
@@ -552,8 +552,8 @@ vsdk::Camera::properties Orbbec::get_properties() {
 
         std::string serial_number;
         {
-            const std::lock_guard<std::mutex> lock(props_mu_);
-            serial_number = props_->serial_number;
+            const std::lock_guard<std::mutex> lock(config_mu_);
+            serial_number = config_->serial_number;
         }
 
         OBCameraIntrinsic props;
@@ -598,8 +598,8 @@ vsdk::Camera::image_collection Orbbec::get_images() {
         VIAM_SDK_LOG(info) << "[get_images] start";
         std::string serial_number;
         {
-            const std::lock_guard<std::mutex> lock(props_mu_);
-            serial_number = props_->serial_number;
+            const std::lock_guard<std::mutex> lock(config_mu_);
+            serial_number = config_->serial_number;
         }
         std::shared_ptr<ob::FrameSet> fs = nullptr;
         {
@@ -691,8 +691,8 @@ vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const v
         VIAM_SDK_LOG(info) << "[get_point_cloud] start";
         std::string serial_number;
         {
-            const std::lock_guard<std::mutex> lock(props_mu_);
-            serial_number = props_->serial_number;
+            const std::lock_guard<std::mutex> lock(config_mu_);
+            serial_number = config_->serial_number;
         }
         std::shared_ptr<ob::FrameSet> fs = nullptr;
         {
@@ -766,8 +766,7 @@ std::vector<vsdk::GeometryConfig> Orbbec::get_geometries(const vsdk::ProtoStruct
     return {vsdk::GeometryConfig(vsdk::pose{-37.5, 5.5, -18.1}, vsdk::box({145, 46, 39}), "box")};
 }
 
-std::unique_ptr<orbbec::resource_properties> Orbbec::configure_(vsdk::Dependencies dependencies,
-                                                              vsdk::ResourceConfig configuration) {
+std::unique_ptr<orbbec::ObResourceConfig> Orbbec::configure_(vsdk::Dependencies dependencies, vsdk::ResourceConfig configuration) {
     auto attrs = configuration.attributes();
 
     std::string serial_number_from_config;
@@ -782,8 +781,7 @@ std::unique_ptr<orbbec::resource_properties> Orbbec::configure_(vsdk::Dependenci
 
     serial_number_from_config = *serial_val;
 
-    auto state =
-        std::make_unique<orbbec::resource_properties>(serial_number_from_config, configuration.name());
+    auto state = std::make_unique<orbbec::ObResourceConfig>(serial_number_from_config, configuration.name());
 
     return state;
 }

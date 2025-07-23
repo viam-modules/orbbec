@@ -7,11 +7,11 @@
 
 namespace orbbec {
 
-struct resource_properties {
+struct ObResourceConfig {
     std::string resource_name;
     std::string serial_number;
 
-    explicit resource_properties(std::string const& serial_number, std::string const& resource_name)
+    explicit ObResourceConfig(std::string const& serial_number, std::string const& resource_name)
         : serial_number(serial_number), resource_name(resource_name) {}
 };
 
@@ -34,10 +34,9 @@ class Orbbec final : public ::viam::sdk::Camera, public ::viam::sdk::Reconfigura
     static ::viam::sdk::Model model;
 
    private:
-    std::unique_ptr<struct resource_properties> props_;
-    std::mutex props_mu_;
-    static std::unique_ptr<struct resource_properties> configure_(::viam::sdk::Dependencies deps,
-                                                                  ::viam::sdk::ResourceConfig cfg);
+    std::unique_ptr<struct ObResourceConfig> config_;
+    std::mutex config_mu_;
+    static std::unique_ptr<struct ObResourceConfig> configure_(::viam::sdk::Dependencies deps, ::viam::sdk::ResourceConfig cfg);
 };
 
 }  // namespace orbbec
