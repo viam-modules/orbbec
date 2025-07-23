@@ -32,7 +32,6 @@
 #include <viam/sdk/config/resource.hpp>
 #include <viam/sdk/module/service.hpp>
 #include <viam/sdk/registry/registry.hpp>
-#include <viam/sdk/resource/reconfigurable.hpp>
 #include <viam/sdk/rpc/server.hpp>
 
 #include <libobsensor/ObSensor.hpp>
@@ -440,7 +439,7 @@ std::vector<std::string> validate(vsdk::ResourceConfig cfg) {
     return {};
 }
 
-class Orbbec : public vsdk::Camera, public vsdk::Reconfigurable {
+class Orbbec : public vsdk::Camera {
    public:
     Orbbec(vsdk::Dependencies deps, vsdk::ResourceConfig cfg) : Camera(cfg.name()), state_(configure_(std::move(deps), std::move(cfg))) {
         VIAM_SDK_LOG(info) << "Orbbec constructor start " << state_->serial_number;
@@ -463,33 +462,6 @@ class Orbbec : public vsdk::Camera, public vsdk::Reconfigurable {
         }
         stopDevice(prev_serial_number, prev_resource_name);
         VIAM_SDK_LOG(info) << "Orbbec destructor end " << state_->serial_number;
-    }
-
-    void reconfigure(const vsdk::Dependencies& deps, const vsdk::ResourceConfig& cfg) {
-        VIAM_SDK_LOG(info) << "Orbbec reconfigure start";
-        std::string prev_serial_number;
-        std::string prev_resource_name;
-        {
-            const std::lock_guard<std::mutex> lock(state_mu_);
-            prev_serial_number = state_->serial_number;
-            prev_resource_name = state_->resource_name;
-        }
-        stopDevice(prev_serial_number, prev_resource_name);
-        std::string new_serial_number;
-        std::string new_resource_name;
-        {
-            const std::lock_guard<std::mutex> lock(state_mu_);
-            state_.reset();
-            state_ = configure_(deps, cfg);
-            new_serial_number = state_->serial_number;
-            new_resource_name = state_->resource_name;
-        }
-        startDevice(new_serial_number, new_resource_name);
-        {
-            std::lock_guard<std::mutex> lock(serial_by_resource_mu());
-            serial_by_resource()[state_->resource_name] = new_serial_number;
-        }
-        VIAM_SDK_LOG(info) << "Orbbec reconfigure end";
     }
 
     vsdk::Camera::raw_image get_image(std::string mime_type, const vsdk::ProtoStruct& extra) {
