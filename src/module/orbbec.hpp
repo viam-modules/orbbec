@@ -19,25 +19,25 @@ struct ObResourceConfig {
 void startOrbbecSDK(ob::Context& ctx);
 void printDeviceInfo(const std::shared_ptr<ob::DeviceInfo> info);
 
-class Orbbec final : public ::viam::sdk::Camera, public ::viam::sdk::Reconfigurable {
+class Orbbec final : public viam::sdk::Camera, public viam::sdk::Reconfigurable {
    public:
-    Orbbec(::viam::sdk::Dependencies deps, ::viam::sdk::ResourceConfig cfg);
+    Orbbec(viam::sdk::Dependencies deps, viam::sdk::ResourceConfig cfg);
     ~Orbbec();
-    void reconfigure(const ::viam::sdk::Dependencies& deps, const ::viam::sdk::ResourceConfig& cfg) override;
-    ::viam::sdk::ProtoStruct do_command(const ::viam::sdk::ProtoStruct& command) override;
-    raw_image get_image(std::string mime_type, const ::viam::sdk::ProtoStruct& extra) override;
+    void reconfigure(const viam::sdk::Dependencies& deps, const viam::sdk::ResourceConfig& cfg) override;
+    viam::sdk::ProtoStruct do_command(const viam::sdk::ProtoStruct& command) override;
+    raw_image get_image(std::string mime_type, const viam::sdk::ProtoStruct& extra) override;
     image_collection get_images() override;
-    point_cloud get_point_cloud(std::string mime_type, const ::viam::sdk::ProtoStruct& extra) override;
+    point_cloud get_point_cloud(std::string mime_type, const viam::sdk::ProtoStruct& extra) override;
     properties get_properties() override;
-    std::vector<::viam::sdk::GeometryConfig> get_geometries(const ::viam::sdk::ProtoStruct& extra) override;
+    std::vector<viam::sdk::GeometryConfig> get_geometries(const viam::sdk::ProtoStruct& extra) override;
 
-    static ::viam::sdk::GeometryConfig geometry;
-    static ::viam::sdk::Model model;
+    static viam::sdk::GeometryConfig geometry;
+    static viam::sdk::Model model;
 
    private:
-    std::unique_ptr<struct ObResourceConfig> config_;
+    std::unique_ptr<ObResourceConfig> config_;
     std::mutex config_mu_;
-    static std::unique_ptr<struct ObResourceConfig> configure_(::viam::sdk::Dependencies deps, ::viam::sdk::ResourceConfig cfg);
+    static std::unique_ptr<ObResourceConfig> configure_(viam::sdk::Dependencies deps, viam::sdk::ResourceConfig cfg);
 };
 
 }  // namespace orbbec
