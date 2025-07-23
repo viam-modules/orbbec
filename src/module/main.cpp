@@ -40,6 +40,7 @@ int serve(int argc, char** argv) try {
             ctx->setLoggerSeverity(OB_LOG_SEVERITY_DEBUG);
         }
     }
+
     orbbec::startOrbbecSDK(*ctx);
     auto module_service = std::make_shared<vsdk::ModuleService>(argc, argv, create_all_model_registrations(ctx));
     module_service->serve();
