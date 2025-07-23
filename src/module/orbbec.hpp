@@ -5,33 +5,38 @@
 
 #include <libobsensor/ObSensor.hpp>
 
-namespace vsdk = ::viam::sdk;
-
 namespace orbbec {
+
+struct resource_properties_ {
+    std::string resource_name;
+    std::string serial_number;
+
+    explicit resource_properties_(std::string const& serial_number, std::string const& resource_name)
+        : serial_number(serial_number), resource_name(resource_name) {}
+};
 
 void startOrbbecSDK(ob::Context& ctx);
 void printDeviceInfo(const std::shared_ptr<ob::DeviceInfo> info);
 
-class Orbbec final : public vsdk::Camera, public vsdk::Reconfigurable {
+class Orbbec final : public ::viam::sdk::Camera, public ::viam::sdk::Reconfigurable {
    public:
-    Orbbec(vsdk::Dependencies deps, vsdk::ResourceConfig cfg);
+    Orbbec(::viam::sdk::Dependencies deps, ::viam::sdk::ResourceConfig cfg);
     ~Orbbec();
-    void reconfigure(const vsdk::Dependencies& deps, const vsdk::ResourceConfig& cfg) override;
-    vsdk::ProtoStruct do_command(const vsdk::ProtoStruct& command) override;
-    raw_image get_image(std::string mime_type, const vsdk::ProtoStruct& extra) override;
+    void reconfigure(const ::viam::sdk::Dependencies& deps, const ::viam::sdk::ResourceConfig& cfg) override;
+    ::viam::sdk::ProtoStruct do_command(const ::viam::sdk::ProtoStruct& command) override;
+    raw_image get_image(std::string mime_type, const ::viam::sdk::ProtoStruct& extra) override;
     image_collection get_images() override;
-    point_cloud get_point_cloud(std::string mime_type, const vsdk::ProtoStruct& extra) override;
+    point_cloud get_point_cloud(std::string mime_type, const ::viam::sdk::ProtoStruct& extra) override;
     properties get_properties() override;
-    std::vector<vsdk::GeometryConfig> get_geometries(const vsdk::ProtoStruct& extra) override;
+    std::vector<::viam::sdk::GeometryConfig> get_geometries(const ::viam::sdk::ProtoStruct& extra) override;
 
-    static vsdk::GeometryConfig geometry;
-    static vsdk::Model model;
+    static ::viam::sdk::GeometryConfig geometry;
+    static ::viam::sdk::Model model;
 
    private:
-    struct state_;
-    std::unique_ptr<struct state_> state_;
-    std::mutex state_mu_;
-    static std::unique_ptr<struct state_> configure_(vsdk::Dependencies deps, vsdk::ResourceConfig cfg);
+    std::unique_ptr<struct resource_properties_> props_;
+    std::mutex props_mu_;
+    static std::unique_ptr<struct resource_properties_> configure_(::viam::sdk::Dependencies deps, ::viam::sdk::ResourceConfig cfg);
 };
 
 }  // namespace orbbec

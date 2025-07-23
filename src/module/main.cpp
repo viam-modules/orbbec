@@ -35,7 +35,8 @@ int serve(int argc, char** argv) try {
         }
     }
     orbbec::startOrbbecSDK(ctx);
-    std::make_shared<vsdk::ModuleService>(argc, argv, create_all_model_registrations())->serve();
+    auto module_service = std::make_shared<vsdk::ModuleService>(argc, argv, create_all_model_registrations());
+    module_service->serve();
 
     return EXIT_SUCCESS;
 } catch (const std::exception& ex) {
@@ -57,4 +58,4 @@ int main(int argc, char* argv[]) {
     }
 
     return serve(argc, argv);
-};
+}
