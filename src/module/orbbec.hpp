@@ -7,6 +7,7 @@
 
 namespace orbbec {
 
+// The native config struct for orbbec resources.
 struct ObResourceConfig {
     std::string resource_name;
     std::string serial_number;

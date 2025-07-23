@@ -27,7 +27,6 @@
 #include <stdexcept>
 #include <vector>
 
-#include <viam/sdk/common/instance.hpp>
 #include <viam/sdk/common/proto_value.hpp>
 #include <viam/sdk/components/camera.hpp>
 #include <viam/sdk/components/component.hpp>
@@ -44,6 +43,12 @@ namespace orbbec {
 namespace vsdk = ::viam::sdk;
 
 vsdk::Model Orbbec::model("viam", "orbbec", "astra2");
+
+const std::string kColorSourceName = "color";
+const std::string kColorMimeTypeJPEG = "image/jpeg";
+const std::string kDepthSourceName = "depth";
+const std::string kDepthMimeTypeViamDep = "image/vnd.viam.dep";
+const std::string kPcdMimeType = "pointcloud/pcd";
 
 // CONSTANTS BEGIN
 constexpr char service_name[] = "viam_orbbec";
@@ -456,7 +461,11 @@ Orbbec::Orbbec(vsdk::Dependencies deps, vsdk::ResourceConfig cfg)
 }
 
 Orbbec::~Orbbec() {
-    VIAM_SDK_LOG(info) << "Orbbec destructor start " << config_->serial_number;
+    if (config_ == nullptr) {
+        VIAM_SDK_LOG(error) << "Orbbec destructor start: config_ is null, no available serial number";
+    } else {
+        VIAM_SDK_LOG(info) << "Orbbec destructor start " << config_->serial_number;
+    }
     std::string prev_serial_number;
     std::string prev_resource_name;
     {
@@ -465,7 +474,11 @@ Orbbec::~Orbbec() {
         prev_resource_name = config_->resource_name;
     }
     stopDevice(prev_serial_number, prev_resource_name);
-    VIAM_SDK_LOG(info) << "Orbbec destructor end " << config_->serial_number;
+    if (config_ == nullptr) {
+        VIAM_SDK_LOG(error) << "Orbbec destructor end: config_ is null, no available serial number";
+    } else {
+        VIAM_SDK_LOG(info) << "Orbbec destructor end " << config_->serial_number;
+    }
 }
 
 void Orbbec::reconfigure(const vsdk::Dependencies& deps, const vsdk::ResourceConfig& cfg) {
@@ -532,11 +545,14 @@ vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::Pro
         }
 
         unsigned char* colorData = (unsigned char*)color->getData();
+        if (colorData == nullptr) {
+            throw std::runtime_error("[get_image] color data is null");
+        }
         uint32_t colorDataSize = color->dataSize();
 
         vsdk::Camera::raw_image response;
-        response.source_name = "color";
-        response.mime_type = "image/jpeg";
+        response.source_name = kColorSourceName;
+        response.mime_type = kColorMimeTypeJPEG;
         response.bytes.assign(colorData, colorData + colorDataSize);
         VIAM_SDK_LOG(info) << "[get_image] end";
         return response;
@@ -553,6 +569,12 @@ vsdk::Camera::properties Orbbec::get_properties() {
         std::string serial_number;
         {
             const std::lock_guard<std::mutex> lock(config_mu_);
+            if (config_ == nullptr) {
+                throw std::runtime_error("native config is null");
+            }
+            if (config_->serial_number.empty()) {
+                throw std::runtime_error("native config serial number is empty");
+            }
             serial_number = config_->serial_number;
         }
 
@@ -640,20 +662,26 @@ vsdk::Camera::image_collection Orbbec::get_images() {
         }
 
         unsigned char* colorData = (unsigned char*)color->getData();
+        if (colorData == nullptr) {
+            throw std::runtime_error("[get_image] color data is null");
+        }
         uint32_t colorDataSize = color->dataSize();
 
         vsdk::Camera::raw_image color_image;
-        color_image.source_name = "color";
-        color_image.mime_type = "image/jpeg";
+        color_image.source_name = kColorSourceName;
+        color_image.mime_type = kColorMimeTypeJPEG;
         color_image.bytes.assign(colorData, colorData + colorDataSize);
 
         unsigned char* depthData = (unsigned char*)depth->getData();
+        if (depthData == nullptr) {
+            throw std::runtime_error("[get_images] depth data is null");
+        }
         auto depthVid = depth->as<ob::VideoFrame>();
         raw_camera_image rci = encodeDepthRAW(depthData, depthVid->getWidth(), depthVid->getHeight(), false);
 
         vsdk::Camera::raw_image depth_image;
-        depth_image.source_name = "depth";
-        depth_image.mime_type = "image/vnd.viam.dep";
+        depth_image.source_name = kDepthSourceName;
+        depth_image.mime_type = kDepthMimeTypeViamDep;
         depth_image.bytes.assign(rci.bytes.get(), rci.bytes.get() + rci.size);
 
         vsdk::Camera::image_collection response;
@@ -685,7 +713,6 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
     return vsdk::ProtoStruct{};
 }
 
-std::string pointcloudMime = "pointcloud/pcd";
 vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const vsdk::ProtoStruct& extra) {
     try {
         VIAM_SDK_LOG(info) << "[get_point_cloud] start";
@@ -730,12 +757,18 @@ vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const v
         }
 
         unsigned char* colorData = (unsigned char*)color->getData();
+        if (colorData == nullptr) {
+            throw std::runtime_error("[get_image] color data is null");
+        }
         uint32_t colorDataSize = color->dataSize();
 
         std::shared_ptr<ob::DepthFrame> depthFrame = depth->as<ob::DepthFrame>();
         float scale = depthFrame->getValueScale();
 
         unsigned char* depthData = (unsigned char*)depth->getData();
+        if (depthData == nullptr) {
+            throw std::runtime_error("[get_point_cloud] depth data is null");
+        }
 
         // NOTE: UNDER LOCK
         std::lock_guard<std::mutex> lock(devices_by_serial_mu());
@@ -753,7 +786,7 @@ vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const v
             RGBPointsToPCD(my_dev->pointCloudFilter->process(my_dev->align->process(fs)), scale * mmToMeterMultiple);
 
         VIAM_SDK_LOG(info) << "[get_point_cloud] end";
-        return vsdk::Camera::point_cloud{pointcloudMime, data};
+        return vsdk::Camera::point_cloud{kPcdMimeType, data};
     } catch (const std::exception& e) {
         VIAM_SDK_LOG(error) << "[get_point_cloud] error: " << e.what();
         throw std::runtime_error("failed to create pointcloud: " + std::string(e.what()));
@@ -781,9 +814,9 @@ std::unique_ptr<orbbec::ObResourceConfig> Orbbec::configure_(vsdk::Dependencies 
 
     serial_number_from_config = *serial_val;
 
-    auto state = std::make_unique<orbbec::ObResourceConfig>(serial_number_from_config, configuration.name());
+    auto native_config = std::make_unique<orbbec::ObResourceConfig>(serial_number_from_config, configuration.name());
 
-    return state;
+    return native_config;
 }
 // RESOURCE END
 
