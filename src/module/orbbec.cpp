@@ -412,18 +412,17 @@ void listDevices(const ob::Context& ctx) {
 
 raw_camera_image encodeDepthRAW(const unsigned char* data, const uint64_t width, const uint64_t height, const bool littleEndian) {
     viam::sdk::Camera::depth_map m = xt::xarray<uint16_t>::from_shape({height, width});
-    std::copy(reinterpret_cast<const uint16_t*>(data), reinterpret_cast<const uint16_t*>(data) + height * width, m.begin());
 
-    for (size_t i = 0; i < m.size(); i++) {
-        m[i] = m[i] * mmToMeterMultiple;
-    }
+    std::transform(
+        reinterpret_cast<const uint16_t*>(data), reinterpret_cast<const uint16_t*>(data) + (height * width), m.begin(), [](uint16_t mi) {
+            return mi * mmToMeterMultiple;
+        });
 
     std::vector<unsigned char> encodedData = viam::sdk::Camera::encode_depth_map(m);
 
     raw_camera_image rawBuf(encodedData.size());
-    auto bufSpan = rawBuf.span();
 
-    std::copy(encodedData.begin(), encodedData.end(), bufSpan.begin());
+    std::copy(encodedData.begin(), encodedData.end(), rawBuf.span().begin());
 
     return rawBuf;
 }
