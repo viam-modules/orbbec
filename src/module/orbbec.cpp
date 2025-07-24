@@ -33,7 +33,6 @@
 #include <viam/sdk/config/resource.hpp>
 #include <viam/sdk/module/service.hpp>
 #include <viam/sdk/registry/registry.hpp>
-#include <viam/sdk/resource/reconfigurable.hpp>
 #include <viam/sdk/rpc/server.hpp>
 
 #include <libobsensor/ObSensor.hpp>
@@ -479,33 +478,6 @@ Orbbec::~Orbbec() {
     } else {
         VIAM_SDK_LOG(info) << "Orbbec destructor end " << config_->serial_number;
     }
-}
-
-void Orbbec::reconfigure(const vsdk::Dependencies& deps, const vsdk::ResourceConfig& cfg) {
-    VIAM_SDK_LOG(info) << "Orbbec reconfigure start";
-    std::string prev_serial_number;
-    std::string prev_resource_name;
-    {
-        const std::lock_guard<std::mutex> lock(config_mu_);
-        prev_serial_number = config_->serial_number;
-        prev_resource_name = config_->resource_name;
-    }
-    stopDevice(prev_serial_number, prev_resource_name);
-    std::string new_serial_number;
-    std::string new_resource_name;
-    {
-        const std::lock_guard<std::mutex> lock(config_mu_);
-        config_.reset();
-        config_ = configure_(deps, cfg);
-        new_serial_number = config_->serial_number;
-        new_resource_name = config_->resource_name;
-    }
-    startDevice(new_serial_number, new_resource_name);
-    {
-        std::lock_guard<std::mutex> lock(serial_by_resource_mu());
-        serial_by_resource()[config_->resource_name] = new_serial_number;
-    }
-    VIAM_SDK_LOG(info) << "Orbbec reconfigure end";
 }
 
 vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::ProtoStruct& extra) {
