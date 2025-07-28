@@ -21,6 +21,11 @@ The following attribute template can be used to configure this model:
 }
 ```
 
+## Model viam:orbbec:discovery
+
+This model is used to locate orbbec cameras connected to your machine. No configuration is needed.
+Expand the test card or look at the discovery control card to obtain configurations for all connected Orbbecs.
+
 #### Attributes
 
 The following attributes are available for this model:

@@ -11,7 +11,7 @@ project(viam-orbbec
 )
 
 add_executable(orbbec-cli src/cli/main.cpp)
-add_executable(orbbec-module src/module/main.cpp src/module/orbbec.cpp)
+add_executable(orbbec-module src/module/main.cpp src/module/orbbec.cpp src/module/discovery.cpp)
 
 set(CMAKE_OSX_DEPLOYMENT_TARGET "14.5")
 
