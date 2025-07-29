@@ -10,14 +10,16 @@ project(viam-orbbec
     LANGUAGES CXX
 )
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+
 add_executable(orbbec-cli src/cli/main.cpp)
 add_executable(orbbec-module src/module/main.cpp src/module/orbbec.cpp src/module/discovery.cpp)
 
 set(CMAKE_OSX_DEPLOYMENT_TARGET "14.5")
 
-set(OrbbecSDK_DIR  "${ORBBEC_SDK_DIR}/lib")
-include_directories("${ORBBEC_SDK_DIR}/include")
+include(fetch_orbbec)
 
+message(STATUS "After module ${OrbbecSDK_DIR}")
 
 find_package(OrbbecSDK REQUIRED)
 find_package(viam-cpp-sdk REQUIRED)

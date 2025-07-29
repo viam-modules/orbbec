@@ -24,18 +24,6 @@ else
     exit 1
 fi
 
-
-rm -rf ${ORBBEC_SDK_DIR}.zip
-rm -rf ${ORBBEC_SDK_DIR}
-wget https://github.com/orbbec/OrbbecSDK_v2/releases/download/${ORBBEC_SDK_VERSION}/${ORBBEC_SDK_DIR}.zip
-unzip ${ORBBEC_SDK_DIR}.zip
-
-# MacOS binary has a different top level dir name than the zip file name
-if [[ ${OS} == "darwin" ]]; then
-TOPDIR=$(ls -d *macOS*/ | head -1 | sed 's#/##')
-mv "${TOPDIR}" "${ORBBEC_SDK_DIR}"
-fi
-
 # lsusb rules only on linux
 if [[ ${OS} == "linux" ]]; then
   cp ${ORBBEC_SDK_DIR}/shared/99-obsensor-libusb.rules .
