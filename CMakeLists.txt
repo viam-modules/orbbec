@@ -19,8 +19,6 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "14.5")
 
 include(fetch_orbbec)
 
-message(STATUS "After module ${OrbbecSDK_DIR}")
-
 find_package(OrbbecSDK REQUIRED)
 find_package(viam-cpp-sdk REQUIRED)
 find_package(Threads REQUIRED)
