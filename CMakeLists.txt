@@ -10,7 +10,7 @@ project(viam-orbbec
     LANGUAGES CXX
 )
 
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src/cmake")
 
 add_executable(orbbec-cli src/cli/main.cpp)
 add_executable(orbbec-module src/module/main.cpp src/module/orbbec.cpp src/module/discovery.cpp)
@@ -19,17 +19,28 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "14.5")
 
 include(fetch_orbbec)
 
+if (LINUX)
+    include(install_udev_rules)
+endif()
+
 find_package(OrbbecSDK REQUIRED)
 find_package(viam-cpp-sdk REQUIRED)
 find_package(Threads REQUIRED)
 
 target_link_libraries(orbbec-cli
-PRIVATE ob::OrbbecSDK
-PRIVATE Threads::Threads
+    PRIVATE ob::OrbbecSDK
+    PRIVATE Threads::Threads
 )
 
 target_link_libraries(orbbec-module
-PRIVATE ob::OrbbecSDK
-PRIVATE Threads::Threads
-PRIVATE viam-cpp-sdk::viamsdk
+    PRIVATE ob::OrbbecSDK
+    PRIVATE Threads::Threads
+    PRIVATE viam-cpp-sdk::viamsdk
+)
+
+# TODO strip rpath, maybe set to @executable_path/lib or just @executable_path
+install(
+    TARGETS orbbec-module
+    RUNTIME_DEPENDENCIES
+        FRAMEWORK DESTINATION bin
 )

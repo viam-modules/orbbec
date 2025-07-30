@@ -5,27 +5,6 @@ BIN := build-conan/build/RelWithDebInfo/orbbec-module
 TAG_VERSION?=latest
 APPIMAGE := packaging/appimages/deploy/$(OUTPUT_NAME)-$(TAG_VERSION)-$(ARCH).AppImage
 
-ifeq ($(OS),darwin)
-  ORBBEC_SDK_VERSION=v2.4.3
-  ORBBEC_SDK_COMMIT=045a0e76
-  ORBBEC_SDK_TIMESTAMP=202505192200
-  ORBBEC_SDK_DIR = OrbbecSDK_$(ORBBEC_SDK_VERSION)_$(ORBBEC_SDK_TIMESTAMP)_$(ORBBEC_SDK_COMMIT)_macOS_beta
-else ifeq ($(OS),linux)
-   ORBBEC_SDK_VERSION=v2.4.8
-   ORBBEC_SDK_COMMIT=ec8e3469
-   ORBBEC_SDK_DIR = OrbbecSDK_$(ORBBEC_SDK_VERSION)_$(ORBBEC_SDK_TIMESTAMP)_$(ORBBEC_SDK_COMMIT)_linux_$(ARCH)
-  ifeq ($(ARCH),x86_64)
-    ORBBEC_SDK_TIMESTAMP = 202507031325
-   else ifeq ($(ARCH), aarch64)
-	ORBBEC_SDK_TIMESTAMP = 202507031330
-  else
-    $(error Unsupported architecture: $(ARCH))
-  endif
-else
-  $(error Unsupported OS: $(OS))
-endif
-
-
 .PHONY: build lint setup appimage
 
 ifeq ($(OS),linux)
@@ -67,7 +46,7 @@ clean:
 
 clean-all: clean
 	rm -rf build-conan
-	rm -rf tmp_cpp_sdk  
+	rm -rf tmp_cpp_sdk
 	rm -rf venv
 	rm -f orbbec-test-bin
 	rm -f $(OUTPUT_NAME)
