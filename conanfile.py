@@ -46,8 +46,6 @@ class orbbec(ConanFile):
 
     def generate(self):
         tc = CMakeToolchain(self)
-        sdk_dir = os.environ.get("ORBBEC_SDK_DIR", "unknown")
-        tc.cache_variables["ORBBEC_SDK_DIR"] = sdk_dir
         tc.generate()
         CMakeDeps(self).generate()
 
@@ -58,3 +56,7 @@ class orbbec(ConanFile):
 
     def layout(self):
         cmake_layout(self, src_folder=".")
+
+    def package(self):
+        cmake = CMake(self)
+        cmake.install()
