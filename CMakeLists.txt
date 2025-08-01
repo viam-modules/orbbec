@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
 project(orbbec)
 
-
 set(CMAKE_PROJECT_VERSION 0.0.1)
 set(CMAKE_CXX_STANDARD 17)
 project(viam-orbbec
@@ -11,6 +10,12 @@ project(viam-orbbec
 )
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src/cmake")
+
+if (APPLE)
+    list(PREPEND CMAKE_INSTALL_RPATH "@loader_path/../lib")
+else()
+    list(PREPEND CMAKE_INSTALL_RPATH "$ORIGIN/../lib")
+endif()
 
 add_executable(orbbec-cli src/cli/main.cpp)
 add_executable(orbbec-module src/module/main.cpp src/module/orbbec.cpp src/module/discovery.cpp)
@@ -38,9 +43,18 @@ target_link_libraries(orbbec-module
     PRIVATE viam-cpp-sdk::viamsdk
 )
 
-# TODO strip rpath, maybe set to @executable_path/lib or just @executable_path
+
 install(
     TARGETS orbbec-module
     RUNTIME_DEPENDENCIES
         FRAMEWORK DESTINATION bin
+)
+
+install(
+    FILES
+        meta.json
+        first_run.sh
+        install_udev_rules.sh
+        99-obsensor-libusb.rules
+    DESTINATION ${CMAKE_INSTALL_PREFIX}
 )
