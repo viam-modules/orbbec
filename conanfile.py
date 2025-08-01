@@ -1,11 +1,9 @@
 import os
-from io import StringIO
 import re
 
 from conan import ConanFile
 from conan.errors import ConanException
 from conan.tools.cmake import CMake, CMakeDeps, CMakeToolchain, cmake_layout
-from conan.tools.build import can_run
 from conan.tools.files import copy, load
 
 class orbbec(ConanFile):
@@ -23,7 +21,7 @@ class orbbec(ConanFile):
         "shared": True
     }
 
-    exports_sources = "CMakeLists.txt", "LICENSE", "src/*"
+    exports_sources = "CMakeLists.txt", "LICENSE", "src/*", "meta.json", "first_run.sh", "install_udev_rules.sh", "99-obsensor-libusb.rules"
 
     def set_version(self):
         content = load(self, "CMakeLists.txt")
@@ -60,3 +58,10 @@ class orbbec(ConanFile):
     def package(self):
         cmake = CMake(self)
         cmake.install()
+
+    def deploy(self):
+        for dir in ["bin", "lib"]:
+            copy(self, "*", src=os.path.join(self.package_folder, dir), dst=os.path.join(self.deploy_folder, dir))
+
+        for pat in ["*.sh", "meta.json", "99-obsensor-libusb.rules"]:
+            copy(self, pat, src=self.package_folder, dst=self.deploy_folder)
