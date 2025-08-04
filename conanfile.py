@@ -3,6 +3,7 @@ import re
 
 from conan import ConanFile
 from conan.errors import ConanException
+from conan.tools.apple import is_apple_os
 from conan.tools.cmake import CMake, CMakeDeps, CMakeToolchain, cmake_layout
 from conan.tools.files import copy, load
 
@@ -21,13 +22,9 @@ class orbbec(ConanFile):
         "shared": True
     }
 
-    def exports_sources(self):
-        for pat in ["CMakeLists.txt", "LICENSE", "src/*", "meta.json", "first_run.sh"]:
+    def export_sources(self):
+        for pat in ["CMakeLists.txt", "LICENSE", "src/*", "meta.json", "*.sh", "99-obsensor-libusb.rules"]:
             copy(self, pat, self.recipe_folder, self.export_sources_folder)
-
-        if self.settings.os == "Linux":
-            for f in ["install_udev_rules.sh", "99-obsensor-libusb.rules"]:
-                copy(self, f, self.recipe_folder, self.export_sources_folder)
 
     def set_version(self):
         content = load(self, "CMakeLists.txt")
