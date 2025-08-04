@@ -53,8 +53,13 @@ install(
 install(
     FILES
         meta.json
+        99-obsensor-libusb.rules
+    DESTINATION ${CMAKE_INSTALL_PREFIX}
+)
+
+install(
+    PROGRAMS
         first_run.sh
         install_udev_rules.sh
-        99-obsensor-libusb.rules
     DESTINATION ${CMAKE_INSTALL_PREFIX}
 )
