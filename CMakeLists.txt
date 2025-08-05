@@ -46,8 +46,13 @@ target_link_libraries(orbbec-module
 
 install(
     TARGETS orbbec-module
-    RUNTIME_DEPENDENCIES
-        FRAMEWORK DESTINATION bin
+    DESTINATION bin
+)
+
+install(
+    DIRECTORY
+    ${OrbbecSDK_DIR}
+    DESTINATION ${CMAKE_INSTALL_PREFIX}
 )
 
 install(
