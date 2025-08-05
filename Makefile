@@ -21,6 +21,7 @@ clean:
 
 clean-all: clean
 	rm -rf build-conan
+	rm -rf module-deploy
 	rm -rf tmp_cpp_sdk
 	rm -rf venv
 	rm -f orbbec-test-bin
