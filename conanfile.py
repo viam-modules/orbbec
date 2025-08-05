@@ -64,9 +64,6 @@ class orbbec(ConanFile):
         cmake.install()
 
     def deploy(self):
-        # for pat, dir in [("*", "bin"), ("*" if self.settings.os == "Linux" else "libOrbbec*", "lib")]:
-            # copy(self, pat, src=os.path.join(self.package_folder, dir), dst=os.path.join(self.deploy_folder, dir))
-
         for dir in ["bin", "lib"]:
             copy(self, "*", src=os.path.join(self.package_folder, dir), dst=os.path.join(self.deploy_folder, dir))
 
