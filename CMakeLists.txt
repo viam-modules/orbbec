@@ -24,10 +24,6 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "14.5")
 
 include(fetch_orbbec)
 
-if (LINUX)
-    include(install_udev_rules)
-endif()
-
 find_package(OrbbecSDK REQUIRED)
 find_package(viam-cpp-sdk REQUIRED)
 find_package(Threads REQUIRED)
