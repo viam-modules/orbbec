@@ -45,16 +45,18 @@ target_link_libraries(orbbec-module
     PRIVATE viam-cpp-sdk::viamsdk
 )
 
-
 install(
     TARGETS orbbec-module
-    DESTINATION bin
+    RUNTIME_DEPENDENCIES
+        FRAMEWORK DESTINATION bin
 )
 
+# The lib/extensions directory contains some shared libraries which are
+# mandatory for our use case but not picked up by the runtime dependency set
+# because they are loaded at runtime.
 install(
-    DIRECTORY
-    ${OrbbecSDK_DIR}
-    DESTINATION ${CMAKE_INSTALL_PREFIX}
+    DIRECTORY ${OrbbecSDK_DIR}/extensions
+    DESTINATION lib
 )
 
 install(
