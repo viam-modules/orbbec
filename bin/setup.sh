@@ -24,12 +24,6 @@ else
     exit 1
 fi
 
-# lsusb rules only on linux
-if [[ ${OS} == "linux" ]]; then
-  cp ${ORBBEC_SDK_DIR}/shared/99-obsensor-libusb.rules .
-fi
-
-
 if [ ! -f "./venv/bin/activate" ]; then
   echo 'creating and sourcing virtual env'
   python3 -m venv venv && source ./venv/bin/activate

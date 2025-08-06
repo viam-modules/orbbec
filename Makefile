@@ -7,13 +7,9 @@ APPIMAGE := packaging/appimages/deploy/$(OUTPUT_NAME)-$(TAG_VERSION)-$(ARCH).App
 
 .PHONY: build lint setup appimage
 
-module.tar.gz: deploy meta.json
-	tar -czvf module.tar.gz -C module-deploy .
-
 build: $(BIN)
 
 $(BIN): lint conanfile.py src/* bin/*
-	export ORBBEC_SDK_DIR=$(ORBBEC_SDK_DIR); \
 	bin/build.sh
 
 clean:
@@ -21,17 +17,12 @@ clean:
 
 clean-all: clean
 	rm -rf build-conan
-	rm -rf module-deploy
 	rm -rf tmp_cpp_sdk
 	rm -rf venv
 	rm -f orbbec-test-bin
 	rm -f $(OUTPUT_NAME)
 
 setup:
-	export ORBBEC_SDK_VERSION=$(ORBBEC_SDK_VERSION); \
-	export ORBBEC_SDK_DIR=$(ORBBEC_SDK_DIR); \
-	export OS=$(OS); \
-	export ARCH=${ARCH}; \
 	bin/setup.sh
 
 lint:
@@ -42,7 +33,6 @@ orbbec-test-bin:
 	go test -c -o orbbec-test-bin ./ && \
 	mv orbbec-test-bin ../
 
-deploy: $(BIN)
+module.tar.gz: $(BIN) meta.json
 	conan install --requires=viam-orbbec/0.0.1 \
 	--deployer-package "&" --envs-generation false \
-	--deployer-folder module-deploy

@@ -34,4 +34,13 @@ FetchContent_Declare(
 
 FetchContent_Makeavailable(orbbec-sdk-release)
 
+if(LINUX)
+  file(
+    COPY_FILE
+      ${CMAKE_CURRENT_BINARY_DIR}/_deps/orbbec-sdk-release-src/shared/99-obsensor-libusb.rules
+      ${CMAKE_CURRENT_SOURCE_DIR}/99-obsensor-libusb.rules
+    ONLY_IF_DIFFERENT
+  )
+endif()
+
 set(OrbbecSDK_DIR "${CMAKE_CURRENT_BINARY_DIR}/_deps/orbbec-sdk-release-src/lib" CACHE PATH "Path to the Orbbec SDK" FORCE)

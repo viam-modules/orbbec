@@ -1,5 +1,8 @@
 import os
 import re
+import tarfile
+
+from tempfile import TemporaryDirectory
 
 from conan import ConanFile
 from conan.errors import ConanException
@@ -64,8 +67,21 @@ class orbbec(ConanFile):
         cmake.install()
 
     def deploy(self):
-        for dir in ["bin", "lib"]:
-            copy(self, "*", src=os.path.join(self.package_folder, dir), dst=os.path.join(self.deploy_folder, dir))
+        with TemporaryDirectory(dir=self.deploy_folder) as tmp_dir:
+            self.output.debug(f"Creating temporary directory {tmp_dir}")
+            self.output.info("Copying bin and lib")
+            for dir in ["bin", "lib"]:
+                copy(self, "*", src=os.path.join(self.package_folder, dir), dst=os.path.join(tmp_dir, dir))
 
-        for pat in ["*.sh", "meta.json", "99-obsensor-libusb.rules"]:
-            copy(self, pat, src=self.package_folder, dst=self.deploy_folder)
+            self.output.info("Copying scripts and additional files")
+            for pat in ["*.sh", "meta.json", "99-obsensor-libusb.rules"]:
+                copy(self, pat, src=self.package_folder, dst=tmp_dir)
+
+            self.output.info("Creating module.tar.gz")
+            with tarfile.open("module.tar.gz", "w|gz") as tar:
+                tar.add(tmp_dir, ".")
+
+                self.output.debug("module.tar.gz contents:")
+                for mem in tar.getmembers():
+                    self.output.debug(mem.name)
+
