@@ -319,6 +319,12 @@ void startDevice(std::string serialNumber, std::string resourceName) {
         throw std::invalid_argument(buffer.str());
     }
 
+    auto info = my_dev->getDeviceInfo();
+    char* firmwareVer = info->info->firmwareVersion();
+    if (firmwareVer == '2.8.20') {
+        VIAM_SDK_LOG(info) << service_name << "has the ideal firmware version " << serialNumber;
+    }
+
     auto frameCallback = [serialNumber](std::shared_ptr<ob::FrameSet> frameSet) {
         if (frameSet->getCount() != 2) {
             std::cerr << "got non 2 frame count: " << frameSet->getCount() << "\n";
