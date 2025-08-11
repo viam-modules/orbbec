@@ -400,6 +400,32 @@ void stopDevice(std::string serialNumber, std::string resourceName) {
     }
 }
 
+void resetDevice(std::string serialNumber) {
+    VIAM_SDK_LOG(info) << service_name << ": resetting device " << serialNumber;
+    std::lock_guard<std::mutex> lock(devices_by_serial_mu());
+
+    auto search = devices_by_serial().find(serialNumber);
+    if (search == devices_by_serial().end()) {
+        std::ostringstream buffer;
+        buffer << service_name << ": unable to reset undetected device" << serialNumber;
+        throw std::invalid_argument(buffer.str());
+    }
+
+    std::unique_ptr<ViamOBDevice>& my_dev = search->second;
+    if (!my_dev->started) {
+        std::ostringstream buffer;
+        buffer << service_name << ": unable to reset stopped device" << serialNumber;
+        throw std::invalid_argument(buffer.str());
+    }
+
+    my_dev->pipe->stop();
+    my_dev->started = false;
+    auto cb = frameCallback(serialNumber);
+    my_dev->pipe->start(my_dev->config, cb);
+    my_dev->started = true;
+    VIAM_SDK_LOG(info) << service_name << ": device reset " << serialNumber;
+}
+
 void listDevices(const ob::Context& ctx) {
     try {
         auto devList = ctx.queryDeviceList();
@@ -514,17 +540,17 @@ void Orbbec::reconfigure(const vsdk::Dependencies& deps, const vsdk::ResourceCon
 vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::ProtoStruct& extra) {
     try {
         VIAM_SDK_LOG(info) << "[get_image] start";
-        std::string serialNumber;
-        std::string resourceName;
+        std::string serial_number;
+        std::string resource_name;
         {
             const std::lock_guard<std::mutex> lock(config_mu_);
-            serialNumber = config_->serial_number;
-            resourceName = config_->resource_name;
+            serial_number = config_->serial_number;
+            resource_name = config_->resource_name;
         }
         std::shared_ptr<ob::FrameSet> fs = nullptr;
         {
             std::lock_guard<std::mutex> lock(frame_set_by_serial_mu());
-            auto search = frame_set_by_serial().find(serialNumber);
+            auto search = frame_set_by_serial().find(serial_number);
             if (search == frame_set_by_serial().end()) {
                 throw std::invalid_argument("no frame yet");
             }
@@ -546,18 +572,17 @@ vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::Pro
         if (diff > maxFrameAgeUs) {
             std::ostringstream buffer;
             buffer << "no recent color frame, diff: " << diff << "us";
-            std::lock_guard<std::mutex> lock(devices_by_serial_mu());
-            auto search = devices_by_serial().find(serialNumber);
-            if (search == devices_by_serial().end()) {
-                buffer << ": " << resourceName << " is no longer connected";
-                throw std::invalid_argument(buffer.str());
+            {
+                std::lock_guard<std::mutex> lock(devices_by_serial_mu());
+                auto search = devices_by_serial().find(serial_number);
+                if (search == devices_by_serial().end()) {
+                    buffer << ": " << resource_name << " is no longer connected";
+                    throw std::invalid_argument(buffer.str());
+                }
             }
             // otherwise restart the pipeline to try to get frames again.
             VIAM_SDK_LOG(info) << "device still connected but not getting frames, restarting pipeline";
-            std::unique_ptr<ViamOBDevice>& my_dev = search->second;
-            my_dev->pipe->stop();
-            auto cb = frameCallback(serialNumber);
-            my_dev->pipe->start(my_dev->config, cb);
+            resetDevice(serial_number);
             throw std::invalid_argument(buffer.str());
         }
 
@@ -636,9 +661,11 @@ vsdk::Camera::image_collection Orbbec::get_images() {
     try {
         VIAM_SDK_LOG(info) << "[get_images] start";
         std::string serial_number;
+        std::string resource_name;
         {
             const std::lock_guard<std::mutex> lock(config_mu_);
             serial_number = config_->serial_number;
+            resource_name = config_->resource_name;
         }
         std::shared_ptr<ob::FrameSet> fs = nullptr;
         {
@@ -658,9 +685,24 @@ vsdk::Camera::image_collection Orbbec::get_images() {
         uint64_t nowUs = getNowUs();
         uint64_t diff = timeSinceFrameUs(nowUs, color->getSystemTimeStampUs());
         if (diff > maxFrameAgeUs) {
-            std::ostringstream buffer;
-            buffer << "no recent color frame: check USB connection, diff: " << diff << "us";
-            throw std::invalid_argument(buffer.str());
+            uint64_t nowUs = getNowUs();
+            uint64_t diff = timeSinceFrameUs(nowUs, color->getSystemTimeStampUs());
+            if (diff > maxFrameAgeUs) {
+                std::ostringstream buffer;
+                buffer << "no recent color frame, diff: " << diff << "us";
+                {
+                    std::lock_guard<std::mutex> lock(devices_by_serial_mu());
+                    auto search = devices_by_serial().find(serial_number);
+                    if (search == devices_by_serial().end()) {
+                        buffer << ": " << resource_name << " is no longer connected";
+                        throw std::invalid_argument(buffer.str());
+                    }
+                }
+                // otherwise restart the pipeline to try to get frames again.
+                VIAM_SDK_LOG(info) << "device still connected but not getting frames, restarting pipeline";
+                resetDevice(serial_number);
+                throw std::invalid_argument(buffer.str());
+            }
         }
 
         if (color->getFormat() != OB_FORMAT_MJPG) {
@@ -674,8 +716,24 @@ vsdk::Camera::image_collection Orbbec::get_images() {
 
         diff = timeSinceFrameUs(nowUs, depth->getSystemTimeStampUs());
         if (diff > maxFrameAgeUs) {
-            std::ostringstream buffer;
-            buffer << "no recent depth frame: check USB connection, diff: " << diff << "us";
+            uint64_t nowUs = getNowUs();
+            uint64_t diff = timeSinceFrameUs(nowUs, color->getSystemTimeStampUs());
+            if (diff > maxFrameAgeUs) {
+                std::ostringstream buffer;
+                buffer << "no recent depth frame, diff: " << diff << "us";
+                {
+                    std::lock_guard<std::mutex> lock(devices_by_serial_mu());
+                    auto search = devices_by_serial().find(serial_number);
+                    if (search == devices_by_serial().end()) {
+                        buffer << ": " << resource_name << " is no longer connected";
+                        throw std::invalid_argument(buffer.str());
+                    }
+                }
+                // otherwise restart the pipeline to try to get frames again.
+                VIAM_SDK_LOG(info) << "device still connected but not getting frames, restarting pipeline";
+                resetDevice(serial_number);
+                throw std::invalid_argument(buffer.str());
+            }
         }
 
         unsigned char* colorData = (unsigned char*)color->getData();
@@ -734,9 +792,11 @@ vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const v
     try {
         VIAM_SDK_LOG(info) << "[get_point_cloud] start";
         std::string serial_number;
+        std::string resource_name;
         {
             const std::lock_guard<std::mutex> lock(config_mu_);
             serial_number = config_->serial_number;
+            resource_name = config_->resource_name;
         }
         std::shared_ptr<ob::FrameSet> fs = nullptr;
         {
@@ -757,7 +817,18 @@ vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const v
         uint64_t diff = timeSinceFrameUs(nowUs, color->getSystemTimeStampUs());
         if (diff > maxFrameAgeUs) {
             std::ostringstream buffer;
-            buffer << "no recent color frame: check USB connection, diff: " << diff << "us";
+            buffer << "no recent color frame, diff: " << diff << "us";
+            {
+                std::lock_guard<std::mutex> lock(devices_by_serial_mu());
+                auto search = devices_by_serial().find(serial_number);
+                if (search == devices_by_serial().end()) {
+                    buffer << ": " << resource_name << " is no longer connected";
+                    throw std::invalid_argument(buffer.str());
+                }
+            }
+            // otherwise restart the pipeline to try to get frames again.
+            VIAM_SDK_LOG(info) << "device still connected but not getting frames, restarting pipeline";
+            resetDevice(serial_number);
             throw std::invalid_argument(buffer.str());
         }
 
@@ -769,7 +840,18 @@ vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const v
         diff = timeSinceFrameUs(nowUs, depth->getSystemTimeStampUs());
         if (diff > maxFrameAgeUs) {
             std::ostringstream buffer;
-            buffer << "no recent depth frame: check USB connection, diff: " << diff << "us";
+            buffer << "no recent depth frame, diff: " << diff << "us";
+            {
+                std::lock_guard<std::mutex> lock(devices_by_serial_mu());
+                auto search = devices_by_serial().find(serial_number);
+                if (search == devices_by_serial().end()) {
+                    buffer << ": " << resource_name << " is no longer connected";
+                    throw std::invalid_argument(buffer.str());
+                }
+            }
+            // otherwise restart the pipeline to try to get frames again.
+            VIAM_SDK_LOG(info) << "device still connected but not getting frames, restarting pipeline";
+            resetDevice(serial_number);
             throw std::invalid_argument(buffer.str());
         }
 
