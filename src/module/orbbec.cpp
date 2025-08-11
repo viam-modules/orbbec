@@ -353,7 +353,7 @@ auto frameCallback(const std::string& serialNumber) {
     };
 }
 
-void startDevice(std::string serialNumber, std::string resourceName) {
+void startDevice(std::string serialNumber) {
     VIAM_SDK_LOG(info) << service_name << ": starting device " << serialNumber;
     std::lock_guard<std::mutex> lock(devices_by_serial_mu());
 
@@ -424,28 +424,6 @@ void resetDevice(std::string serialNumber) {
     VIAM_SDK_LOG(info) << service_name << ": device reset " << serialNumber;
 }
 
-void listDevices(const ob::Context& ctx) {
-    try {
-        auto devList = ctx.queryDeviceList();
-        int devCount = devList->getCount();
-        VIAM_SDK_LOG(info) << "devCount: " << devCount << "\n";
-
-        std::shared_ptr<ob::Device> dev = nullptr;
-        std::shared_ptr<ob::DeviceInfo> info = nullptr;
-        for (size_t i = 0; i < devCount; i++) {
-            dev = devList->getDevice(i);
-            info = dev->getDeviceInfo();
-            printDeviceInfo(info);
-            dev.reset();
-        }
-    } catch (ob::Error& e) {
-        std::cerr << "listDevices\n"
-                  << "function:" << e.getFunction() << "\nargs:" << e.getArgs() << "\nname:" << e.getName() << "\nmessage:" << e.what()
-                  << "\ntype:" << e.getExceptionType() << std::endl;
-        throw e;
-    }
-}
-
 raw_camera_image encodeDepthRAW(const unsigned char* data, const uint64_t width, const uint64_t height, const bool littleEndian) {
     viam::sdk::Camera::depth_map m = xt::xarray<uint16_t>::from_shape({height, width});
     std::copy(reinterpret_cast<const uint16_t*>(data), reinterpret_cast<const uint16_t*>(data) + height * width, m.begin());
@@ -479,7 +457,7 @@ std::vector<std::string> validate(vsdk::ResourceConfig cfg) {
 Orbbec::Orbbec(vsdk::Dependencies deps, vsdk::ResourceConfig cfg)
     : Camera(cfg.name()), config_(configure_(std::move(deps), std::move(cfg))) {
     VIAM_SDK_LOG(info) << "Orbbec constructor start " << config_->serial_number;
-    startDevice(config_->serial_number, config_->resource_name);
+    startDevice(config_->serial_number);
     {
         std::lock_guard<std::mutex> lock(serial_by_resource_mu());
         serial_by_resource()[config_->resource_name] = config_->serial_number;
@@ -527,10 +505,10 @@ void Orbbec::reconfigure(const vsdk::Dependencies& deps, const vsdk::ResourceCon
         new_serial_number = config_->serial_number;
         new_resource_name = config_->resource_name;
     }
-    startDevice(new_serial_number, new_resource_name);
+    startDevice(new_serial_number);
     {
         std::lock_guard<std::mutex> lock(serial_by_resource_mu());
-        serial_by_resource()[config_->resource_name] = new_serial_number;
+        serial_by_resource()[new_resource_name] = new_serial_number;
     }
     VIAM_SDK_LOG(info) << "Orbbec reconfigure end";
 }
@@ -579,7 +557,7 @@ vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::Pro
                 }
             }
             // USB still connected, restart the pipeline to try to get frames again.
-            VIAM_SDK_LOG(info) << "device still connected but not getting frames, restarting pipeline";
+            VIAM_SDK_LOG(error) << "device still connected but not getting frames, restarting pipeline";
             resetDevice(serial_number);
             throw std::invalid_argument(buffer.str());
         }
@@ -697,7 +675,7 @@ vsdk::Camera::image_collection Orbbec::get_images() {
                     }
                 }
                 // USB still connected, restart the pipeline to try to get frames again.
-                VIAM_SDK_LOG(info) << "device still connected but not getting frames, restarting pipeline";
+                VIAM_SDK_LOG(error) << "device still connected but not getting frames, restarting pipeline";
                 resetDevice(serial_number);
                 throw std::invalid_argument(buffer.str());
             }
@@ -728,7 +706,7 @@ vsdk::Camera::image_collection Orbbec::get_images() {
                     }
                 }
                 // USB still connected, restart the pipeline to try to get frames again.
-                VIAM_SDK_LOG(info) << "device still connected but not getting frames, restarting pipeline";
+                VIAM_SDK_LOG(error) << "device still connected but not getting frames, restarting pipeline";
                 resetDevice(serial_number);
                 throw std::invalid_argument(buffer.str());
             }
@@ -825,7 +803,7 @@ vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const v
                 }
             }
             // USB still connected, restart the pipeline to try to get frames again.
-            VIAM_SDK_LOG(info) << "device still connected but not getting frames, restarting pipeline";
+            VIAM_SDK_LOG(error) << "device still connected but not getting frames, restarting pipeline";
             resetDevice(serial_number);
             throw std::invalid_argument(buffer.str());
         }
@@ -848,7 +826,7 @@ vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const v
                 }
             }
             // USB still connected, restart the pipeline to try to get frames again.
-            VIAM_SDK_LOG(info) << "device still connected but not getting frames, restarting pipeline";
+            VIAM_SDK_LOG(error) << "device still connected but not getting frames, restarting pipeline";
             resetDevice(serial_number);
             throw std::invalid_argument(buffer.str());
         }
@@ -983,7 +961,7 @@ void deviceChangedCallback(const std::shared_ptr<ob::DeviceList> removedList, co
                 std::lock_guard<std::mutex> lock(serial_by_resource_mu());
                 for (auto& [resource_name, serial_number] : serial_by_resource()) {
                     if (serial_number == info->getSerialNumber()) {
-                        startDevice(serial_number, resource_name);
+                        startDevice(serial_number);
                         serial_by_resource()[resource_name] = serial_number;
                     }
                 }
