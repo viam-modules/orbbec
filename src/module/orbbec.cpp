@@ -371,8 +371,7 @@ void startDevice(std::string serialNumber, std::string resourceName) {
         throw std::invalid_argument(buffer.str());
     }
 
-    auto cb = frameCallback(serialNumber);
-    my_dev->pipe->start(my_dev->config, cb);
+    my_dev->pipe->start(my_dev->config, frameCallback(serialNumber));
     my_dev->started = true;
     VIAM_SDK_LOG(info) << service_name << ": device started " << serialNumber;
 }
@@ -420,8 +419,7 @@ void resetDevice(std::string serialNumber) {
 
     my_dev->pipe->stop();
     my_dev->started = false;
-    auto cb = frameCallback(serialNumber);
-    my_dev->pipe->start(my_dev->config, cb);
+    my_dev->pipe->start(my_dev->config, frameCallback(serialNumber));
     my_dev->started = true;
     VIAM_SDK_LOG(info) << service_name << ": device reset " << serialNumber;
 }
@@ -580,7 +578,7 @@ vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::Pro
                     throw std::invalid_argument(buffer.str());
                 }
             }
-            // otherwise restart the pipeline to try to get frames again.
+            // USB still connected, restart the pipeline to try to get frames again.
             VIAM_SDK_LOG(info) << "device still connected but not getting frames, restarting pipeline";
             resetDevice(serial_number);
             throw std::invalid_argument(buffer.str());
@@ -698,7 +696,7 @@ vsdk::Camera::image_collection Orbbec::get_images() {
                         throw std::invalid_argument(buffer.str());
                     }
                 }
-                // otherwise restart the pipeline to try to get frames again.
+                // USB still connected, restart the pipeline to try to get frames again.
                 VIAM_SDK_LOG(info) << "device still connected but not getting frames, restarting pipeline";
                 resetDevice(serial_number);
                 throw std::invalid_argument(buffer.str());
@@ -729,7 +727,7 @@ vsdk::Camera::image_collection Orbbec::get_images() {
                         throw std::invalid_argument(buffer.str());
                     }
                 }
-                // otherwise restart the pipeline to try to get frames again.
+                // USB still connected, restart the pipeline to try to get frames again.
                 VIAM_SDK_LOG(info) << "device still connected but not getting frames, restarting pipeline";
                 resetDevice(serial_number);
                 throw std::invalid_argument(buffer.str());
@@ -826,7 +824,7 @@ vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const v
                     throw std::invalid_argument(buffer.str());
                 }
             }
-            // otherwise restart the pipeline to try to get frames again.
+            // USB still connected, restart the pipeline to try to get frames again.
             VIAM_SDK_LOG(info) << "device still connected but not getting frames, restarting pipeline";
             resetDevice(serial_number);
             throw std::invalid_argument(buffer.str());
@@ -849,7 +847,7 @@ vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const v
                     throw std::invalid_argument(buffer.str());
                 }
             }
-            // otherwise restart the pipeline to try to get frames again.
+            // USB still connected, restart the pipeline to try to get frames again.
             VIAM_SDK_LOG(info) << "device still connected but not getting frames, restarting pipeline";
             resetDevice(serial_number);
             throw std::invalid_argument(buffer.str());
