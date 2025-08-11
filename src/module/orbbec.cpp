@@ -301,25 +301,8 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
     return nullptr;
 }
 
-void startDevice(std::string serialNumber, std::string resourceName) {
-    VIAM_SDK_LOG(info) << service_name << ": starting device " << serialNumber;
-    std::lock_guard<std::mutex> lock(devices_by_serial_mu());
-
-    auto search = devices_by_serial().find(serialNumber);
-    if (search == devices_by_serial().end()) {
-        std::ostringstream buffer;
-        buffer << service_name << ": unable to start undetected device" << serialNumber;
-        throw std::invalid_argument(buffer.str());
-    }
-
-    std::unique_ptr<ViamOBDevice>& my_dev = search->second;
-    if (my_dev->started) {
-        std::ostringstream buffer;
-        buffer << service_name << ": unable to start already started device" << serialNumber;
-        throw std::invalid_argument(buffer.str());
-    }
-
-    auto frameCallback = [serialNumber](std::shared_ptr<ob::FrameSet> frameSet) {
+auto frameCallback(const std::string& serialNumber) {
+    return [serialNumber](std::shared_ptr<ob::FrameSet> frameSet) {
         if (frameSet->getCount() != 2) {
             std::cerr << "got non 2 frame count: " << frameSet->getCount() << "\n";
             return;
@@ -368,8 +351,28 @@ void startDevice(std::string serialNumber, std::string resourceName) {
         }
         frame_set_by_serial()[serialNumber] = frameSet;
     };
+}
 
-    my_dev->pipe->start(my_dev->config, std::move(frameCallback));
+void startDevice(std::string serialNumber, std::string resourceName) {
+    VIAM_SDK_LOG(info) << service_name << ": starting device " << serialNumber;
+    std::lock_guard<std::mutex> lock(devices_by_serial_mu());
+
+    auto search = devices_by_serial().find(serialNumber);
+    if (search == devices_by_serial().end()) {
+        std::ostringstream buffer;
+        buffer << service_name << ": unable to start undetected device" << serialNumber;
+        throw std::invalid_argument(buffer.str());
+    }
+
+    std::unique_ptr<ViamOBDevice>& my_dev = search->second;
+    if (my_dev->started) {
+        std::ostringstream buffer;
+        buffer << service_name << ": unable to start already started device" << serialNumber;
+        throw std::invalid_argument(buffer.str());
+    }
+
+    auto cb = frameCallback(serialNumber);
+    my_dev->pipe->start(my_dev->config, cb);
     my_dev->started = true;
     VIAM_SDK_LOG(info) << service_name << ": device started " << serialNumber;
 }
@@ -511,15 +514,17 @@ void Orbbec::reconfigure(const vsdk::Dependencies& deps, const vsdk::ResourceCon
 vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::ProtoStruct& extra) {
     try {
         VIAM_SDK_LOG(info) << "[get_image] start";
-        std::string serial_number;
+        std::string serialNumber;
+        std::string resourceName;
         {
             const std::lock_guard<std::mutex> lock(config_mu_);
-            serial_number = config_->serial_number;
+            serialNumber = config_->serial_number;
+            resourceName = config_->resource_name;
         }
         std::shared_ptr<ob::FrameSet> fs = nullptr;
         {
             std::lock_guard<std::mutex> lock(frame_set_by_serial_mu());
-            auto search = frame_set_by_serial().find(serial_number);
+            auto search = frame_set_by_serial().find(serialNumber);
             if (search == frame_set_by_serial().end()) {
                 throw std::invalid_argument("no frame yet");
             }
@@ -540,7 +545,19 @@ vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::Pro
         uint64_t diff = timeSinceFrameUs(nowUs, color->getSystemTimeStampUs());
         if (diff > maxFrameAgeUs) {
             std::ostringstream buffer;
-            buffer << "no recent color frame: check USB connection, diff: " << diff << "us";
+            buffer << "no recent color frame, diff: " << diff << "us";
+            std::lock_guard<std::mutex> lock(devices_by_serial_mu());
+            auto search = devices_by_serial().find(serialNumber);
+            if (search == devices_by_serial().end()) {
+                buffer << ": " << resourceName << " is no longer connected";
+                throw std::invalid_argument(buffer.str());
+            }
+            // otherwise restart the pipeline to try to get frames again.
+            VIAM_SDK_LOG(info) << "device still connected but not getting frames, restarting pipeline";
+            std::unique_ptr<ViamOBDevice>& my_dev = search->second;
+            my_dev->pipe->stop();
+            auto cb = frameCallback(serialNumber);
+            my_dev->pipe->start(my_dev->config, cb);
             throw std::invalid_argument(buffer.str());
         }
 
