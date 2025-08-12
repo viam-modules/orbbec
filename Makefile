@@ -5,7 +5,7 @@ BIN := build-conan/build/RelWithDebInfo/orbbec-module
 TAG_VERSION?=latest
 APPIMAGE := packaging/appimages/deploy/$(OUTPUT_NAME)-$(TAG_VERSION)-$(ARCH).AppImage
 
-.PHONY: build lint setup appimage
+.PHONY: build lint setup conan-pkg
 
 build: $(BIN)
 
@@ -33,7 +33,14 @@ orbbec-test-bin:
 	go test -c -o orbbec-test-bin ./ && \
 	mv orbbec-test-bin ../
 
-module.tar.gz: $(BIN) meta.json
+conan-pkg:
+	conan create . \
+	-o:a "viam-cpp-sdk/*:shared=False" \
+	-s:a build_type=Release \
+	-s:a compiler.cppstd=17 \
+	--build=missing
+
+module.tar.gz: conan-pkg meta.json
 	conan install --requires=viam-orbbec/0.0.1 \
 	-o:a "viam-cpp-sdk/*:shared=False" \
 	-s:a build_type=Release \
