@@ -22,6 +22,8 @@ clean-all: clean
 	rm -f $(OUTPUT_NAME)
 
 setup:
+	export OS=$(OS); \
+	export ARCH=$(ARCH); \
 	bin/setup.sh
 
 lint:
