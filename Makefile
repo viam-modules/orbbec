@@ -3,7 +3,6 @@ ARCH ?= $(shell uname -m)
 OUTPUT_NAME = orbbec-module
 BIN := build-conan/build/RelWithDebInfo/orbbec-module
 TAG_VERSION?=latest
-APPIMAGE := packaging/appimages/deploy/$(OUTPUT_NAME)-$(TAG_VERSION)-$(ARCH).AppImage
 
 .PHONY: build lint setup conan-pkg
 
