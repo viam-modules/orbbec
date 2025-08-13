@@ -394,7 +394,7 @@ void startDevice(std::string serialNumber) {
         VIAM_SDK_LOG(error) << "did not get frame within 500ms of starting device, resetting";
         my_dev->pipe->stop();
         my_dev->started = false;
-        my_dev->pipe->start(dev->config, frameCallback(my_dev->serial_number));
+        my_dev->pipe->start(my_dev->config, frameCallback(serialNumber));
         my_dev->started = true;
     }
 
@@ -656,8 +656,6 @@ vsdk::Camera::image_collection Orbbec::get_images() {
             buffer << "no recent color frame: check USB connection, diff: " << diff << "us";
             throw std::invalid_argument(buffer.str());
         }
-        }
-
         if (color->getFormat() != OB_FORMAT_MJPG) {
             throw std::invalid_argument("color frame was not in jpeg format");
         }
@@ -730,11 +728,9 @@ vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const v
     try {
         VIAM_SDK_LOG(info) << "[get_point_cloud] start";
         std::string serial_number;
-        std::string resource_name;
         {
             const std::lock_guard<std::mutex> lock(config_mu_);
             serial_number = config_->serial_number;
-            resource_name = config_->resource_name;
         }
         std::shared_ptr<ob::FrameSet> fs = nullptr;
         {
