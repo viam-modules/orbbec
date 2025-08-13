@@ -353,16 +353,6 @@ auto frameCallback(const std::string& serialNumber) {
     };
 }
 
-void resetDevice(std::unique_ptr<ViamOBDevice>& dev) {
-    VIAM_SDK_LOG(info) << service_name << ": resetting device " << dev->serial_number;
-
-    dev->pipe->stop();
-    dev->started = false;
-    dev->pipe->start(dev->config, frameCallback(dev->serial_number));
-    dev->started = true;
-    VIAM_SDK_LOG(info) << service_name << ": device reset " << dev->serial_number;
-}
-
 void startDevice(std::string serialNumber) {
     VIAM_SDK_LOG(info) << service_name << ": starting device " << serialNumber;
     std::lock_guard<std::mutex> lock(devices_by_serial_mu());
@@ -400,7 +390,10 @@ void startDevice(std::string serialNumber) {
 
     if (!got_frame) {
         VIAM_SDK_LOG(info) << "did not get frame within 500ms, resetting";
-        resetDevice(my_dev);
+        my_dev->pipe->stop();
+        my_dev->started = false;
+        my_dev->pipe->start(dev->config, frameCallback(my_dev->serial_number));
+        my_dev->started = true;
     }
 
     VIAM_SDK_LOG(info) << service_name << ": device started " << serialNumber;
