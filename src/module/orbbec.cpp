@@ -656,6 +656,7 @@ vsdk::Camera::image_collection Orbbec::get_images() {
             buffer << "no recent color frame: check USB connection, diff: " << diff << "us";
             throw std::invalid_argument(buffer.str());
         }
+
         if (color->getFormat() != OB_FORMAT_MJPG) {
             throw std::invalid_argument("color frame was not in jpeg format");
         }
