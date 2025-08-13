@@ -374,6 +374,8 @@ void startDevice(std::string serialNumber) {
     my_dev->pipe->start(my_dev->config, frameCallback(serialNumber));
     my_dev->started = true;
 
+    // Ensure we start getting frames within 500ms, otherwise something is
+    // wrong with the pipeline and we should restart.
     auto start_time = std::chrono::steady_clock::now();
     bool got_frame = false;
     while (std::chrono::steady_clock::now() - start_time < std::chrono::milliseconds(500)) {
@@ -389,7 +391,7 @@ void startDevice(std::string serialNumber) {
     }
 
     if (!got_frame) {
-        VIAM_SDK_LOG(info) << "did not get frame within 500ms, resetting";
+        VIAM_SDK_LOG(error) << "did not get frame within 500ms of starting device, resetting";
         my_dev->pipe->stop();
         my_dev->started = false;
         my_dev->pipe->start(dev->config, frameCallback(my_dev->serial_number));
@@ -521,11 +523,9 @@ vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::Pro
     try {
         VIAM_SDK_LOG(info) << "[get_image] start";
         std::string serial_number;
-        std::string resource_name;
         {
             const std::lock_guard<std::mutex> lock(config_mu_);
             serial_number = config_->serial_number;
-            resource_name = config_->resource_name;
         }
         std::shared_ptr<ob::FrameSet> fs = nullptr;
         {
@@ -630,11 +630,9 @@ vsdk::Camera::image_collection Orbbec::get_images() {
     try {
         VIAM_SDK_LOG(info) << "[get_images] start";
         std::string serial_number;
-        std::string resource_name;
         {
             const std::lock_guard<std::mutex> lock(config_mu_);
             serial_number = config_->serial_number;
-            resource_name = config_->resource_name;
         }
         std::shared_ptr<ob::FrameSet> fs = nullptr;
         {
@@ -654,13 +652,10 @@ vsdk::Camera::image_collection Orbbec::get_images() {
         uint64_t nowUs = getNowUs();
         uint64_t diff = timeSinceFrameUs(nowUs, color->getSystemTimeStampUs());
         if (diff > maxFrameAgeUs) {
-            uint64_t nowUs = getNowUs();
-            uint64_t diff = timeSinceFrameUs(nowUs, color->getSystemTimeStampUs());
-            if (diff > maxFrameAgeUs) {
-                std::ostringstream buffer;
-                buffer << "no recent color frame: check USB connection, diff: " << diff << "us";
-                throw std::invalid_argument(buffer.str());
-            }
+            std::ostringstream buffer;
+            buffer << "no recent color frame: check USB connection, diff: " << diff << "us";
+            throw std::invalid_argument(buffer.str());
+        }
         }
 
         if (color->getFormat() != OB_FORMAT_MJPG) {
@@ -672,7 +667,7 @@ vsdk::Camera::image_collection Orbbec::get_images() {
             throw std::invalid_argument("no depth frame");
         }
 
-        diff = timeSinceFrameUs(nowUs, color->getSystemTimeStampUs());
+        diff = timeSinceFrameUs(nowUs, depth->getSystemTimeStampUs());
         if (diff > maxFrameAgeUs) {
             std::ostringstream buffer;
             buffer << "no recent depth frame: check USB connection, diff: " << diff << "us";
@@ -772,7 +767,7 @@ vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const v
         diff = timeSinceFrameUs(nowUs, depth->getSystemTimeStampUs());
         if (diff > maxFrameAgeUs) {
             std::ostringstream buffer;
-            buffer << "no recent color frame: check USB connection, diff: " << diff << "us";
+            buffer << "no recent depth frame: check USB connection, diff: " << diff << "us";
             throw std::invalid_argument(buffer.str());
         }
 
