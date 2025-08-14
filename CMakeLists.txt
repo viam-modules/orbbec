@@ -60,12 +60,18 @@ if (LINUX)
     )
 endif()
 
+if (APPLE)
+    # For reasons unclear to me the install command below doesn't work without this
+    set(_framework_dest_arg "FRAMEWORK" "DESTINATION" "lib")
+endif()
+
 install(
     TARGETS orbbec-module
     RUNTIME_DEPENDENCIES
 		POST_EXCLUDE_REGEXES ${_post_exclude_regex}
     RUNTIME
     LIBRARY
+    ${_framework_dest_arg}
 )
 
 # The lib/extensions directory contains some shared libraries which are
