@@ -28,7 +28,9 @@ add_executable(orbbec-module src/module/main.cpp src/module/orbbec.cpp src/modul
 target_compile_features(orbbec-cli PRIVATE cxx_std_17)
 target_compile_features(orbbec-module PRIVATE cxx_std_17)
 
-set(CMAKE_OSX_DEPLOYMENT_TARGET "14.5")
+if (APPLE)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "14.5")
+endif()
 
 include(fetch_orbbec)
 
