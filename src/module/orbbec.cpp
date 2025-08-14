@@ -349,17 +349,19 @@ void startDevice(std::string serialNumber, std::string resourceName) {
                       << depth->getSystemTimeStampUs() << "\n";
         }
 
-        auto it = frame_set_by_serial().find(serialNumber);
-        if (it != frame_set_by_serial().end()) {
-            std::shared_ptr<ob::Frame> prevColor = frameSet->getFrame(OB_FRAME_COLOR);
-            std::shared_ptr<ob::Frame> prevDepth = frameSet->getFrame(OB_FRAME_DEPTH);
+        auto search = frame_set_by_serial().find(serialNumber);
+        if (search != frame_set_by_serial().end()) {
+            std::shared_ptr<ob::Frame> prevColor = search->second->getFrame(OB_FRAME_COLOR);
+            std::shared_ptr<ob::Frame> prevDepth = search->second->getFrame(OB_FRAME_DEPTH);
             if (prevColor != nullptr && prevDepth != nullptr) {
-                diff = timeSinceFrameUs(color->getSystemTimeStampUs(), prevColor->getSystemTimeStampUs());
+                uint64_t prevColorTimeUs = prevColor->getSystemTimeStampUs();
+                uint64_t prevDepthTimeUs = prevDepth->getSystemTimeStampUs();
+                diff = timeSinceFrameUs(color->getSystemTimeStampUs(), prevColorTimeUs);
                 if (diff > maxFrameAgeUs) {
                     std::cerr << "previous color frame is " << diff << "us older than current color frame. nowUs: " << nowUs
                               << " frameTimeUs " << color->getSystemTimeStampUs() << "\n";
                 }
-                diff = timeSinceFrameUs(depth->getSystemTimeStampUs(), prevDepth->getSystemTimeStampUs());
+                diff = timeSinceFrameUs(depth->getSystemTimeStampUs(), prevDepthTimeUs);
                 if (diff > maxFrameAgeUs) {
                     std::cerr << "previous depth frame is " << diff << "us older than current depth frame. nowUs: " << nowUs
                               << " frameTimeUs " << depth->getSystemTimeStampUs() << "\n";
