@@ -47,10 +47,23 @@ target_link_libraries(orbbec-module
     PRIVATE viam-cpp-sdk::viamsdk
 )
 
+if (LINUX)
+    set(_post_exclude_regex
+	    ".*ld-linux.*\\.so.*"
+	    ".*libc\\.so.*"
+	    ".*libdl\\.so.*"
+	    ".*libgcc.*\\.so.*"
+	    ".*libm\\.so.*"
+	    ".*libpthread\\.so.*"
+    )
+endif()
+
 install(
     TARGETS orbbec-module
     RUNTIME_DEPENDENCIES
-        FRAMEWORK DESTINATION bin
+		POST_EXCLUDE_REGEXES ${_post_exclude_regex}
+    RUNTIME
+    LIBRARY
 )
 
 # The lib/extensions directory contains some shared libraries which are
