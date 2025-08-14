@@ -510,7 +510,7 @@ void Orbbec::reconfigure(const vsdk::Dependencies& deps, const vsdk::ResourceCon
 
 vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::ProtoStruct& extra) {
     try {
-        VIAM_SDK_LOG(info) << "[get_image] start";
+        VIAM_SDK_LOG(debug) << "[get_image] start";
         std::string serial_number;
         {
             const std::lock_guard<std::mutex> lock(config_mu_);
@@ -554,7 +554,7 @@ vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::Pro
         response.source_name = kColorSourceName;
         response.mime_type = kColorMimeTypeJPEG;
         response.bytes.assign(colorData, colorData + colorDataSize);
-        VIAM_SDK_LOG(info) << "[get_image] end";
+        VIAM_SDK_LOG(debug) << "[get_image] end";
         return response;
     } catch (const std::exception& e) {
         VIAM_SDK_LOG(error) << "[get_image] error: " << e.what();
@@ -564,7 +564,7 @@ vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::Pro
 
 vsdk::Camera::properties Orbbec::get_properties() {
     try {
-        VIAM_SDK_LOG(info) << "[get_properties] start";
+        VIAM_SDK_LOG(debug) << "[get_properties] start";
 
         std::string serial_number;
         {
@@ -607,7 +607,7 @@ vsdk::Camera::properties Orbbec::get_properties() {
         p.intrinsic_parameters.center_y_px = props.cy;
         // TODO: Set distortion parameters
 
-        VIAM_SDK_LOG(info) << "[get_properties] end";
+        VIAM_SDK_LOG(debug) << "[get_properties] end";
         return p;
     } catch (const std::exception& e) {
         VIAM_SDK_LOG(error) << "[get_properties] error: " << e.what();
@@ -617,7 +617,7 @@ vsdk::Camera::properties Orbbec::get_properties() {
 
 vsdk::Camera::image_collection Orbbec::get_images() {
     try {
-        VIAM_SDK_LOG(info) << "[get_images] start";
+        VIAM_SDK_LOG(debug) << "[get_images] start";
         std::string serial_number;
         {
             const std::lock_guard<std::mutex> lock(config_mu_);
@@ -700,7 +700,7 @@ vsdk::Camera::image_collection Orbbec::get_images() {
 
         std::chrono::microseconds latestTimestamp(timestamp);
         response.metadata.captured_at = vsdk::time_pt{std::chrono::duration_cast<std::chrono::nanoseconds>(latestTimestamp)};
-        VIAM_SDK_LOG(info) << "[get_images] end";
+        VIAM_SDK_LOG(debug) << "[get_images] end";
         return response;
     } catch (const std::exception& e) {
         VIAM_SDK_LOG(error) << "[get_images] error: " << e.what();
@@ -715,7 +715,7 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
 
 vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const vsdk::ProtoStruct& extra) {
     try {
-        VIAM_SDK_LOG(info) << "[get_point_cloud] start";
+        VIAM_SDK_LOG(debug) << "[get_point_cloud] start";
         std::string serial_number;
         {
             const std::lock_guard<std::mutex> lock(config_mu_);
@@ -785,7 +785,7 @@ vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const v
         std::vector<unsigned char> data =
             RGBPointsToPCD(my_dev->pointCloudFilter->process(my_dev->align->process(fs)), scale * mmToMeterMultiple);
 
-        VIAM_SDK_LOG(info) << "[get_point_cloud] end";
+        VIAM_SDK_LOG(debug) << "[get_point_cloud] end";
         return vsdk::Camera::point_cloud{kPcdMimeType, data};
     } catch (const std::exception& e) {
         VIAM_SDK_LOG(error) << "[get_point_cloud] error: " << e.what();
