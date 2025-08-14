@@ -38,7 +38,7 @@ orbbec-test-bin:
 # conan call because every line of a Makefile runs in a subshell
 
 conan-pkg:
-	test -f ./venv/bin/activate && source ./venv/bin/activate; \
+	test -f ./venv/bin/activate && . ./venv/bin/activate; \
 	conan create . \
 	-o:a "viam-cpp-sdk/*:shared=False" \
 	-s:a build_type=Release \
@@ -46,7 +46,7 @@ conan-pkg:
 	--build=missing
 
 module.tar.gz: conan-pkg meta.json
-	test -f ./venv/bin/activate && source ./venv/bin/activate; \
+	test -f ./venv/bin/activate && . ./venv/bin/activate; \
 	conan install --requires=viam-orbbec/0.0.1 \
 	-o:a "viam-cpp-sdk/*:shared=False" \
 	-s:a build_type=Release \
