@@ -381,8 +381,7 @@ void startDevice(std::string serialNumber) {
     while (std::chrono::steady_clock::now() - start_time < std::chrono::milliseconds(500)) {
         {
             std::lock_guard<std::mutex> lock(frame_set_by_serial_mu());
-            auto search = frame_set_by_serial().find(serialNumber);
-            if (search != frame_set_by_serial().end()) {
+            if (frame_set_by_serial().count(serialNumber) > 0) {
                 got_frame = true;
                 break;
             }
