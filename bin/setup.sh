@@ -6,8 +6,10 @@
 #
 set -euxo pipefail
 
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+
 if [[ ${OS} == "darwin" ]]; then
-    echo "Detected MacOS ${ARCH}"
+    echo "Detected MacOS"
 
   if ! command -v brew >/dev/null; then
      echo "Brew not installed. Please install brew!"
@@ -16,7 +18,7 @@ if [[ ${OS} == "darwin" ]]; then
   # Install required tools
   brew install cmake python@3.11 wget unzip || true
 elif  [[ ${OS} == "linux" ]]; then
-    echo "Detected Linux $ARCH"
+    echo "Detected Linux"
     # NOTE: this is written under the assumption that it will be built in canon
     sudo apt -y update && sudo apt -y upgrade && sudo apt install -y cmake python3.11 python3.11-venv wget
 else

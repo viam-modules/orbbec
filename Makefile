@@ -1,5 +1,3 @@
-OS ?= $(shell uname -s | tr '[:upper:]' '[:lower:]')
-ARCH ?= $(shell uname -m)
 OUTPUT_NAME = orbbec-module
 BIN := build-conan/build/RelWithDebInfo/orbbec-module
 TAG_VERSION?=latest
@@ -22,8 +20,6 @@ clean-all: clean
 	rm -f $(OUTPUT_NAME)
 
 setup:
-	export OS=$(OS); \
-	export ARCH=$(ARCH); \
 	bin/setup.sh
 
 lint:
