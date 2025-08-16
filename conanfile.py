@@ -1,12 +1,11 @@
 import os
+from io import StringIO
 import re
-import tarfile
-
-from tempfile import TemporaryDirectory
 
 from conan import ConanFile
-from conan.tools.build import check_min_cppstd
+from conan.errors import ConanException
 from conan.tools.cmake import CMake, CMakeDeps, CMakeToolchain, cmake_layout
+from conan.tools.build import can_run
 from conan.tools.files import copy, load
 
 class orbbec(ConanFile):
@@ -17,24 +16,38 @@ class orbbec(ConanFile):
     package_type = "application"
     settings = "os", "compiler", "build_type", "arch"
 
-    def export_sources(self):
-        for pat in ["CMakeLists.txt", "LICENSE", "src/*", "meta.json", "*.sh", "99-obsensor-libusb.rules"]:
-            copy(self, pat, self.recipe_folder, self.export_sources_folder)
+    options = {
+        "shared": [True, False]
+    }
+    default_options = {
+        "shared": True
+    }
+
+    exports_sources = "CMakeLists.txt", "LICENSE", "src/*"
 
     def set_version(self):
         content = load(self, "CMakeLists.txt")
         self.version = re.search("set\(CMAKE_PROJECT_VERSION (.+)\)", content).group(1).strip()
+
+    def configure(self):
+        # If we're building static then build the world as static, otherwise
+        # stuff will probably break.
+        # If you want your shared build to also build the world as shared, you
+        # can invoke conan with -o "&:shared=False" -o "*:shared=False",
+        # possibly with --build=missing or --build=cascade as desired,
+        # but this is probably not necessary.
+        if not self.options.shared:
+            self.options["*"].shared = False
 
     def requirements(self):
         # NOTE: If you update the `viam-cpp-sdk` dependency here, it
         # should also be updated in `bin/setup.{sh,ps1}`.
         self.requires("viam-cpp-sdk/0.16.0")
 
-    def validate(self):
-        check_min_cppstd(self, 17)
-
     def generate(self):
         tc = CMakeToolchain(self)
+        sdk_dir = os.environ.get("ORBBEC_SDK_DIR", "unknown")
+        tc.cache_variables["ORBBEC_SDK_DIR"] = sdk_dir
         tc.generate()
         CMakeDeps(self).generate()
 
@@ -45,27 +58,3 @@ class orbbec(ConanFile):
 
     def layout(self):
         cmake_layout(self, src_folder=".")
-
-    def package(self):
-        cmake = CMake(self)
-        cmake.install()
-
-    def deploy(self):
-        with TemporaryDirectory(dir=self.deploy_folder) as tmp_dir:
-            self.output.debug(f"Creating temporary directory {tmp_dir}")
-            self.output.info("Copying bin and lib")
-            for dir in ["bin", "lib"]:
-                copy(self, "*", src=os.path.join(self.package_folder, dir), dst=os.path.join(tmp_dir, dir))
-
-            self.output.info("Copying scripts and additional files")
-            for pat in ["*.sh", "meta.json", "99-obsensor-libusb.rules"]:
-                copy(self, pat, src=self.package_folder, dst=tmp_dir)
-
-            self.output.info("Creating module.tar.gz")
-            with tarfile.open("module.tar.gz", "w|gz") as tar:
-                tar.add(tmp_dir, ".")
-
-                self.output.debug("module.tar.gz contents:")
-                for mem in tar.getmembers():
-                    self.output.debug(mem.name)
-
