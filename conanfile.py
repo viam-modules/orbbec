@@ -20,7 +20,8 @@ class orbbec(ConanFile):
         "shared": [True, False]
     }
     default_options = {
-        "shared": True
+        "shared": True,
+        "libcurl/*:with_ssl": "openssl",
     }
 
     exports_sources = "CMakeLists.txt", "LICENSE", "src/*"
@@ -43,6 +44,9 @@ class orbbec(ConanFile):
         # NOTE: If you update the `viam-cpp-sdk` dependency here, it
         # should also be updated in `bin/setup.{sh,ps1}`.
         self.requires("viam-cpp-sdk/0.16.0")
+        self.requires("openssl/3.3.2")
+        self.requires("libcurl/8.9.1")
+        self.requires("libzip/1.11.1")
 
     def generate(self):
         tc = CMakeToolchain(self)
