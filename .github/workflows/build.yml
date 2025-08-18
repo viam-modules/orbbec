@@ -16,7 +16,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: buildjet-8vcpu-ubuntu-2204-arm
+          - os: ubuntu-latest-arm64
             container:
               image: nvcr.io/nvidia/l4t-jetpack:r36.2.0
               options: --platform linux/arm64
