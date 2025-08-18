@@ -38,15 +38,15 @@ jobs:
         run: |
           apt-get update
           apt-get -y dist-upgrade
-          apt-get -y --no-install-recommends install  build-essential ca-certificates curl doxygen g++ gdb git gnupg gpg less libboost-all-dev libgrpc++-dev libprotobuf-dev libssl-dev ninja-build pkg-config protobuf-compiler protobuf-compiler-grpc software-properties-common sudo wget unzip python3.10-venv
+          apt-get -y --no-install-recommends install build-essential ca-certificates curl doxygen g++ gdb git gnupg gpg less libboost-all-dev libgrpc++-dev libprotobuf-dev libssl-dev ninja-build pkg-config
           # Add the public key for the llvm repository to get the correct clang version
-          bash -c 'wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key|apt-key add -'
-          apt-add-repository -y 'deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-15 main'
+          wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor > /usr/share/keyrings/llvm-snapshot-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/llvm-snapshot-keyring.gpg] http://apt.llvm.org/jammy/ llvm-toolchain-jammy-15 main" > /etc/apt/sources.list.d/llvm.list
           # Add public key and repository to get cmake 3.25+
           wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - > /usr/share/keyrings/kitware-archive-keyring.gpg
           echo 'deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] https://apt.kitware.com/ubuntu/ jammy main' > /etc/apt/sources.list.d/kitware.list
           apt-get update
-          apt-get -y --no-install-recommends install -t llvm-toolchain-jammy-15 clang-15 clang-tidy-15 clang-format
+          apt-get -y --no-install-recommends install -t llvm-toolchain-jammy-15 clang-15 clang-tidy-15 clang-format libllvm15 libclang-cpp15
           apt-get -y install cmake
 
       - name: Set up build environment
