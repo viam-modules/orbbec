@@ -6,7 +6,8 @@ namespace discovery {
 namespace vsdk = ::viam::sdk;
 vsdk::Model OrbbecDiscovery::model = vsdk::Model("viam", "orbbec", "discovery");
 
-OrbbecDiscovery::OrbbecDiscovery(vsdk::Dependencies dependencies, vsdk::ResourceConfig configuration) : Discovery(configuration.name()) {}
+OrbbecDiscovery::OrbbecDiscovery(vsdk::Dependencies dependencies, vsdk::ResourceConfig configuration, std::shared_ptr<ob::Context> ctx)
+    : Discovery(configuration.name()), ob_ctx_(std::move(ctx)) {}
 
 std::vector<vsdk::ResourceConfig> OrbbecDiscovery::discover_resources(const vsdk::ProtoStruct& extra) {
     std::vector<vsdk::ResourceConfig> configs;

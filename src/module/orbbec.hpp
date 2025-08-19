@@ -21,7 +21,7 @@ void printDeviceInfo(const std::shared_ptr<ob::DeviceInfo> info);
 
 class Orbbec final : public viam::sdk::Camera, public viam::sdk::Reconfigurable {
    public:
-    Orbbec(viam::sdk::Dependencies deps, viam::sdk::ResourceConfig cfg);
+    Orbbec(viam::sdk::Dependencies deps, viam::sdk::ResourceConfig cfg, std::shared_ptr<ob::Context> ctx);
     ~Orbbec();
     void reconfigure(const viam::sdk::Dependencies& deps, const viam::sdk::ResourceConfig& cfg) override;
     viam::sdk::ProtoStruct do_command(const viam::sdk::ProtoStruct& command) override;
@@ -36,6 +36,7 @@ class Orbbec final : public viam::sdk::Camera, public viam::sdk::Reconfigurable 
     static viam::sdk::Model model;
 
    private:
+    std::shared_ptr<ob::Context> ob_ctx_;
     std::unique_ptr<ObResourceConfig> config_;
     std::mutex config_mu_;
     static std::unique_ptr<ObResourceConfig> configure_(viam::sdk::Dependencies deps, viam::sdk::ResourceConfig cfg);

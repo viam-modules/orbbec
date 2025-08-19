@@ -318,6 +318,16 @@ size_t writeCallback(void* contents, size_t size, size_t nmemb, void* userp) {
 }
 
 void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev) {
+    //     if (ob_ctx_ == nullptr) {
+    //         VIAM_SDK_LOG(error) << "update Firmware: ob context is null";
+    //         return;
+    //     }
+
+    // // On linux, orbbec reccomendsto set libuvc backend for firmware update
+    // #if defined(__linux__)
+    //     ob_ctx_->setUvcBackendType(OB_UVC_BACKEND_TYPE_LIBUVC);
+    // #endif
+
     auto url = "https://orbbec-debian-repos-aws.s3.amazonaws.com/product/Astra2_Release_2.8.20.zip";
     CURL* curl;
     CURLcode res;
@@ -457,11 +467,23 @@ void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev) {
         }
         VIAM_SDK_LOG(info) << "Firmware update in progress: " << message;
     };
-
-    my_dev->device->updateFirmwareFromData(binData.data(), binData.size(), std::move(firmwareUpdateCallback), false);
+    try {
+        my_dev->device->updateFirmwareFromData(binData.data(), binData.size(), std::move(firmwareUpdateCallback), false);
+    } catch (ob::Error& e) {
+        VIAM_SDK_LOG(error) << "Error while updating firmware: " << e.what();
+    }
 }
 
 void startDevice(std::string serialNumber, std::string resourceName) {
+    if (ob_ctx_ == nullptr) {
+        VIAM_SDK_LOG(error) << "update Firmware: ob context is null";
+        return;
+    }
+
+// On linux, orbbec reccomendsto set libuvc backend for firmware update
+#if defined(__linux__)
+    ob_ctx_->setUvcBackendType(OB_UVC_BACKEND_TYPE_LIBUVC);
+#endif
     VIAM_SDK_LOG(info) << service_name << ": starting device " << serialNumber;
     ViamOBDevice* dev_ptr = nullptr;
     {
