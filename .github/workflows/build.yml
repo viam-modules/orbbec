@@ -47,6 +47,8 @@ jobs:
           apt-get remove -y libllvm15 || true
           apt-get -y --no-install-recommends install -t llvm-toolchain-jammy-15 libllvm15 clang-15 clang-tidy-15 clang-format libclang-cpp15
           apt-get -y install cmake
+          pip3 install --user appimage-builder
+          export PATH=$PATH:~/.local/bin
 
       - name: Set up build environment
         run: |
