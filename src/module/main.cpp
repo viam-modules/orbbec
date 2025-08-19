@@ -45,7 +45,7 @@ int serve(int argc, char** argv) try {
         }
     }
 
-    orbbec::startOrbbecSDK(*ctx);
+    orbbec::startOrbbecSDK(ctx);
     auto module_service = std::make_shared<vsdk::ModuleService>(argc, argv, create_all_model_registrations(ctx));
     module_service->serve();
 

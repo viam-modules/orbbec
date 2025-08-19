@@ -16,7 +16,7 @@ struct ObResourceConfig {
         : serial_number(serial_number), resource_name(resource_name) {}
 };
 
-void startOrbbecSDK(ob::Context& ctx);
+void startOrbbecSDK(std::shared_ptr<ob::Context> ctx);
 void printDeviceInfo(const std::shared_ptr<ob::DeviceInfo> info);
 
 class Orbbec final : public viam::sdk::Camera, public viam::sdk::Reconfigurable {
