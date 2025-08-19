@@ -11,9 +11,7 @@ namespace discovery {
 
 class OrbbecDiscovery : public viam::sdk::Discovery {
    public:
-    explicit OrbbecDiscovery(viam::sdk::Dependencies dependencies,
-                             viam::sdk::ResourceConfig configuration,
-                             std::shared_ptr<ob::Context> ctx);
+    explicit OrbbecDiscovery(viam::sdk::Dependencies dependencies, viam::sdk::ResourceConfig configuration);
     std::vector<viam::sdk::ResourceConfig> discover_resources(const viam::sdk::ProtoStruct& extra) override;
     viam::sdk::ProtoStruct do_command(const viam::sdk::ProtoStruct& command) override;
     static viam::sdk::Model model;
