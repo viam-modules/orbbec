@@ -12,7 +12,7 @@
 
 namespace vsdk = ::viam::sdk;
 
-std::vector<std::shared_ptr<vsdk::ModelRegistration>> create_all_model_registrations(std::shared_ptr<ob::Context> ctx) {
+std::vector<std::shared_ptr<vsdk::ModelRegistration>> create_all_model_registrations() {
     std::vector<std::shared_ptr<vsdk::ModelRegistration>> registrations;
 
     registrations.push_back(std::make_shared<vsdk::ModelRegistration>(
@@ -24,28 +24,11 @@ std::vector<std::shared_ptr<vsdk::ModelRegistration>> create_all_model_registrat
         orbbec::Orbbec::validate));
 
     registrations.push_back(std::make_shared<vsdk::ModelRegistration>(
-        vsdk::API::get<vsdk::Discovery>(), discovery::OrbbecDiscovery::model, [ctx](vsdk::Dependencies deps, vsdk::ResourceConfig config) {
-            return std::make_unique<discovery::OrbbecDiscovery>(std::move(deps), std::move(config), ctx);
+        vsdk::API::get<vsdk::Discovery>(), discovery::OrbbecDiscovery::model, [](vsdk::Dependencies deps, vsdk::ResourceConfig config) {
+            return std::make_unique<discovery::OrbbecDiscovery>(std::move(deps), std::move(config));
         }));
 
     return registrations;
-}
-
-void printDeviceList(const std::string& prompt, std::shared_ptr<ob::DeviceList> deviceList) {
-    auto count = deviceList->getCount();
-    if (count == 0) {
-        return;
-    }
-    std::cout << count << " device(s) " << prompt << ": " << std::endl;
-    for (uint32_t i = 0; i < count; i++) {
-        auto uid = deviceList->getUid(i);
-        auto vid = deviceList->getVid(i);
-        auto pid = deviceList->getPid(i);
-        auto serialNumber = deviceList->getSerialNumber(i);
-        auto connection = deviceList->getConnectionType(i);
-        std::cout << " serial number: " << serialNumber << ", connection: " << connection << std::endl;
-    }
-    std::cout << std::endl;
 }
 
 int serve(int argc, char** argv) try {
@@ -54,39 +37,17 @@ int serve(int argc, char** argv) try {
     // all Viam C++ SDK objects are destroyed.
     vsdk::Instance inst;
 
-    // create context
-    ob::Context ctx;
+    auto ctx = std::make_shared<ob::Context>();
 
     for (size_t i = 0; i < argc; i++) {
         if (std::string(argv[i]) == "--log-level=debug") {
-            ctx.setLoggerSeverity(OB_LOG_SEVERITY_DEBUG);
+            ctx->setLoggerSeverity(OB_LOG_SEVERITY_DEBUG);
         }
     }
 
-    ctx.setDeviceChangedCallback([](std::shared_ptr<ob::DeviceList> removedList, std::shared_ptr<ob::DeviceList> deviceList) {
-        printDeviceList("added", deviceList);
-        printDeviceList("removed", removedList);
-    });
-
-    std::shared_ptr<ob::DeviceList> devList = ctx.queryDeviceList();
-    int devCount = devList->getCount();
-    for (size_t i = 0; i < devCount; i++) {
-        if (i == 0) {
-            VIAM_SDK_LOG(info) << "devCount: " << devCount << "\n";
-        }
-        std::shared_ptr<ob::Device> dev = devList->getDevice(i);
-        std::shared_ptr<ob::DeviceInfo> info = dev->getDeviceInfo();
-        VIAM_SDK_LOG(info) << "REBOOTING START ORBBEC SDK";
-        dev->reboot();
-        sleep(20);
-        // registerDevice(info->getSerialNumber(), dev);
-    }
-
-    // auto ctx = std::make_shared<ob::Context>();
-
-    // // orbbec::startOrbbecSDK(*ctx);
-    // auto module_service = std::make_shared<vsdk::ModuleService>(argc, argv, create_all_model_registrations(ctx));
-    // module_service->serve();
+    orbbec::startOrbbecSDK(*ctx);
+    auto module_service = std::make_shared<vsdk::ModuleService>(argc, argv, create_all_model_registrations());
+    module_service->serve();
 
     return EXIT_SUCCESS;
 } catch (const std::exception& ex) {

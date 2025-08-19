@@ -1,6 +1,21 @@
 #include "discovery.hpp"
 #include "orbbec.hpp"
 
+#include <iostream>
+#include <string>
+
+#include <viam/sdk/common/instance.hpp>
+#include <viam/sdk/common/proto_value.hpp>
+#include <viam/sdk/components/camera.hpp>
+#include <viam/sdk/config/resource.hpp>
+#include <viam/sdk/module/service.hpp>
+#include <viam/sdk/registry/registry.hpp>
+#include <viam/sdk/resource/reconfigurable.hpp>
+#include <viam/sdk/rpc/server.hpp>
+#include <viam/sdk/services/discovery.hpp>
+
+#include <libobsensor/ObSensor.hpp>
+
 namespace discovery {
 
 namespace vsdk = ::viam::sdk;
@@ -8,10 +23,13 @@ vsdk::Model OrbbecDiscovery::model = vsdk::Model("viam", "orbbec", "discovery");
 
 OrbbecDiscovery::OrbbecDiscovery(vsdk::Dependencies dependencies, vsdk::ResourceConfig configuration) : Discovery(configuration.name()) {}
 
+void OrbbecDiscovery::reconfigure(const vsdk::Dependencies& despendencies, const vsdk::ResourceConfig& configuration) {}
+
 std::vector<vsdk::ResourceConfig> OrbbecDiscovery::discover_resources(const vsdk::ProtoStruct& extra) {
     std::vector<vsdk::ResourceConfig> configs;
 
-    std::shared_ptr<ob::DeviceList> devList = ob_ctx_->queryDeviceList();
+    ob::Context ctx;
+    std::shared_ptr<ob::DeviceList> devList = ctx.queryDeviceList();
     int devCount = devList->getCount();
 
     if (devCount == 0) {
@@ -24,15 +42,15 @@ std::vector<vsdk::ResourceConfig> OrbbecDiscovery::discover_resources(const vsdk
     for (size_t i = 0; i < devCount; i++) {
         std::shared_ptr<ob::Device> dev = devList->getDevice(i);
         std::shared_ptr<ob::DeviceInfo> info = dev->getDeviceInfo();
+        orbbec::printDeviceInfo(info);
 
-        std::ostringstream name;
-        name << "orbbec-" << i + 1;
+        char name[10];
+        sprintf(name, "orbbec-%d", i + 1);
 
         vsdk::ProtoStruct attributes;
         attributes.emplace("serial_number", info->serialNumber());
 
-        vsdk::ResourceConfig config(
-            "camera", std::move(name.str()), "viam", attributes, "rdk:component:camera", orbbec::Orbbec::model, vsdk::log_level::info);
+        vsdk::ResourceConfig config("camera", name, "viam", attributes, "rdk:component:camera", orbbec::Orbbec::model);
         configs.push_back(config);
     }
     return configs;
