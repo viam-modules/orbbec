@@ -12,17 +12,17 @@
 
 namespace vsdk = ::viam::sdk;
 
-std::vector<std::shared_ptr<vsdk::ModelRegistration>> create_all_model_registrations() {
+std::vector<std::shared_ptr<vsdk::ModelRegistration>> create_all_model_registrations(std::shared_ptr<ob::Context> ctx) {
     std::vector<std::shared_ptr<vsdk::ModelRegistration>> registrations;
 
     registrations.push_back(std::make_shared<vsdk::ModelRegistration>(
-        vsdk::API::get<vsdk::Camera>(), orbbec::Orbbec::model, [](vsdk::Dependencies deps, vsdk::ResourceConfig config) {
-            return std::make_unique<orbbec::Orbbec>(std::move(deps), std::move(config));
+        vsdk::API::get<vsdk::Camera>(), orbbec::Orbbec::model, [ctx](vsdk::Dependencies deps, vsdk::ResourceConfig config) {
+            return std::make_unique<orbbec::Orbbec>(std::move(deps), std::move(config), ctx);
         }));
 
     registrations.push_back(std::make_shared<vsdk::ModelRegistration>(
-        vsdk::API::get<vsdk::Discovery>(), discovery::OrbbecDiscovery::model, [](vsdk::Dependencies deps, vsdk::ResourceConfig config) {
-            return std::make_unique<discovery::OrbbecDiscovery>(std::move(deps), std::move(config));
+        vsdk::API::get<vsdk::Discovery>(), discovery::OrbbecDiscovery::model, [ctx](vsdk::Dependencies deps, vsdk::ResourceConfig config) {
+            return std::make_unique<discovery::OrbbecDiscovery>(std::move(deps), std::move(config), ctx);
         }));
 
     return registrations;
@@ -43,7 +43,7 @@ int serve(int argc, char** argv) try {
     }
 
     orbbec::startOrbbecSDK(*ctx);
-    auto module_service = std::make_shared<vsdk::ModuleService>(argc, argv, create_all_model_registrations());
+    auto module_service = std::make_shared<vsdk::ModuleService>(argc, argv, create_all_model_registrations(ctx));
     module_service->serve();
 
     return EXIT_SUCCESS;
