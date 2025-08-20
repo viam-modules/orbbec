@@ -16,9 +16,12 @@ std::vector<std::shared_ptr<vsdk::ModelRegistration>> create_all_model_registrat
     std::vector<std::shared_ptr<vsdk::ModelRegistration>> registrations;
 
     registrations.push_back(std::make_shared<vsdk::ModelRegistration>(
-        vsdk::API::get<vsdk::Camera>(), orbbec::Orbbec::model, [](vsdk::Dependencies deps, vsdk::ResourceConfig config) {
+        vsdk::API::get<vsdk::Camera>(),
+        orbbec::Orbbec::model,
+        [](vsdk::Dependencies deps, vsdk::ResourceConfig config) {
             return std::make_unique<orbbec::Orbbec>(std::move(deps), std::move(config));
-        }));
+        },
+        orbbec::validate));
 
     registrations.push_back(std::make_shared<vsdk::ModelRegistration>(
         vsdk::API::get<vsdk::Discovery>(), discovery::OrbbecDiscovery::model, [ctx](vsdk::Dependencies deps, vsdk::ResourceConfig config) {

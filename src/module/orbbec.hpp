@@ -18,6 +18,7 @@ struct ObResourceConfig {
 
 void startOrbbecSDK(ob::Context& ctx);
 void printDeviceInfo(const std::shared_ptr<ob::DeviceInfo> info);
+std::vector<std::string> validate(viam::sdk::ResourceConfig cfg);
 
 class Orbbec final : public viam::sdk::Camera, public viam::sdk::Reconfigurable {
    public:
@@ -37,7 +38,7 @@ class Orbbec final : public viam::sdk::Camera, public viam::sdk::Reconfigurable 
    private:
     std::unique_ptr<ObResourceConfig> config_;
     std::mutex config_mu_;
-    static std::unique_ptr<ObResourceConfig> configure_(viam::sdk::Dependencies deps, viam::sdk::ResourceConfig cfg);
+    static std::unique_ptr<ObResourceConfig> configure(viam::sdk::Dependencies deps, viam::sdk::ResourceConfig cfg);
 };
 
 }  // namespace orbbec
