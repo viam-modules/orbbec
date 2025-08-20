@@ -31,13 +31,19 @@ wget https://github.com/orbbec/OrbbecSDK_v2/releases/download/${ORBBEC_SDK_VERSI
 unzip ${ORBBEC_SDK_DIR}.zip
 
 # MacOS binary has a different top level dir name than the zip file name
-if [[ ${OS} == "darwin" ]]; then
+if [[ ${TARGET_OS} == "darwin" ]]; then
+TOPDIR=$(ls -d *macOS*/ | head -1 | sed 's#/##')
+mv "${TOPDIR}" "${ORBBEC_SDK_DIR}"
+fi
+
+# windows binary does not have a top level dir, create one
+if [[ ${TARGET_OS} == "windows" ]]; then
 TOPDIR=$(ls -d *macOS*/ | head -1 | sed 's#/##')
 mv "${TOPDIR}" "${ORBBEC_SDK_DIR}"
 fi
 
 # lsusb rules only on linux
-if [[ ${OS} == "linux" ]]; then
+if [[ ${TARGET_OS} == "linux" ]]; then
   cp ${ORBBEC_SDK_DIR}/shared/99-obsensor-libusb.rules .
 fi
 
