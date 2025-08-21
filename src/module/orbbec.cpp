@@ -451,7 +451,7 @@ std::vector<std::string> Orbbec::validate(vsdk::ResourceConfig cfg) {
         throw std::invalid_argument("serial_number must be a string");
     }
 
-    // We already stablished this is a string, so it's safe to call this
+    // We already established this is a string, so it's safe to call this
     std::string const serial = attrs["serial_number"].get_unchecked<std::string>();
     if (serial.empty()) {
         throw std::invalid_argument("serial_number must be a non-empty string");
