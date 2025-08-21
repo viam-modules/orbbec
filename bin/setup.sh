@@ -24,20 +24,20 @@ else
     exit 1
 fi
 
-
 rm -rf ${ORBBEC_SDK_DIR}.zip
 rm -rf ${ORBBEC_SDK_DIR}
 wget https://github.com/orbbec/OrbbecSDK_v2/releases/download/${ORBBEC_SDK_VERSION}/${ORBBEC_SDK_DIR}.zip
-unzip ${ORBBEC_SDK_DIR}.zip
+
+
+# Windows zip doesn't have a top level folder
+if [[ ${TARGET_OS} == "windows" ]]; then
+  unzip ${ORBBEC_SDK_DIR}.zip -d ${ORBBEC_SDK_DIR} || true
+else
+  unzip ${ORBBEC_SDK_DIR}.zip
+fi
 
 # MacOS binary has a different top level dir name than the zip file name
 if [[ ${TARGET_OS} == "darwin" ]]; then
-TOPDIR=$(ls -d *macOS*/ | head -1 | sed 's#/##')
-mv "${TOPDIR}" "${ORBBEC_SDK_DIR}"
-fi
-
-# windows binary does not have a top level dir, create one
-if [[ ${TARGET_OS} == "windows" ]]; then
 TOPDIR=$(ls -d *macOS*/ | head -1 | sed 's#/##')
 mv "${TOPDIR}" "${ORBBEC_SDK_DIR}"
 fi
