@@ -901,8 +901,21 @@ vsdk::Camera::image_collection Orbbec::get_images() {
 }
 
 vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
-    VIAM_SDK_LOG(error) << "do_command not implemented";
-    return vsdk::ProtoStruct{};
+    constexpr char firmware_key[] = "update_firmware";
+    for (const auto& kv : command) {
+        if (kv.first == k_vel_key) {
+            VIAM_SDK_LOG(info) << "Updating device firmware..."
+            const double serial_num = *kv.second.get<std::string>();
+            devices_by_serial_mu
+            devices_by_serial()
+
+            {
+                const std::lock_guard<std::mutex> lock(devices_by_serial_mu);
+                dev = devices_by_serial[serial_num];
+            }
+        }
+
+    }
 }
 
 vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const vsdk::ProtoStruct& extra) {
