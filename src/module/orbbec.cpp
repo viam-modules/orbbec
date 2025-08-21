@@ -317,7 +317,7 @@ size_t writeCallback(void* contents, size_t size, size_t nmemb, void* userp) {
     return totalSize;
 }
 
-void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev, std::shared_ptr<ob::Context> ctx) {
+void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev) {
 // On linux, orbbec reccomendsto set libuvc backend for firmware update
 #if defined(__linux__)
     ctx->setUvcBackendType(OB_UVC_BACKEND_TYPE_LIBUVC);
@@ -906,15 +906,23 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
         if (kv.first == k_vel_key) {
             VIAM_SDK_LOG(info) << "Updating device firmware..."
             const double serial_num = *kv.second.get<std::string>();
-            devices_by_serial_mu
-            devices_by_serial()
 
             {
                 const std::lock_guard<std::mutex> lock(devices_by_serial_mu);
-                dev = devices_by_serial[serial_num];
+                auto search = devices_by_serial().find(serial_number);
+                if (search == devices_by_serial().end()) {
+                    throw std::invalid_argument("device is not connected");
+                }
+                std::unique_ptr<ViamOBDevice>& dev = search->second;
+                updateFirmware(dev);
+                // macOS has a bug where the callbacks are not called, so user must manually reboot the device
+                #if defined(__linux__)
+                    dev->device->reboot();
+                    return 
+                #endif
+
             }
         }
-
     }
 }
 
