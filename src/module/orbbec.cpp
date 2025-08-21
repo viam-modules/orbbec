@@ -51,6 +51,7 @@ const std::string kColorMimeTypeJPEG = "image/jpeg";
 const std::string kDepthSourceName = "depth";
 const std::string kDepthMimeTypeViamDep = "image/vnd.viam.dep";
 const std::string kPcdMimeType = "pointcloud/pcd";
+const std::string firmwareUrl = "https://orbbec-debian-repos-aws.s3.amazonaws.com/product/Astra2_Release_2.8.20.zip";
 
 // CONSTANTS BEGIN
 constexpr char service_name[] = "viam_orbbec";
@@ -317,36 +318,20 @@ size_t writeCallback(void* contents, size_t size, size_t nmemb, void* userp) {
     return totalSize;
 }
 
-void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev) {
+void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev, std::shared_ptr<ob::Context> ctx) {
 // On linux, orbbec reccomendsto set libuvc backend for firmware update
 #if defined(__linux__)
     ctx->setUvcBackendType(OB_UVC_BACKEND_TYPE_LIBUVC);
 #endif
-
-    auto url = "https://orbbec-debian-repos-aws.s3.amazonaws.com/product/Astra2_Release_2.8.20.zip";
     CURL* curl;
     CURLcode res;
 
-    curl = curl_easy_init();
-
     if (!curl) {
+        throw std::invalid_argument("curl easy init failed");
     }
 
-    const char* zipName = "/Astra2_Release_2.8.20.zip";
-    char zipPath[100];
-    // strcpy(zipPath, dataPath);
-    // strcpy(zipPath, zipName);
-
     std::vector<char> zipBuffer;
-
-    // FILE* fp = fopen(zipPath, "wb");
-    // if (!fp) {
-    //     std::ostringstream buffer;
-    //     buffer << "failed to update firmware: couldn't open file path";
-    //     throw std::invalid_argument(buffer.str());
-    // }
-
-    curl_easy_setopt(curl, CURLOPT_URL, url);
+    curl_easy_setopt(curl, CURLOPT_URL, firmwareUrl.c_str());
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &zipBuffer);
@@ -354,11 +339,10 @@ void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev) {
     res = curl_easy_perform(curl);
     if (res != CURLE_OK) {
         std::ostringstream buffer;
-        buffer << "curl failed: " << curl_easy_strerror(res);
+        buffer << "curl early performed failed: " << curl_easy_strerror(res);
         throw std::invalid_argument(buffer.str());
     }
 
-    // fclose(fp);
     curl_easy_cleanup(curl);
 
     zip_error_t ziperror;
@@ -368,9 +352,9 @@ void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev) {
     zip_t* zip = zip_open_from_source(src, 0, &ziperror);
     if (!zip) {
         zip_source_free(src);
-        // std::ostringstream buffer;
-        // buffer << "failed to open zip from source: " << std::string(ziperror);
-        // throw std::invalid_argument(buffer.str());
+        std::ostringstream buffer;
+        buffer << "failed to open zip from source: " << std::to_string(zip_error_code_zip(&ziperror));
+        throw std::invalid_argument(buffer.str());
     }
 
     if (zip_get_num_entries(zip, 0) != 1) {
@@ -406,34 +390,6 @@ void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev) {
 
     std::vector<uint8_t> binData(stats.size);
     zip_fread(binFile, binData.data(), stats.size);
-
-    // int err = 0;
-
-    // zip* z = zip_open(zipPath, 0, &err);
-    // struct zip_stat st;
-    // zip_stat_init(&st);
-    // zip_stat(z, "Astra2_Release_2.8.20.bin", 0, &st);
-    // char* contents = new char[st.size];
-    // zip_file* f = zip_fopen(z, "Astra2_Release_2.8.20.bin", 0);
-
-    // char binPath[100];
-    // const char* binName = "/Astra2_Release_2.8.20.bin"
-    // strcpy(binPath, dataPath);
-    // strcpy(binPath, binName);
-
-    // FILE* firmwareBin = fopen(binPath, "wb");
-    // if (!firmwareBin) {
-    //     std::ostringstream buffer;
-    //     buffer << "failed to update firmware: couldn't open firmware binary";
-    //     throw std::invalid_argument(buffer.str());
-
-    // }
-    // char buffer[4096];
-    // zip_int64_t n;
-    // while ((n = zip_fread(f, buffer, sizeof(buffer))) > 0) {
-    //     fwrite(buffer, 1, n, firmwareBin);
-    // }
-
     zip_close(zip);
 
     auto firmwareUpdateCallback = [](OBFwUpdateState state, const char* message, uint8_t percent) {
@@ -462,57 +418,28 @@ void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev) {
         }
         VIAM_SDK_LOG(info) << "Firmware update in progress: " << message;
     };
-    try {
-        my_dev->device->updateFirmwareFromData(binData.data(), binData.size(), std::move(firmwareUpdateCallback), false);
-    } catch (ob::Error& e) {
-        VIAM_SDK_LOG(error) << "Error while updating firmware: " << e.what();
-    }
+    my_dev->device->updateFirmwareFromData(binData.data(), binData.size(), std::move(firmwareUpdateCallback), false);
+#if defined(__linux__)
+    ctx->setUvcBackendType(OB_UVC_BACKEND_TYPE_AUTO);
+#endif
 }
 
 void startDevice(std::string serialNumber, std::string resourceName, std::shared_ptr<ob::Context> ctx) {
     VIAM_SDK_LOG(info) << service_name << ": starting device " << serialNumber;
-    ViamOBDevice* dev_ptr = nullptr;
-    {
-        std::lock_guard<std::mutex> lock(devices_by_serial_mu());
-
-        auto search = devices_by_serial().find(serialNumber);
-        if (search == devices_by_serial().end()) {
-            std::ostringstream buffer;
-            buffer << service_name << ": unable to start undetected device" << serialNumber;
-            throw std::invalid_argument(buffer.str());
-        }
-
-        std::unique_ptr<ViamOBDevice>& my_dev = search->second;
-        if (my_dev->started) {
-            std::ostringstream buffer;
-            buffer << service_name << ": unable to start already started device" << serialNumber;
-            throw std::invalid_argument(buffer.str());
-        }
-
-        auto info = my_dev->device->getDeviceInfo();
-        const char* firmwareVer = info->firmwareVersion();
-        if (strcmp(firmwareVer, "2.8.20") == 0 && count == 0) {
-            updateFirmware(my_dev, ctx);
-        }
-        dev_ptr = my_dev.get();
-    }
-
-    // need to do this outside of the lock
-    // this will call the devicechangecallback twice to remove and readd the device
-    // the callbacks are not working on mac
-    if (count == 0) {
-        count++;
-        dev_ptr->device->reboot();
-        // sleep to give time for the callbacks to be called.
-        VIAM_SDK_LOG(info) << "REBOOTED";
-        // can return because the device changed callback will call this function again
-        // throw so viam doesn't think we started the device
+    std::lock_guard<std::mutex> lock(devices_by_serial_mu());
+    auto search = devices_by_serial().find(serialNumber);
+    if (search == devices_by_serial().end()) {
         std::ostringstream buffer;
-        buffer << service_name << "rebooting after firmware update for " << serialNumber;
-        throw rebootNeededError(buffer.str());
+        buffer << service_name << ": unable to start undetected device" << serialNumber;
+        throw std::invalid_argument(buffer.str());
     }
-    // // can return because the device changed callback will call this function again
-    // return;
+
+    std::unique_ptr<ViamOBDevice>& my_dev = search->second;
+    if (my_dev->started) {
+        std::ostringstream buffer;
+        buffer << service_name << ": unable to start already started device" << serialNumber;
+        throw std::invalid_argument(buffer.str());
+    }
 
     auto frameCallback = [serialNumber](std::shared_ptr<ob::FrameSet> frameSet) {
         if (frameSet->getCount() != 2) {
@@ -566,8 +493,8 @@ void startDevice(std::string serialNumber, std::string resourceName, std::shared
         frame_set_by_serial()[serialNumber] = frameSet;
     };
     VIAM_SDK_LOG(info) << service_name << "starting pipeline" << serialNumber;
-    dev_ptr->pipe->start(dev_ptr->config, std::move(frameCallback));
-    dev_ptr->started = true;
+    my_dev->pipe->start(my_dev->config, std::move(frameCallback));
+    my_dev->started = true;
     VIAM_SDK_LOG(info) << service_name << ": device started " << serialNumber;
 }
 
@@ -911,29 +838,43 @@ vsdk::Camera::image_collection Orbbec::get_images() {
 }
 
 vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
+    viam::sdk::ProtoStruct resp = viam::sdk::ProtoStruct{};
     constexpr char firmware_key[] = "update_firmware";
     for (const auto& kv : command) {
-        if (kv.first == k_vel_key) {
-            VIAM_SDK_LOG(info) << "Updating device firmware..."
-            const double serial_num = *kv.second.get<std::string>();
-
+        if (kv.first == firmware_key) {
+            VIAM_SDK_LOG(info) << "Updating device firmware...";
+            const std::string serial_number = *kv.second.get<std::string>();
             {
-                const std::lock_guard<std::mutex> lock(devices_by_serial_mu);
-                auto search = devices_by_serial().find(serial_number);
-                if (search == devices_by_serial().end()) {
-                    throw std::invalid_argument("device is not connected");
+                {
+                    const std::lock_guard<std::mutex> lock(devices_by_serial_mu());
+                    auto search = devices_by_serial().find(serial_number);
+                    if (search == devices_by_serial().end()) {
+                        throw std::invalid_argument("device is not connected");
+                    }
+                    std::unique_ptr<ViamOBDevice>& dev = search->second;
+                    if (dev->started) {
+                        dev->pipe->stop();
+                        dev->started = false;
+                    }
+                    try {
+                        updateFirmware(dev, ob_ctx_);
+                    } catch (const std::exception& e) {
+                        std::ostringstream buffer;
+                        buffer << "firmware update failed: " << e.what();
+                        VIAM_SDK_LOG(error) << buffer.str();
+                        resp.emplace(firmware_key, buffer.str());
+                    }
                 }
-                std::unique_ptr<ViamOBDevice>& dev = search->second;
-                updateFirmware(dev);
-                // macOS has a bug where the callbacks are not called, so user must manually reboot the device
-                #if defined(__linux__)
-                    dev->device->reboot();
-                    return 
-                #endif
-
+// macOS has a bug where the callbacks are not called, so user must manually reboot the device
+#if defined(__linux__)
+                dev->device->reboot();
+                resp.emplace(firmware_key, std::string("firmware successfully updated"));
+#endif
+                resp.emplace(firmware_key, std::string("firmware successfully updated, unplug and replug the device"));
             }
         }
     }
+    return resp;
 }
 
 vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const vsdk::ProtoStruct& extra) {
