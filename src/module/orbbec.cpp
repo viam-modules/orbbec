@@ -440,17 +440,15 @@ raw_camera_image encodeDepthRAW(const unsigned char* data, const uint64_t width,
 // HELPERS END
 
 // RESOURCE BEGIN
-std::vector<std::string> validate(vsdk::ResourceConfig cfg) {
+std::vector<std::string> Orbbec::validate(vsdk::ResourceConfig cfg) {
     auto attrs = cfg.attributes();
 
     if (not attrs.count("serial_number")) {
         throw std::invalid_argument("serial_number is a required argument");
     }
 
-    if (attrs.count("serial_number")) {
-        if (!attrs["serial_number"].get<std::string>()) {
-            throw std::invalid_argument("serial_number must be a string");
-        }
+    if (!attrs["serial_number"].get<std::string>()) {
+        throw std::invalid_argument("serial_number must be a string");
     }
 
     // We already stablished this is a string, so it's safe to call this
