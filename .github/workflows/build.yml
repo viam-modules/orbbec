@@ -16,19 +16,19 @@ jobs:
             target_arch: amd64
           - os: ubuntu-latest
             target_os: linux
-            target_arch: aarch64
+            target_arch: x86_64
             container:
                 image: ghcr.io/viamrobotics/rdk-devenv:amd64
                 options: --platform linux/amd64
           - os: buildjet-8vcpu-ubuntu-2204-arm
             target_os: linux
-            target_arch: arm64
+            target_arch: aarch64
             container:
               image: ghcr.io/viamrobotics/rdk-devenv:arm64
               options: --platform linux/arm64
           - os: windows
             target_os: windows
-            target_arch: x86
+            target_arch: x64
             container:
                 image: ghcr.io/viamrobotics/rdk-devenv:amd64
                 options: --platform linux/amd64
