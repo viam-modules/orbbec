@@ -16,7 +16,7 @@ jobs:
             target_arch: amd64
           - os: ubuntu-latest
             target_os: linux
-            target_arch: aarch4
+            target_arch: aarch64
             container:
                 image: ghcr.io/viamrobotics/rdk-devenv:amd64
                 options: --platform linux/amd64
