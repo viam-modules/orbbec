@@ -20,6 +20,14 @@ jobs:
             container:
               image: ghcr.io/viamrobotics/rdk-devenv:arm64
               options: --platform linux/arm64
+          - os: windows
+            target_os: windows
+            target_arch: amd64
+            container:
+                image: ghcr.io/viamrobotics/rdk-devenv:amd64
+                options: --platform linux/amd64
+
+
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container }}
 
@@ -29,8 +37,8 @@ jobs:
 
       - name: Set up build environment
         run: |
-          make setup
+            TARGET_OS=target_os TARGET_ARCH=target_arch make setup make setup
 
       - name: Make module.tar.gz
         run: |
-          make module.tar.gz
+            TARGET_OS=target_os TARGET_ARCH=target_arch make module.tar.gz
