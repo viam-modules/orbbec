@@ -138,7 +138,23 @@ int count = 0;
 // GLOBALS END
 
 // HELPERS BEGIN
-//
+
+void checkFirmwareVersion(const std::string& serial_number) {
+    const std::lock_guard<std::mutex> lock(devices_by_serial_mu());
+    auto search = devices_by_serial().find(serial_number);
+    if (search == devices_by_serial().end()) {
+        throw std::runtime_error("device not found");
+    }
+
+    auto& device = search->second;
+    auto info = device->device->getDeviceInfo();
+    std::string version = info->firmwareVersion();
+
+    if (version != " 2.8.20") {
+        throw std::runtime_error("Unsupported firmware version. Required: 2.8.20, Current: " + version "Call update_firmware do command to upgrade.");
+    }
+}
+
 uint64_t getNowUs() {
     return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 }
@@ -635,6 +651,9 @@ vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::Pro
             const std::lock_guard<std::mutex> lock(config_mu_);
             serial_number = config_->serial_number;
         }
+
+        checkFirmwareVersion(serial_number);
+
         std::shared_ptr<ob::FrameSet> fs = nullptr;
         {
             std::lock_guard<std::mutex> lock(frame_set_by_serial_mu());
@@ -742,6 +761,9 @@ vsdk::Camera::image_collection Orbbec::get_images() {
             const std::lock_guard<std::mutex> lock(config_mu_);
             serial_number = config_->serial_number;
         }
+
+        checkFirmwareVersion(serial_number);
+
         std::shared_ptr<ob::FrameSet> fs = nullptr;
         {
             std::lock_guard<std::mutex> lock(frame_set_by_serial_mu());
@@ -879,6 +901,9 @@ vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const v
             const std::lock_guard<std::mutex> lock(config_mu_);
             serial_number = config_->serial_number;
         }
+
+        checkFirmwareVersion(serial_number);
+
         std::shared_ptr<ob::FrameSet> fs = nullptr;
         {
             std::lock_guard<std::mutex> lock(frame_set_by_serial_mu());
