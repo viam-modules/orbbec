@@ -841,9 +841,13 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
     viam::sdk::ProtoStruct resp = viam::sdk::ProtoStruct{};
     constexpr char firmware_key[] = "update_firmware";
     for (const auto& kv : command) {
+        VIAM_SDK_LOG(info) << "Updating device firmware...";
         if (kv.first == firmware_key) {
-            VIAM_SDK_LOG(info) << "Updating device firmware...";
-            const std::string serial_number = *kv.second.get<std::string>();
+            std::string serial_number;
+            {
+                const std::lock_guard<std::mutex> lock(config_mu_);
+                serial_number = config_->serial_number;
+            }
             {
                 {
                     const std::lock_guard<std::mutex> lock(devices_by_serial_mu());
