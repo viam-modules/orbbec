@@ -31,13 +31,14 @@ class Orbbec final : public viam::sdk::Camera, public viam::sdk::Reconfigurable 
     properties get_properties() override;
     std::vector<viam::sdk::GeometryConfig> get_geometries(const viam::sdk::ProtoStruct& extra) override;
 
+    static std::vector<std::string> validate(viam::sdk::ResourceConfig cfg);
     static viam::sdk::GeometryConfig geometry;
     static viam::sdk::Model model;
 
    private:
     std::unique_ptr<ObResourceConfig> config_;
     std::mutex config_mu_;
-    static std::unique_ptr<ObResourceConfig> configure_(viam::sdk::Dependencies deps, viam::sdk::ResourceConfig cfg);
+    static std::unique_ptr<ObResourceConfig> configure(viam::sdk::Dependencies deps, viam::sdk::ResourceConfig cfg);
 };
 
 }  // namespace orbbec

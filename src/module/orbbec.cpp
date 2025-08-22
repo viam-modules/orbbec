@@ -440,19 +440,27 @@ raw_camera_image encodeDepthRAW(const unsigned char* data, const uint64_t width,
 // HELPERS END
 
 // RESOURCE BEGIN
-std::vector<std::string> validate(vsdk::ResourceConfig cfg) {
+std::vector<std::string> Orbbec::validate(vsdk::ResourceConfig cfg) {
     auto attrs = cfg.attributes();
 
-    if (attrs.count("serial_number")) {
-        if (!attrs["serial_number"].get<std::string>()) {
-            throw std::invalid_argument("serial_number must be a string");
-        }
+    if (not attrs.count("serial_number")) {
+        throw std::invalid_argument("serial_number is a required argument");
+    }
+
+    if (!attrs["serial_number"].get<std::string>()) {
+        throw std::invalid_argument("serial_number must be a string");
+    }
+
+    // We already established this is a string, so it's safe to call this
+    std::string const serial = attrs["serial_number"].get_unchecked<std::string>();
+    if (serial.empty()) {
+        throw std::invalid_argument("serial_number must be a non-empty string");
     }
     return {};
 }
 
 Orbbec::Orbbec(vsdk::Dependencies deps, vsdk::ResourceConfig cfg)
-    : Camera(cfg.name()), config_(configure_(std::move(deps), std::move(cfg))) {
+    : Camera(cfg.name()), config_(configure(std::move(deps), std::move(cfg))) {
     VIAM_SDK_LOG(info) << "Orbbec constructor start " << config_->serial_number;
     startDevice(config_->serial_number, config_->resource_name);
     {
@@ -498,7 +506,7 @@ void Orbbec::reconfigure(const vsdk::Dependencies& deps, const vsdk::ResourceCon
     {
         const std::lock_guard<std::mutex> lock(config_mu_);
         config_.reset();
-        config_ = configure_(deps, cfg);
+        config_ = configure(deps, cfg);
         new_serial_number = config_->serial_number;
         new_resource_name = config_->resource_name;
     }
@@ -801,23 +809,12 @@ std::vector<vsdk::GeometryConfig> Orbbec::get_geometries(const vsdk::ProtoStruct
     return {vsdk::GeometryConfig(vsdk::pose{-37.5, 5.5, -18.1}, vsdk::box({145, 46, 39}), "box")};
 }
 
-std::unique_ptr<orbbec::ObResourceConfig> Orbbec::configure_(vsdk::Dependencies dependencies, vsdk::ResourceConfig configuration) {
+std::unique_ptr<orbbec::ObResourceConfig> Orbbec::configure(vsdk::Dependencies dependencies, vsdk::ResourceConfig configuration) {
     auto attrs = configuration.attributes();
-
     std::string serial_number_from_config;
-    if (!attrs.count("serial_number")) {
-        throw std::invalid_argument("serial_number is a required argument");
-    }
-
     const std::string* serial_val = attrs["serial_number"].get<std::string>();
-    if (serial_val == nullptr) {
-        throw std::invalid_argument("serial_number must be a string");
-    }
-
     serial_number_from_config = *serial_val;
-
     auto native_config = std::make_unique<orbbec::ObResourceConfig>(serial_number_from_config, configuration.name());
-
     return native_config;
 }
 // RESOURCE END
