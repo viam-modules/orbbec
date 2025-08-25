@@ -6,6 +6,10 @@
 #
 set -euxo pipefail
 
+export WINDRES=x86_64-w64-mingw32-windres
+export RCFLAGS="-I/usr/x86_64-w64-mingw32/include"
+export WINDRESFLAGS="--target=pe-x86-64 -I/usr/x86_64-w64-mingw32/include -D_WIN64"
+
 if [[ ${OS} == "darwin" ]]; then
     echo "Detected MacOS ${ARCH}"
 
@@ -18,25 +22,27 @@ if [[ ${OS} == "darwin" ]]; then
 elif  [[ ${OS} == "linux" ]]; then
     echo "Detected Linux $ARCH"
     # NOTE: this is written under the assumption that it will be built in canon
-    sudo apt -y update && sudo apt -y upgrade && sudo apt install -y cmake python3.11 python3.11-venv wget
+    sudo apt -y update && sudo apt -y upgrade && sudo apt install -y cmake python3.11 python3.11-venv wget 
 else
     echo "Unsupported OS: ${OS}"
     exit 1
 fi
 
-rm -rf ${ORBBEC_SDK_DIR}.zip
-rm -rf ${ORBBEC_SDK_DIR}
-wget https://github.com/orbbec/OrbbecSDK_v2/releases/download/${ORBBEC_SDK_VERSION}/${ORBBEC_SDK_DIR}.zip
+# rm -rf ${ORBBEC_SDK_DIR}.zip
+# rm -rf ${ORBBEC_SDK_DIR}
+# wget https://github.com/orbbec/OrbbecSDK_v2/releases/download/${ORBBEC_SDK_VERSION}/${ORBBEC_SDK_DIR}.zip
 
 
 # Windows zip doesn't have a top level folder
 if [[ ${TARGET_OS} == "windows" ]]; then
-  unzip ${ORBBEC_SDK_DIR}.zip -d ${ORBBEC_SDK_DIR} || true
-  sudo apt install -y mingw-w64 mingw-w64-tools
+  #unzip ${ORBBEC_SDK_DIR}.zip -d ${ORBBEC_SDK_DIR} || true
+  sudo apt install -y mingw-w64 mingw-w64-tools g++-mingw-w64-x86-64-posix gcc-mingw-w64-x86-64-posix mingw-w64-x86-64-dev
+  #sudo ln -s $(which x86_64-w64-mingw32-windres) /usr/bin/windres
   gendef "${ORBBEC_SDK_DIR}/bin/OrbbecSDK.dll"
   x86_64-w64-mingw32-dlltool -D ${ORBBEC_SDK_DIR}/bin/OrbbecSDK.dll \
                              -d OrbbecSDK.def \
                              -l ${ORBBEC_SDK_DIR}/lib/libOrbbecSDK.a
+                          
 else
   unzip ${ORBBEC_SDK_DIR}.zip
 fi
@@ -83,18 +89,23 @@ fi
 # NOTE: If you change this version, also change it in the `conanfile.py` requirements
 git checkout releases/v0.16.0
 
+
+# Cleanup
+popd  # viam-cpp-sdk
+popd  # tmp_cpp_sdk
+
 # Build the C++ SDK repo
 #
 # We want a static binary, so we turn off shared. Elect for C++17
 # compilation, since it seems some of the dependencies we pick mandate
 # it anyway.
 conan create . \
+      --profile:host=./.conan2/profiles/mingw-windows \
       --build=missing \
       -o:a "&:shared=False" \
+      -o boost/*:with_stacktrace_backtrace=False \
+      -o boost/*:without_stacktrace=True \
       -s:a build_type=Release \
       -s:a compiler.cppstd=17
 
-# Cleanup
-popd  # viam-cpp-sdk
-popd  # tmp_cpp_sdk
 rm -rf tmp_cpp_sdk

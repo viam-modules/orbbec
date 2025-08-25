@@ -97,6 +97,7 @@ setup:
 	export OS=$(SOURCE_OS); \
 	export ARCH=${SOURCE_ARCH}; \
 	export TARGET_OS=$(TARGET_OS); \
+	export WINDRESFLAGS="-I/usr/x86_64-w64-mingw32/include"; \
 	bin/setup.sh
 
 lint:
