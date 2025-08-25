@@ -57,6 +57,7 @@ const std::string firmwareUrl = "https://orbbec-debian-repos-aws.s3.amazonaws.co
 constexpr char service_name[] = "viam_orbbec";
 const float mmToMeterMultiple = 0.001;
 const uint64_t maxFrameAgeUs = 1e6;  // time until a frame is considered stale, in microseconds (equal to 1 sec)
+const char requiredFirmwareVer[] = "2.8.20";
 
 // CONSTANTS END
 
@@ -143,15 +144,20 @@ void checkFirmwareVersion(const std::string& serial_number) {
     const std::lock_guard<std::mutex> lock(devices_by_serial_mu());
     auto search = devices_by_serial().find(serial_number);
     if (search == devices_by_serial().end()) {
-        throw std::runtime_error("device not found");
+        std::ostringstream buffer;
+        buffer << "device with serial number " << serialNumber << " not found";
+        throw std::invalid_argument(buffer.str());
     }
 
     auto& device = search->second;
     auto info = device->device->getDeviceInfo();
     std::string version = info->firmwareVersion();
 
-    if (version != " 2.8.20") {
-        throw std::runtime_error("Unsupported firmware version. Required: 2.8.20, Current: " + version "Call update_firmware do command to upgrade.");
+    if (version != requiredFirmwareVer) {
+        std::ostringstream buffer;
+        buffer << "Unsupported firmware version. Required: " << requiredFirmwareVer << ", Current: " << version
+               << ". Call update_firmware do command to upgrade.";
+        throw std::runtime_error(buffer.str());
     }
 }
 
