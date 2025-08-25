@@ -24,20 +24,31 @@ else
     exit 1
 fi
 
-
 rm -rf ${ORBBEC_SDK_DIR}.zip
 rm -rf ${ORBBEC_SDK_DIR}
 wget https://github.com/orbbec/OrbbecSDK_v2/releases/download/${ORBBEC_SDK_VERSION}/${ORBBEC_SDK_DIR}.zip
-unzip ${ORBBEC_SDK_DIR}.zip
+
+
+# Windows zip doesn't have a top level folder
+if [[ ${TARGET_OS} == "windows" ]]; then
+  unzip ${ORBBEC_SDK_DIR}.zip -d ${ORBBEC_SDK_DIR} || true
+  sudo apt install -y mingw-w64 mingw-w64-tools
+  gendef "${ORBBEC_SDK_DIR}/bin/OrbbecSDK.dll"
+  x86_64-w64-mingw32-dlltool -D ${ORBBEC_SDK_DIR}/bin/OrbbecSDK.dll \
+                             -d OrbbecSDK.def \
+                             -l ${ORBBEC_SDK_DIR}/lib/libOrbbecSDK.a
+else
+  unzip ${ORBBEC_SDK_DIR}.zip
+fi
 
 # MacOS binary has a different top level dir name than the zip file name
-if [[ ${OS} == "darwin" ]]; then
+if [[ ${TARGET_OS} == "darwin" ]]; then
 TOPDIR=$(ls -d *macOS*/ | head -1 | sed 's#/##')
 mv "${TOPDIR}" "${ORBBEC_SDK_DIR}"
 fi
 
 # lsusb rules only on linux
-if [[ ${OS} == "linux" ]]; then
+if [[ ${TARGET_OS} == "linux" ]]; then
   cp ${ORBBEC_SDK_DIR}/shared/99-obsensor-libusb.rules .
 fi
 

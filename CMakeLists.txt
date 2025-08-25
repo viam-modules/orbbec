@@ -10,6 +10,10 @@ project(viam-orbbec
     LANGUAGES CXX
 )
 
+if(WIN32)
+    add_definitions(-DOB_EXPORT=__declspec(dllimport))
+endif()
+
 add_executable(orbbec-cli src/cli/main.cpp)
 add_executable(orbbec-module src/module/main.cpp src/module/orbbec.cpp src/module/discovery.cpp)
 
@@ -28,8 +32,14 @@ PRIVATE ob::OrbbecSDK
 PRIVATE Threads::Threads
 )
 
-target_link_libraries(orbbec-module
-PRIVATE ob::OrbbecSDK
-PRIVATE Threads::Threads
-PRIVATE viam-cpp-sdk::viamsdk
-)
+
+if(WIN32)
+    message(STATUS "Linking OrbbecSDK import library for Windows")
+    set(ORBBEC_LIB "${ORBBEC_SDK_DIR}/lib/libOrbbecSDK.a")
+    target_link_libraries(orbbec-module PRIVATE "${ORBBEC_LIB}" Threads::Threads viam-cpp-sdk::viamsdk)
+else()
+    # Linux/macOS linking
+    message(STATUS "Linking OrbbecSDK import library not for windows")
+    target_link_libraries(orbbec-module PRIVATE ob::OrbbecSDK Threads::Threads viam-cpp-sdk::viamsdk)
+endif()
+

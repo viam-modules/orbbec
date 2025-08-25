@@ -25,11 +25,21 @@ if [ -f "./venv/bin/activate" ]; then
   source ./venv/bin/activate
 fi
 
-conan install . \
+
+if [ "$TARGET_OS" = "Windows" ]; then
+      conan install . \
       --build=missing \
       -o:a "&:shared=False" \
       -s:a build_type=Release \
       -s:a compiler.cppstd=17
+else
+    conan install . \
+      --profile:host=mingw-windows \
+      --build=missing \
+      -o:a "&:shared=False" \
+      -s:a build_type=Release \
+      -s:a compiler.cppstd=17
+fi
 
 conan build . \
       --output-folder=build-conan \
