@@ -59,7 +59,6 @@ endif
 build: $(BIN)
 
 $(BIN): lint conanfile.py src/* bin/*
-	export ORBBEC_SDK_DIR=$(ORBBEC_SDK_DIR); \
 	bin/build.sh
 
 clean:
@@ -67,16 +66,12 @@ clean:
 
 clean-all: clean
 	rm -rf build-conan
-	rm -rf tmp_cpp_sdk  
+	rm -rf tmp_cpp_sdk
 	rm -rf venv
 	rm -f orbbec-test-bin
 	rm -f $(OUTPUT_NAME)
 
 setup:
-	export ORBBEC_SDK_VERSION=$(ORBBEC_SDK_VERSION); \
-	export ORBBEC_SDK_DIR=$(ORBBEC_SDK_DIR); \
-	export OS=$(OS); \
-	export ARCH=${ARCH}; \
 	bin/setup.sh
 
 lint:
