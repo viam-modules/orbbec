@@ -30,8 +30,12 @@ PRIVATE ob::OrbbecSDK
 PRIVATE Threads::Threads
 )
 
-target_link_libraries(orbbec-module
-PRIVATE ob::OrbbecSDK
-PRIVATE Threads::Threads
-PRIVATE viam-cpp-sdk::viamsdk
-)
+
+if(WIN32)
+    set(ORBBEC_LIB "${ORBBEC_SDK_DIR}/lib/libOrbbecSDK.a")
+    target_link_libraries(orbbec-module PRIVATE "${ORBBEC_LIB}" Threads::Threads viam-cpp-sdk::viamsdk)
+else()
+    # Linux/macOS linking
+    target_link_libraries(orbbec-module PRIVATE ob::OrbbecSDK Threads::Threads viam-cpp-sdk::viamsdk)
+endif()
+

@@ -32,6 +32,11 @@ wget https://github.com/orbbec/OrbbecSDK_v2/releases/download/${ORBBEC_SDK_VERSI
 # Windows zip doesn't have a top level folder
 if [[ ${TARGET_OS} == "windows" ]]; then
   unzip ${ORBBEC_SDK_DIR}.zip -d ${ORBBEC_SDK_DIR} || true
+  sudo apt install -y mingw-w64 mingw-w64-tools
+  pexports OrbbecSDK.dll > OrbbecSDK.def
+    x86_64-w64-mingw32-dlltool -D ${ORBBEC_SDK_DIR}/bin/OrbbecSDK.dll \
+                             -d OrbbecSDK.def \
+                             -l ${ORBBEC_SDK_DIR}/lib/libOrbbecSDK.a
 else
   unzip ${ORBBEC_SDK_DIR}.zip
 fi
