@@ -351,18 +351,20 @@ void startDevice(std::string serialNumber, std::string resourceName) {
 
         auto it = frame_set_by_serial().find(serialNumber);
         if (it != frame_set_by_serial().end()) {
-            std::shared_ptr<ob::Frame> prevColor = frameSet->getFrame(OB_FRAME_COLOR);
-            std::shared_ptr<ob::Frame> prevDepth = frameSet->getFrame(OB_FRAME_DEPTH);
+            std::shared_ptr<ob::Frame> prevColor = it->second->getFrame(OB_FRAME_COLOR);
+            std::shared_ptr<ob::Frame> prevDepth = it->second->getFrame(OB_FRAME_DEPTH);
             if (prevColor != nullptr && prevDepth != nullptr) {
                 diff = timeSinceFrameUs(color->getSystemTimeStampUs(), prevColor->getSystemTimeStampUs());
                 if (diff > maxFrameAgeUs) {
-                    std::cerr << "previous color frame is " << diff << "us older than current color frame. nowUs: " << nowUs
-                              << " frameTimeUs " << color->getSystemTimeStampUs() << "\n";
+                    std::cerr << "previous color frame is " << diff
+                              << "us older than current color frame. previousUs: " << prevColor->getSystemTimeStampUs()
+                              << " currentUs: " << color->getSystemTimeStampUs() << "\n";
                 }
                 diff = timeSinceFrameUs(depth->getSystemTimeStampUs(), prevDepth->getSystemTimeStampUs());
                 if (diff > maxFrameAgeUs) {
-                    std::cerr << "previous depth frame is " << diff << "us older than current depth frame. nowUs: " << nowUs
-                              << " frameTimeUs " << depth->getSystemTimeStampUs() << "\n";
+                    std::cerr << "previous depth frame is " << diff
+                              << "us older than current depth frame. previousUs: " << prevDepth->getSystemTimeStampUs()
+                              << " currentUs: " << depth->getSystemTimeStampUs() << "\n";
                 }
             }
         }
@@ -438,19 +440,27 @@ raw_camera_image encodeDepthRAW(const unsigned char* data, const uint64_t width,
 // HELPERS END
 
 // RESOURCE BEGIN
-std::vector<std::string> validate(vsdk::ResourceConfig cfg) {
+std::vector<std::string> Orbbec::validate(vsdk::ResourceConfig cfg) {
     auto attrs = cfg.attributes();
 
-    if (attrs.count("serial_number")) {
-        if (!attrs["serial_number"].get<std::string>()) {
-            throw std::invalid_argument("serial_number must be a string");
-        }
+    if (not attrs.count("serial_number")) {
+        throw std::invalid_argument("serial_number is a required argument");
+    }
+
+    if (!attrs["serial_number"].get<std::string>()) {
+        throw std::invalid_argument("serial_number must be a string");
+    }
+
+    // We already established this is a string, so it's safe to call this
+    std::string const serial = attrs["serial_number"].get_unchecked<std::string>();
+    if (serial.empty()) {
+        throw std::invalid_argument("serial_number must be a non-empty string");
     }
     return {};
 }
 
 Orbbec::Orbbec(vsdk::Dependencies deps, vsdk::ResourceConfig cfg)
-    : Camera(cfg.name()), config_(configure_(std::move(deps), std::move(cfg))) {
+    : Camera(cfg.name()), config_(configure(std::move(deps), std::move(cfg))) {
     VIAM_SDK_LOG(info) << "Orbbec constructor start " << config_->serial_number;
     startDevice(config_->serial_number, config_->resource_name);
     {
@@ -496,7 +506,7 @@ void Orbbec::reconfigure(const vsdk::Dependencies& deps, const vsdk::ResourceCon
     {
         const std::lock_guard<std::mutex> lock(config_mu_);
         config_.reset();
-        config_ = configure_(deps, cfg);
+        config_ = configure(deps, cfg);
         new_serial_number = config_->serial_number;
         new_resource_name = config_->resource_name;
     }
@@ -510,7 +520,7 @@ void Orbbec::reconfigure(const vsdk::Dependencies& deps, const vsdk::ResourceCon
 
 vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::ProtoStruct& extra) {
     try {
-        VIAM_SDK_LOG(info) << "[get_image] start";
+        VIAM_SDK_LOG(debug) << "[get_image] start";
         std::string serial_number;
         {
             const std::lock_guard<std::mutex> lock(config_mu_);
@@ -554,7 +564,7 @@ vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::Pro
         response.source_name = kColorSourceName;
         response.mime_type = kColorMimeTypeJPEG;
         response.bytes.assign(colorData, colorData + colorDataSize);
-        VIAM_SDK_LOG(info) << "[get_image] end";
+        VIAM_SDK_LOG(debug) << "[get_image] end";
         return response;
     } catch (const std::exception& e) {
         VIAM_SDK_LOG(error) << "[get_image] error: " << e.what();
@@ -564,7 +574,7 @@ vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::Pro
 
 vsdk::Camera::properties Orbbec::get_properties() {
     try {
-        VIAM_SDK_LOG(info) << "[get_properties] start";
+        VIAM_SDK_LOG(debug) << "[get_properties] start";
 
         std::string serial_number;
         {
@@ -607,7 +617,7 @@ vsdk::Camera::properties Orbbec::get_properties() {
         p.intrinsic_parameters.center_y_px = props.cy;
         // TODO: Set distortion parameters
 
-        VIAM_SDK_LOG(info) << "[get_properties] end";
+        VIAM_SDK_LOG(debug) << "[get_properties] end";
         return p;
     } catch (const std::exception& e) {
         VIAM_SDK_LOG(error) << "[get_properties] error: " << e.what();
@@ -617,7 +627,7 @@ vsdk::Camera::properties Orbbec::get_properties() {
 
 vsdk::Camera::image_collection Orbbec::get_images() {
     try {
-        VIAM_SDK_LOG(info) << "[get_images] start";
+        VIAM_SDK_LOG(debug) << "[get_images] start";
         std::string serial_number;
         {
             const std::lock_guard<std::mutex> lock(config_mu_);
@@ -700,7 +710,7 @@ vsdk::Camera::image_collection Orbbec::get_images() {
 
         std::chrono::microseconds latestTimestamp(timestamp);
         response.metadata.captured_at = vsdk::time_pt{std::chrono::duration_cast<std::chrono::nanoseconds>(latestTimestamp)};
-        VIAM_SDK_LOG(info) << "[get_images] end";
+        VIAM_SDK_LOG(debug) << "[get_images] end";
         return response;
     } catch (const std::exception& e) {
         VIAM_SDK_LOG(error) << "[get_images] error: " << e.what();
@@ -715,7 +725,7 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
 
 vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const vsdk::ProtoStruct& extra) {
     try {
-        VIAM_SDK_LOG(info) << "[get_point_cloud] start";
+        VIAM_SDK_LOG(debug) << "[get_point_cloud] start";
         std::string serial_number;
         {
             const std::lock_guard<std::mutex> lock(config_mu_);
@@ -785,7 +795,7 @@ vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const v
         std::vector<unsigned char> data =
             RGBPointsToPCD(my_dev->pointCloudFilter->process(my_dev->align->process(fs)), scale * mmToMeterMultiple);
 
-        VIAM_SDK_LOG(info) << "[get_point_cloud] end";
+        VIAM_SDK_LOG(debug) << "[get_point_cloud] end";
         return vsdk::Camera::point_cloud{kPcdMimeType, data};
     } catch (const std::exception& e) {
         VIAM_SDK_LOG(error) << "[get_point_cloud] error: " << e.what();
@@ -799,23 +809,12 @@ std::vector<vsdk::GeometryConfig> Orbbec::get_geometries(const vsdk::ProtoStruct
     return {vsdk::GeometryConfig(vsdk::pose{-37.5, 5.5, -18.1}, vsdk::box({145, 46, 39}), "box")};
 }
 
-std::unique_ptr<orbbec::ObResourceConfig> Orbbec::configure_(vsdk::Dependencies dependencies, vsdk::ResourceConfig configuration) {
+std::unique_ptr<orbbec::ObResourceConfig> Orbbec::configure(vsdk::Dependencies dependencies, vsdk::ResourceConfig configuration) {
     auto attrs = configuration.attributes();
-
     std::string serial_number_from_config;
-    if (!attrs.count("serial_number")) {
-        throw std::invalid_argument("serial_number is a required argument");
-    }
-
     const std::string* serial_val = attrs["serial_number"].get<std::string>();
-    if (serial_val == nullptr) {
-        throw std::invalid_argument("serial_number must be a string");
-    }
-
     serial_number_from_config = *serial_val;
-
     auto native_config = std::make_unique<orbbec::ObResourceConfig>(serial_number_from_config, configuration.name());
-
     return native_config;
 }
 // RESOURCE END
