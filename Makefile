@@ -112,5 +112,5 @@ $(APPIMAGE): $(BIN)
 	cd packaging/appimages && \
 	mkdir -p deploy && \
 	rm -f deploy/$(OUTPUT_NAME)* && \
-	appimage-builder --recipe $(OUTPUT_NAME)-$(ARCH).yml
-	cp ./packaging/appimages/$(OUTPUT_NAME)-$(TAG_VERSION)-$(ARCH).AppImage ./packaging/appimages/deploy/
+	appimage-builder --recipe $(OUTPUT_NAME)-$(TARGET_ARCH).yml
+	cp ./packaging/appimages/$(OUTPUT_NAME)-$(TAG_VERSION)-$(TARGET_ARCH).AppImage ./packaging/appimages/deploy/
