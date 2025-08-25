@@ -26,7 +26,7 @@ jobs:
             container:
               image: ghcr.io/viamrobotics/rdk-devenv:arm64
               options: --platform linux/arm64
-          - os: windows
+          - os: ubuntu-latest
             target_os: windows
             target_arch: x64
             container:
