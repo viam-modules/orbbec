@@ -32,7 +32,7 @@ else ifeq ($(TARGET_OS),windows)
   ORBBEC_SDK_VERSION=v2.4.8
   ORBBEC_SDK_COMMIT=ec8e346
   ORBBEC_SDK_TIMESTAMP=202507032159
-  ORBBEC_SDK_DIR = OrbbecSDK_$(ORBBEC_SDK_VERSION)_$(ORBBEC_SDK_TIMESTAMP)_$(ORBBEC_SDK_COMMIT)_win_$(TARGET_ARCH)
+  ORBBEC_SDK_DIR = OrbbecSDK_$(ORBBEC_SDK_VERSION)_$(ORBBEC_SDK_TIMESTAMP)_$(ORBBEC_SDK_COMMIT)_win_x64
 else
   $(error Unsupported OS: $(OS))
 endif
@@ -78,6 +78,7 @@ build: $(BIN)
 
 $(BIN): conanfile.py src/* bin/*
 	export ORBBEC_SDK_DIR=$(ORBBEC_SDK_DIR); \
+	export TARGET_OS=$(TARGET_OS); \
 	bin/build.sh
 
 clean:
@@ -96,7 +97,6 @@ setup:
 	export OS=$(SOURCE_OS); \
 	export ARCH=${SOURCE_ARCH}; \
 	export TARGET_OS=$(TARGET_OS); \
-	export TARGET_ARCH=$(TARGET_ARCH); \
 	bin/setup.sh
 
 lint:

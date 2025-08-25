@@ -45,11 +45,19 @@ jobs:
 
       - name: Set up build environment
         run: |
-          TARGET_OS=target_os TARGET_ARCH=target_arch make setup
+          if [ -n "${{ matrix.target_os }}" ]; then
+            TARGET_OS=${{ matrix.target_os }} TARGET_ARCH=${{ matrix.target_arch }} make setup
+          else
+            make setup
+          fi
 
       - name: Build module
         run: |
-          make module.tar.gz
+          if [ -n "${{ matrix.target_os }}" ]; then
+             make setup TARGET_OS=${{ matrix.target_os }} TARGET_ARCH=${{ matrix.target_arch }} make module.tar.gz
+          else
+            make module.tar.gz
+          fi
 
       - name: Upload module artifact
         uses: actions/upload-artifact@v4

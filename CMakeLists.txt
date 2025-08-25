@@ -10,7 +10,9 @@ project(viam-orbbec
     LANGUAGES CXX
 )
 
-add_definitions(-DOB_EXPORT=)
+if(WIN32)
+    add_definitions(-DOB_EXPORT=__declspec(dllimport))
+endif()
 
 add_executable(orbbec-cli src/cli/main.cpp)
 add_executable(orbbec-module src/module/main.cpp src/module/orbbec.cpp src/module/discovery.cpp)
