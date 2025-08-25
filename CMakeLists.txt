@@ -10,6 +10,8 @@ project(viam-orbbec
     LANGUAGES CXX
 )
 
+add_definitions(-DOB_EXPORT=)
+
 add_executable(orbbec-cli src/cli/main.cpp)
 add_executable(orbbec-module src/module/main.cpp src/module/orbbec.cpp src/module/discovery.cpp)
 
