@@ -3,6 +3,7 @@ from io import StringIO
 import re
 
 from conan import ConanFile
+from conan.tools.build import check_min_cppstd
 from conan.errors import ConanException
 from conan.tools.cmake import CMake, CMakeDeps, CMakeToolchain, cmake_layout
 from conan.tools.build import can_run
@@ -16,38 +17,20 @@ class orbbec(ConanFile):
     package_type = "application"
     settings = "os", "compiler", "build_type", "arch"
 
-    options = {
-        "shared": [True, False]
-    }
-    default_options = {
-        "shared": True
-    }
-
-    exports_sources = "CMakeLists.txt", "LICENSE", "src/*"
-
     def set_version(self):
         content = load(self, "CMakeLists.txt")
         self.version = re.search("set\(CMAKE_PROJECT_VERSION (.+)\)", content).group(1).strip()
-
-    def configure(self):
-        # If we're building static then build the world as static, otherwise
-        # stuff will probably break.
-        # If you want your shared build to also build the world as shared, you
-        # can invoke conan with -o "&:shared=False" -o "*:shared=False",
-        # possibly with --build=missing or --build=cascade as desired,
-        # but this is probably not necessary.
-        if not self.options.shared:
-            self.options["*"].shared = False
 
     def requirements(self):
         # NOTE: If you update the `viam-cpp-sdk` dependency here, it
         # should also be updated in `bin/setup.{sh,ps1}`.
         self.requires("viam-cpp-sdk/0.16.0")
 
+    def validate(self):
+        check_min_cppstd(self, 17)
+
     def generate(self):
         tc = CMakeToolchain(self)
-        sdk_dir = os.environ.get("ORBBEC_SDK_DIR", "unknown")
-        tc.cache_variables["ORBBEC_SDK_DIR"] = sdk_dir
         tc.generate()
         CMakeDeps(self).generate()
 
