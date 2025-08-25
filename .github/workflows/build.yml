@@ -47,4 +47,4 @@ jobs:
 
       - name: Make module.tar.gz
         run: |
-            TARGET_OS=target_os TARGET_ARCH=target_arch make module.tar.gz
+            TARGET_OS=${{ matrix.target_os }} TARGET_ARCH=${{ matrix.target_arch }} make module.tar.gz
