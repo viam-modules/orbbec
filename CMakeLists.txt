@@ -32,10 +32,12 @@ PRIVATE Threads::Threads
 
 
 if(WIN32)
+    message(STATUS "Linking OrbbecSDK import library for Windows")
     set(ORBBEC_LIB "${ORBBEC_SDK_DIR}/lib/libOrbbecSDK.a")
     target_link_libraries(orbbec-module PRIVATE "${ORBBEC_LIB}" Threads::Threads viam-cpp-sdk::viamsdk)
 else()
     # Linux/macOS linking
+    message(STATUS "Linking OrbbecSDK import library not for windows")
     target_link_libraries(orbbec-module PRIVATE ob::OrbbecSDK Threads::Threads viam-cpp-sdk::viamsdk)
 endif()
 
