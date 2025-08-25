@@ -12,7 +12,7 @@ endif
 OUTPUT_NAME = orbbec-module$(BIN_SUFFIX)
 BIN := build-conan/build/RelWithDebInfo/$(OUTPUT_NAME)
 TAG_VERSION?=latest
-APPIMAGE := packaging/appimages/deploy/$(OUTPUT_NAME)-$(TAG_VERSION)-$(ARCH).AppImage
+APPIMAGE := packaging/appimages/deploy/$(OUTPUT_NAME)-$(TAG_VERSION)-$(TARGET_ARCH).AppImage
 
 ifeq ($(TARGET_OS),darwin)
   ORBBEC_SDK_VERSION=v2.4.3
