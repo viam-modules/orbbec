@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
 project(orbbec)
 
-
 set(CMAKE_PROJECT_VERSION 0.0.1)
 set(CMAKE_CXX_STANDARD 17)
 project(viam-orbbec
@@ -15,10 +14,6 @@ add_executable(orbbec-module src/module/main.cpp src/module/orbbec.cpp src/modul
 
 set(CMAKE_OSX_DEPLOYMENT_TARGET "14.5")
 
-set(OrbbecSDK_DIR  "${ORBBEC_SDK_DIR}/lib")
-include_directories("${ORBBEC_SDK_DIR}/include")
-
-
 find_package(OrbbecSDK REQUIRED)
 find_package(viam-cpp-sdk REQUIRED)
 find_package(Threads REQUIRED)
@@ -28,9 +23,7 @@ PRIVATE ob::OrbbecSDK
 PRIVATE Threads::Threads
 )
 
-    message(STATUS "Linking OrbbecSDK import library for Windows")
-    set(ORBBEC_LIB "${ORBBEC_SDK_DIR}/lib/libOrbbecSDK.a")
-    target_link_libraries(orbbec-module PRIVATE "${ORBBEC_LIB}" Threads::Threads viam-cpp-sdk::viamsdk)
-
-endif()
-
+target_link_libraries(orbbec-module
+PRIVATE ob::OrbbecSDK
+Threads::Threads
+viam-cpp-sdk::viamsdk)
