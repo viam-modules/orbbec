@@ -89,7 +89,6 @@ conan create . `
       -s:a build_type=Release `
       -s:a compiler.cppstd=17 `
       -c:a tools.microsoft:winsdk_version=10.0.17763.0 `
-      -s:a compiler.runtime=static `
       -tf `"`
 
 Pop-Location  # viam-cpp-sdk
