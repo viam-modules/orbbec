@@ -86,6 +86,7 @@ git checkout releases/v0.16.0
 conan create . `
       --build=missing `
       -o:a "&:shared=False" `
+      -o:a "boost*:debug_level=2" `
       -s:a build_type=Release `
       -s:a compiler.cppstd=17 `
       -c:a tools.microsoft:winsdk_version=10.0.17763.0 `
