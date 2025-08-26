@@ -17,8 +17,6 @@ if (-not (Test-Path $venvActivate)) {
     & $venvActivate
 }
 
-Pop-Location
-
 conan install . `
       --build=missing `
       -o:a "&:shared=False" `
