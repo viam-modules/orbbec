@@ -91,7 +91,6 @@ conan create . `
       -o:a "boost/*:without_stacktrace=True" `
       -s:a build_type=Release `
       -s:a compiler.cppstd=17 `
-      -c:a tools.microsoft:winsdk_version=10.0.17763.0 `
       -tf `"`"
 
 Pop-Location  # viam-cpp-sdk
