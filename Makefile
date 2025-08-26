@@ -70,8 +70,8 @@ else ifeq ($(TARGET_OS),windows)
 	tar -czvf module.tar.gz \
 	meta.json \
 	-C .\$(ORBBEC_SDK_DIR) lib \
-	bin/OrbbecSDK.dll \
-    -C ../$(dir $(BIN)) $(OUTPUT_NAME)
+	-C bin OrbbecSDK.dll \
+    -C ../../$(dir $(BIN)) $(OUTPUT_NAME)
 endif
 
 build: $(BIN)
