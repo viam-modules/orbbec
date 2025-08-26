@@ -60,6 +60,10 @@ if (-not (Test-Path $conanExe)) {
     Write-Host "Conan already installed."
 }
 
+# Initialize conan if it hasn't been already
+conan profile detect
+if (!$?) { Write-Host "Conan is already installed" }
+
 # Clone the C++ SDK repo
 mkdir tmp_cpp_sdk
 Push-Location tmp_cpp_sdk
