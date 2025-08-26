@@ -83,16 +83,17 @@ git checkout releases/v0.16.0
 #
 # TODO: Note `-tf ""`, which disables the self test. I have not been
 # able to get this working on windows.
+# boost backtrace contains a unix only library dlfcn.h
 conan create . `
       --build=missing `
       -o:a "&:shared=False" `
-      -o:a "boost*:debug_level=2" `
       -o:a "boost/*:with_stacktrace_backtrace=False" `
       -o:a "boost/*:without_stacktrace=True" `
       -s:a build_type=Release `
       -s:a compiler.cppstd=17 `
       -c:a tools.microsoft:winsdk_version=10.0.17763.0 `
-      -tf `"`
+      -s:a compiler.runtime=static `
+      -tf `"`"
 
 Pop-Location  # viam-cpp-sdk
 Pop-Location  # tmp_cpp_sdk
