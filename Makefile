@@ -50,7 +50,6 @@ ifeq ($(TARGET_OS),linux)
 	tar -czvf module.tar.gz \
 		$(OUTPUT_NAME) \
 		meta.json \
-		./first_run.sh \
 		./install_udev_rules.sh \
 		./99-obsensor-libusb.rules
 else ifeq ($(TARGET_OS),darwin)
