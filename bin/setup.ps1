@@ -20,11 +20,6 @@ choco install -y cmake wget python311 unzip git
 Import-Module $env:ChocolateyInstall\helpers\chocolateyProfile.psm1
 refreshenv
 
-# Initialize conan if it hasn't been already
-conan profile detect
-if (!$?) { Write-Host "Conan is already installed" }
-
-
 # Remove previous SDK files if they exist
 if (Test-Path "$env:ORBBEC_SDK_DIR.zip") {
     Remove-Item -Force -Recurse "$env:ORBBEC_SDK_DIR.zip"
