@@ -70,7 +70,7 @@ else ifeq ($(TARGET_OS),windows)
 	tar -czvf module.tar.gz \
 	meta.json \
 	-C .\$(ORBBEC_SDK_DIR) lib \
-	-C bin OrbbecSDK.dll \
+	-C bin OrbbecSDK.dll extensions \
     -C ../../$(dir $(BIN)) $(OUTPUT_NAME)
 endif
 
