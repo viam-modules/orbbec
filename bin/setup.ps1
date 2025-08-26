@@ -90,7 +90,6 @@ conan create . `
       -s:a compiler.cppstd=17 `
       -c:a tools.microsoft:winsdk_version=10.0.17763.0 `
       -tf `"`
-      --verbose
 
 Pop-Location  # viam-cpp-sdk
 Pop-Location  # tmp_cpp_sdk
