@@ -65,7 +65,7 @@ else ifeq ($(TARGET_OS),darwin)
 	meta.json \
     first_run.sh \
 	-C $(ORBBEC_SDK_DIR) lib/ \
-    -C ../$(dir $(BIN)) $(OUTPUT_NAME)
+    -C $(dir $(BIN)) $(OUTPUT_NAME)
 else ifeq ($(TARGET_OS),windows)
 	tar -czvf module.tar.gz \
 	meta.json \
