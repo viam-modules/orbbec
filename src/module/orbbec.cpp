@@ -340,10 +340,10 @@ size_t writeCallback(void* contents, size_t size, size_t nmemb, void* userp) {
     return totalSize;
 }
 
-void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev, std::shared_ptr<ob::Context> ctx) {
+void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev) {
 // On linux, orbbec reccomendsto set libuvc backend for firmware update
 #if defined(__linux__)
-    ctx->setUvcBackendType(OB_UVC_BACKEND_TYPE_LIBUVC);
+    ob_ctx_->setUvcBackendType(OB_UVC_BACKEND_TYPE_LIBUVC);
 #endif
 
     CURL* curl = curl_easy_init();
@@ -364,7 +364,6 @@ void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev, std::shared_ptr<ob::C
         throw std::invalid_argument(buffer.str());
     }
     curl_easy_cleanup(curl);
-
 
     // create zip file
     zip_error_t ziperror;
@@ -459,7 +458,7 @@ void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev, std::shared_ptr<ob::C
     };
     my_dev->device->updateFirmwareFromData(binData.data(), binData.size(), std::move(firmwareUpdateCallback), false);
 #if defined(__linux__)
-    ctx->setUvcBackendType(OB_UVC_BACKEND_TYPE_AUTO);
+    ob_ctx_->setUvcBackendType(OB_UVC_BACKEND_TYPE_AUTO);
 #endif
 }
 auto frameCallback(const std::string& serialNumber) {
@@ -883,6 +882,7 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
                 serial_number = config_->serial_number;
             }
             {
+                // note: under lock for the entire firmware update
                 const std::lock_guard<std::mutex> lock(devices_by_serial_mu());
                 auto search = devices_by_serial().find(serial_number);
                 if (search == devices_by_serial().end()) {
@@ -892,12 +892,12 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
                 std::unique_ptr<ViamOBDevice>& dev = search->second;
                 std::shared_ptr<ob::DeviceInfo> info = dev->device->getDeviceInfo();
                 std::string version = info->firmwareVersion();
-                // if (version.find(requiredFirmwareVer) != std::string::npos) {
-                //     std::ostringstream buffer;
-                //     buffer << "device firmware already on required version " << requiredFirmwareVer;
-                //     resp.emplace(firmware_key, buffer.str());
-                //     break;
-                // }
+                if (version.find(requiredFirmwareVer) != std::string::npos) {
+                    std::ostringstream buffer;
+                    buffer << "device firmware already on required version " << requiredFirmwareVer;
+                    resp.emplace(firmware_key, buffer.str());
+                    break;
+                }
                 if (dev->started) {
                     dev->pipe->stop();
                     dev->started = false;
@@ -905,7 +905,7 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
 
                 VIAM_SDK_LOG(info) << "Updating device firmware...";
                 try {
-                    updateFirmware(dev, ob_ctx_);
+                    updateFirmware(dev);
                 } catch (const std::exception& e) {
                     std::ostringstream buffer;
                     buffer << "firmware update failed: " << e.what();
@@ -1087,56 +1087,57 @@ void printDeviceList(const std::string& prompt, std::shared_ptr<ob::DeviceList> 
     std::cout << std::endl;
 }
 
-void startOrbbecSDK(std::shared_ptr<ob::Context> ctx) {
-    auto deviceChangedCallback = [ctx](const std::shared_ptr<ob::DeviceList> removedList, const std::shared_ptr<ob::DeviceList> addedList) {
-        try {
-            int devCount = removedList->getCount();
-            printDeviceList(removedList);
-            for (size_t i = 0; i < devCount; i++) {
-                if (i == 0) {
-                    VIAM_SDK_LOG(info) << " Devices Removed:\n";
-                }
-                std::lock_guard<std::mutex> lock(devices_by_serial_mu());
-                std::string serial_number = removedList->serialNumber(i);
-                auto search = devices_by_serial().find(serial_number);
-                if (search == devices_by_serial().end()) {
-                    std::cerr << serial_number
-                              << "was in removedList of device change callback but not "
-                                 "in devices_by_serial\n";
-                    continue;
-                }
-                VIAM_SDK_LOG(info) << "deleting the device from devices_by_serial";
-                devices_by_serial().erase(search);
+void deviceChangedCallback(const std::shared_ptr<ob::DeviceList> removedList, const std::shared_ptr<ob::DeviceList> addedList) {
+    try {
+        int devCount = removedList->getCount();
+        printDeviceList(removedList);
+        for (size_t i = 0; i < devCount; i++) {
+            if (i == 0) {
+                VIAM_SDK_LOG(info) << " Devices Removed:\n";
             }
+            std::lock_guard<std::mutex> lock(devices_by_serial_mu());
+            std::string serial_number = removedList->serialNumber(i);
+            auto search = devices_by_serial().find(serial_number);
+            if (search == devices_by_serial().end()) {
+                std::cerr << serial_number
+                          << "was in removedList of device change callback but not "
+                             "in devices_by_serial\n";
+                continue;
+            }
+            VIAM_SDK_LOG(info) << "deleting the device from devices_by_serial";
+            devices_by_serial().erase(search);
+        }
 
-            devCount = addedList->getCount();
-            for (size_t i = 0; i < devCount; i++) {
-                if (i == 0) {
-                    VIAM_SDK_LOG(info) << " Devices added:\n";
-                }
-                std::shared_ptr<ob::Device> dev = addedList->getDevice(i);
-                std::shared_ptr<ob::DeviceInfo> info = dev->getDeviceInfo();
-                printDeviceInfo(info);
-                registerDevice(info->getSerialNumber(), dev);
-                {
-                    std::lock_guard<std::mutex> lock(serial_by_resource_mu());
-                    for (auto& [resource_name, serial_number] : serial_by_resource()) {
-                        if (serial_number == info->getSerialNumber()) {
-                            startDevice(serial_number, resource_name);
-                            serial_by_resource()[resource_name] = serial_number;
-                        }
+        devCount = addedList->getCount();
+        for (size_t i = 0; i < devCount; i++) {
+            if (i == 0) {
+                VIAM_SDK_LOG(info) << " Devices added:\n";
+            }
+            std::shared_ptr<ob::Device> dev = addedList->getDevice(i);
+            std::shared_ptr<ob::DeviceInfo> info = dev->getDeviceInfo();
+            printDeviceInfo(info);
+            registerDevice(info->getSerialNumber(), dev);
+            {
+                std::lock_guard<std::mutex> lock(serial_by_resource_mu());
+                for (auto& [resource_name, serial_number] : serial_by_resource()) {
+                    if (serial_number == info->getSerialNumber()) {
+                        startDevice(serial_number, resource_name);
+                        serial_by_resource()[resource_name] = serial_number;
                     }
                 }
             }
-        } catch (ob::Error& e) {
-            std::cerr << "setDeviceChangedCallback\n"
-                      << "function:" << e.getFunction() << "\nargs:" << e.getArgs() << "\nname:" << e.getName() << "\nmessage:" << e.what()
-                      << "\ntype:" << e.getExceptionType() << std::endl;
         }
-    };
-    ctx->setDeviceChangedCallback(std::move(deviceChangedCallback));
+    } catch (ob::Error& e) {
+        std::cerr << "setDeviceChangedCallback\n"
+                  << "function:" << e.getFunction() << "\nargs:" << e.getArgs() << "\nname:" << e.getName() << "\nmessage:" << e.what()
+                  << "\ntype:" << e.getExceptionType() << std::endl;
+    }
+};
 
-    std::shared_ptr<ob::DeviceList> devList = ctx->queryDeviceList();
+void startOrbbecSDK(ob::Context& ctx) {
+    ctx.setDeviceChangedCallback(deviceChangedCallback);
+
+    std::shared_ptr<ob::DeviceList> devList = ctx.queryDeviceList();
     int devCount = devList->getCount();
     for (size_t i = 0; i < devCount; i++) {
         if (i == 0) {

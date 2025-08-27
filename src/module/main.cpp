@@ -35,14 +35,13 @@ int serve(int argc, char** argv) try {
     vsdk::Instance inst;
 
     auto ctx = std::make_shared<ob::Context>();
-
     for (size_t i = 0; i < argc; i++) {
         if (std::string(argv[i]) == "--log-level=debug") {
             ctx->setLoggerSeverity(OB_LOG_SEVERITY_DEBUG);
         }
     }
 
-    orbbec::startOrbbecSDK(ctx);
+    orbbec::startOrbbecSDK(*ctx);
     auto module_service = std::make_shared<vsdk::ModuleService>(argc, argv, create_all_model_registrations(ctx));
     module_service->serve();
 
