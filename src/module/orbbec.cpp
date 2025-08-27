@@ -619,8 +619,8 @@ std::vector<std::string> Orbbec::validate(vsdk::ResourceConfig cfg) {
     return {};
 }
 
-Orbbec::Orbbec(vsdk::Dependencies deps, vsdk::ResourceConfig cfg)
-    : Camera(cfg.name()), config_(configure(std::move(deps), std::move(cfg))) {
+Orbbec::Orbbec(vsdk::Dependencies deps, vsdk::ResourceConfig cfg, std::shared_ptr<ob::Context> ctx)
+    : Camera(cfg.name()), config_(configure_(std::move(deps), std::move(cfg))), ob_ctx_(std::move(ctx)) {
     VIAM_SDK_LOG(info) << "Orbbec constructor start " << config_->serial_number;
     startDevice(config_->serial_number, config_->resource_name);
 
