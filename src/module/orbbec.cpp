@@ -129,17 +129,9 @@ std::unordered_map<std::string, std::shared_ptr<ob::FrameSet>>& frame_set_by_ser
     static std::unordered_map<std::string, std::shared_ptr<ob::FrameSet>> frame_sets;
     return frame_sets;
 }
-
-class rebootNeededError : public std::runtime_error {
-   public:
-    using std::runtime_error::runtime_error;
-};
-
-int count = 0;
 // GLOBALS END
 
 // HELPERS BEGIN
-
 void checkFirmwareVersion(const std::string& serial_number) {
     const std::lock_guard<std::mutex> lock(devices_by_serial_mu());
     auto search = devices_by_serial().find(serial_number);
@@ -333,7 +325,7 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
     return nullptr;
 }
 
-size_t writeCallback(void* contents, size_t size, size_t nmemb, void* userp) {
+size_t writeFileCallback(void* contents, size_t size, size_t nmemb, void* userp) {
     auto* buffer = static_cast<std::vector<char>*>(userp);
     size_t totalSize = size * nmemb;
     buffer->insert(buffer->end(), static_cast<char*>(contents), static_cast<char*>(contents) + totalSize);
@@ -341,7 +333,7 @@ size_t writeCallback(void* contents, size_t size, size_t nmemb, void* userp) {
 }
 
 void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev) {
-// On linux, orbbec reccomendsto set libuvc backend for firmware update
+// On linux, orbbec reccomends to set libuvc backend for firmware update
 #if defined(__linux__)
     ob_ctx_->setUvcBackendType(OB_UVC_BACKEND_TYPE_LIBUVC);
 #endif
@@ -355,7 +347,7 @@ void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev) {
     std::vector<char> zipBuffer;
     curl_easy_setopt(curl, CURLOPT_URL, firmwareUrl.c_str());
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeFileCallback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &zipBuffer);
     CURLcode res = curl_easy_perform(curl);
     if (res != CURLE_OK) {
@@ -402,7 +394,6 @@ void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev) {
         throw std::runtime_error("failed to open the firmware bin file");
     }
 
-    // get stats of the file for size info
     zip_stat_t stats;
     zip_stat_init(&stats);
     if (zip_stat(zip, fileName, 0, &stats) != 0) {
@@ -410,6 +401,7 @@ void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev) {
         throw std::invalid_argument("failed to stat file");
     }
 
+    // read data from binary file to vector
     std::vector<uint8_t> binData(stats.size);
     zip_int64_t bytesRead = zip_fread(binFile, binData.data(), stats.size);
     if (bytesRead == -1) {
@@ -422,6 +414,8 @@ void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev) {
     }
 
     if (bytesRead != stats.size) {
+        zip_close(zip);
+        zip_fclose(binFile);
         std::ostringstream buffer;
         buffer << "failed to fully read binary file, file size: " << stats.size << "bytes read: " << bytesRead;
         throw std::runtime_error(buffer.str());
@@ -461,6 +455,7 @@ void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev) {
     ob_ctx_->setUvcBackendType(OB_UVC_BACKEND_TYPE_AUTO);
 #endif
 }
+
 auto frameCallback(const std::string& serialNumber) {
     return [serialNumber](std::shared_ptr<ob::FrameSet> frameSet) {
         if (frameSet->getCount() != 2) {
@@ -645,7 +640,11 @@ Orbbec::~Orbbec() {
         prev_resource_name = config_->resource_name;
     }
     stopDevice(prev_serial_number, prev_resource_name);
-    VIAM_SDK_LOG(info) << "Orbbec destructor end " << config_->serial_number;
+    if (config_ == nullptr) {
+        VIAM_SDK_LOG(error) << "Orbbec destructor end: config_ is null, no available serial number";
+    } else {
+        VIAM_SDK_LOG(info) << "Orbbec destructor end " << config_->serial_number;
+    }
 }
 
 void Orbbec::reconfigure(const vsdk::Dependencies& deps, const vsdk::ResourceConfig& cfg) {
@@ -1069,23 +1068,6 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
     }
 }
 
-void printDeviceList(const std::string& prompt, std::shared_ptr<ob::DeviceList> deviceList) {
-    auto count = deviceList->getCount();
-    if (count == 0) {
-        return;
-    }
-    std::cout << count << " device(s) " << prompt << ": " << std::endl;
-    for (uint32_t i = 0; i < count; i++) {
-        auto uid = deviceList->getUid(i);
-        auto vid = deviceList->getVid(i);
-        auto pid = deviceList->getPid(i);
-        auto serialNumber = deviceList->getSerialNumber(i);
-        auto connection = deviceList->getConnectionType(i);
-        std::cout << " serial number: " << serialNumber << ", connection: " << connection << std::endl;
-    }
-    std::cout << std::endl;
-}
-
 void deviceChangedCallback(const std::shared_ptr<ob::DeviceList> removedList, const std::shared_ptr<ob::DeviceList> addedList) {
     try {
         int devCount = removedList->getCount();
@@ -1103,7 +1085,6 @@ void deviceChangedCallback(const std::shared_ptr<ob::DeviceList> removedList, co
                              "in devices_by_serial\n";
                 continue;
             }
-            VIAM_SDK_LOG(info) << "deleting the device from devices_by_serial";
             devices_by_serial().erase(search);
         }
 
@@ -1131,7 +1112,7 @@ void deviceChangedCallback(const std::shared_ptr<ob::DeviceList> removedList, co
                   << "function:" << e.getFunction() << "\nargs:" << e.getArgs() << "\nname:" << e.getName() << "\nmessage:" << e.what()
                   << "\ntype:" << e.getExceptionType() << std::endl;
     }
-};
+}
 
 void startOrbbecSDK(ob::Context& ctx) {
     ctx.setDeviceChangedCallback(deviceChangedCallback);
