@@ -347,33 +347,37 @@ void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev, std::shared_ptr<ob::C
 #if defined(__linux__)
     ctx->setUvcBackendType(OB_UVC_BACKEND_TYPE_LIBUVC);
 #endif
-    CURL* curl;
-    CURLcode res;
 
-    curl = curl_easy_init();
-
+    CURL* curl = curl_easy_init();
     if (!curl) {
         throw std::invalid_argument("curl easy init failed");
     }
 
+    // Download the firmware and write it to a buffer
     std::vector<char> zipBuffer;
-    curl_easy_setopt(curl, CURLOPT_URL, firmwareUrl.c_str());
+    curl_easy_setopt(curl, CURLOPT_URL, firmwareTestUrl.c_str());
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &zipBuffer);
-
-    res = curl_easy_perform(curl);
+    CURLcode res = curl_easy_perform(curl);
     if (res != CURLE_OK) {
         std::ostringstream buffer;
         buffer << "curl early perform failed: " << curl_easy_strerror(res);
         throw std::invalid_argument(buffer.str());
     }
-
     curl_easy_cleanup(curl);
 
+
+    // create zip file
     zip_error_t ziperror;
     zip_error_init(&ziperror);
     zip_source_t* src = zip_source_buffer_create(zipBuffer.data(), zipBuffer.size(), 0, &ziperror);
+    if (!src) {
+        std::ostringstream buffer;
+        buffer << "failed to create zip buffer: " << zip_error_strerror(&ziperror);
+        throw std::runtime_error(buffer.str());
+    }
+
     zip_t* zip = zip_open_from_source(src, 0, &ziperror);
     if (!zip) {
         zip_source_free(src);
@@ -382,19 +386,16 @@ void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev, std::shared_ptr<ob::C
         throw std::runtime_error(buffer.str());
     }
 
+    // Confirm there is only 1 file inside the zip
     if (zip_get_num_entries(zip, 0) != 1) {
         zip_close(zip);
-        std::ostringstream buffer;
-        buffer << "unexpected number of files in firmware zip";
-        throw std::runtime_error(buffer.str());
+        throw std::runtime_error("unexpected number of files in firmware zip");
     }
 
     const char* fileName = zip_get_name(zip, 0, 0);
     if (!fileName) {
         zip_close(zip);
-        std::ostringstream buffer;
-        buffer << "couldn't get bin file name";
-        throw std::runtime_error(buffer.str());
+        throw std::runtime_error("couldn't get bin file name");
     }
 
     // open the .bin file inside the zip
@@ -404,18 +405,33 @@ void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev, std::shared_ptr<ob::C
         throw std::runtime_error("failed to open the firmware bin file");
     }
 
-    // get stats of the .bin file for size info
+    // get stats of the file for size info
     zip_stat_t stats;
     zip_stat_init(&stats);
-
     if (zip_stat(zip, fileName, 0, &stats) != 0) {
         zip_close(zip);
-        throw std::invalid_argument("failed to stat");
+        throw std::invalid_argument("failed to stat file");
     }
 
     std::vector<uint8_t> binData(stats.size);
-    zip_fread(binFile, binData.data(), stats.size);
+    zip_int64_t bytesRead = zip_fread(binFile, binData.data(), stats.size);
+    if (bytesRead == -1) {
+        zip_close(zip);
+        zip_fclose(binFile);
+        zip_error_t* err = zip_file_get_error(binFile);
+        std::ostringstream buffer;
+        buffer << "failed to read bin: " << zip_error_strerror(err);
+        throw std::runtime_error(buffer.str());
+    }
+
+    if (bytesRead != stats.size) {
+        std::ostringstream buffer;
+        buffer << "failed to fully read binary file, file size: " << stats.size << "bytes read: " << bytesRead;
+        throw std::runtime_error(buffer.str());
+    }
+
     zip_close(zip);
+    zip_fclose(binFile);
 
     auto firmwareUpdateCallback = [](OBFwUpdateState state, const char* message, uint8_t percent) {
         switch (state) {
@@ -1074,7 +1090,6 @@ void printDeviceList(const std::string& prompt, std::shared_ptr<ob::DeviceList> 
 
 void startOrbbecSDK(std::shared_ptr<ob::Context> ctx) {
     auto deviceChangedCallback = [ctx](const std::shared_ptr<ob::DeviceList> removedList, const std::shared_ptr<ob::DeviceList> addedList) {
-        VIAM_SDK_LOG(info) << "DEVICE CHANGED CALLBACK";
         try {
             int devCount = removedList->getCount();
             printDeviceList(removedList);
