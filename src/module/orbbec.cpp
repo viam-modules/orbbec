@@ -357,11 +357,10 @@ void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev, std::shared_ptr<ob::C
     }
 
     std::vector<char> zipBuffer;
-    curl_easy_setopt(curl, CURLOPT_URL, firmwareTestUrl.c_str());
+    curl_easy_setopt(curl, CURLOPT_URL, firmwareUrl.c_str());
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &zipBuffer);
-
 
     res = curl_easy_perform(curl);
     if (res != CURLE_OK) {
@@ -395,7 +394,7 @@ void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev, std::shared_ptr<ob::C
         zip_close(zip);
         std::ostringstream buffer;
         buffer << "couldn't get bin file name";
-        throw std:runtime_error(buffer.str());
+        throw std::runtime_error(buffer.str());
     }
 
     // open the .bin file inside the zip
@@ -911,13 +910,14 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
                     dev->pipe->start(dev->config, frameCallback(serial_number));
                     dev->started = true;
                 }
-            }
 // macOS has a bug where the device changed callback is not called on reboot, so user must manually reboot the device
 #if defined(__linux__)
-            dev->device->reboot();
-            resp.emplace(firmware_key, std::string("firmware successfully updated"));
+                dev->device->reboot();
+                resp.emplace(firmware_key, std::string("firmware successfully updated"));
+#else
+                resp.emplace(firmware_key, std::string("firmware successfully updated, unplug and replug the device"));
 #endif
-            resp.emplace(firmware_key, std::string("firmware successfully updated, unplug and replug the device"));
+            }
         }
     }
     return resp;
