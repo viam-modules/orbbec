@@ -22,14 +22,19 @@ include_directories("${ORBBEC_SDK_DIR}/include")
 find_package(OrbbecSDK REQUIRED)
 find_package(viam-cpp-sdk REQUIRED)
 find_package(Threads REQUIRED)
+find_package(CURL REQUIRED)
+find_package(libzip REQUIRED)
 
 target_link_libraries(orbbec-cli
 PRIVATE ob::OrbbecSDK
 PRIVATE Threads::Threads
+
 )
 
 target_link_libraries(orbbec-module
 PRIVATE ob::OrbbecSDK
 PRIVATE Threads::Threads
 PRIVATE viam-cpp-sdk::viamsdk
+PRIVATE CURL::libcurl
+PRIVATE libzip::zip
 )
