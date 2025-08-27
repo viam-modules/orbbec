@@ -314,7 +314,7 @@ void startDevice(std::string serialNumber, std::string resourceName) {
 
     // Check if the device is an Astra 2
     std::shared_ptr<ob::DeviceInfo> deviceInfo = search->second->device->getDeviceInfo();
-    if (!strcmp(deviceInfo->name(), " Orbbec Astra 2")) {
+    if (!strstr(deviceInfo->name(), "Astra 2")) {
         std::ostringstream buffer;
         buffer << service_name << ": device " << serialNumber << " is not an Astra 2 (found: " << deviceInfo->name() << ")";
         throw std::invalid_argument(buffer.str());
