@@ -51,8 +51,6 @@ const std::string kColorMimeTypeJPEG = "image/jpeg";
 const std::string kDepthSourceName = "depth";
 const std::string kDepthMimeTypeViamDep = "image/vnd.viam.dep";
 const std::string kPcdMimeType = "pointcloud/pcd";
-
-const std::string firmwareTestUrl = "https://github.com/oliviamiller/orbbec-firmware-test/raw/refs/heads/master/firmware.zip";
 const std::string firmwareUrl = "https://orbbec-debian-repos-aws.s3.amazonaws.com/product/Astra2_Release_2.8.20.zip";
 
 // CONSTANTS BEGIN
@@ -355,7 +353,7 @@ void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev, std::shared_ptr<ob::C
 
     // Download the firmware and write it to a buffer
     std::vector<char> zipBuffer;
-    curl_easy_setopt(curl, CURLOPT_URL, firmwareTestUrl.c_str());
+    curl_easy_setopt(curl, CURLOPT_URL, firmwareUrl.c_str());
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &zipBuffer);
