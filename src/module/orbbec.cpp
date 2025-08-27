@@ -52,7 +52,7 @@ const std::string kDepthSourceName = "depth";
 const std::string kDepthMimeTypeViamDep = "image/vnd.viam.dep";
 const std::string kPcdMimeType = "pointcloud/pcd";
 
-const std::string firmwareTestUrl = "https://github.com/oliviamiller/orbbec-firmware-te/raw/refs/heads/master/firmware.zip";
+const std::string firmwareTestUrl = "https://github.com/oliviamiller/orbbec-firmware-test/raw/refs/heads/master/firmware.zip";
 const std::string firmwareUrl = "https://orbbec-debian-repos-aws.s3.amazonaws.com/product/Astra2_Release_2.8.20.zip";
 
 // CONSTANTS BEGIN
