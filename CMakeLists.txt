@@ -28,7 +28,6 @@ find_package(libzip REQUIRED)
 target_link_libraries(orbbec-cli
 PRIVATE ob::OrbbecSDK
 PRIVATE Threads::Threads
-
 )
 
 target_link_libraries(orbbec-module
