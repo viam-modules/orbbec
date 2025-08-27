@@ -39,7 +39,7 @@ class Orbbec final : public viam::sdk::Camera, public viam::sdk::Reconfigurable 
     std::shared_ptr<ob::Context> ob_ctx_;
     std::unique_ptr<ObResourceConfig> config_;
     std::mutex config_mu_;
-    static std::unique_ptr<ObResourceConfig> configure_(viam::sdk::Dependencies deps, viam::sdk::ResourceConfig cfg);
+    static std::unique_ptr<ObResourceConfig> configure(viam::sdk::Dependencies deps, viam::sdk::ResourceConfig cfg);
 };
 
 }  // namespace orbbec
