@@ -95,8 +95,6 @@ clean-all: clean
 
 setup:
 ifeq ($(OS),Windows_NT)
-	export ORBBEC_SDK_VERSION=$(ORBBEC_SDK_VERSION); \
-	export ORBBEC_SDK_DIR=$(ORBBEC_SDK_DIR); \
 	powershell -ExecutionPolicy Bypass -File bin\setup$(SCRIPT_EXT) `
 else
 	export ORBBEC_SDK_VERSION=$(ORBBEC_SDK_VERSION); \
