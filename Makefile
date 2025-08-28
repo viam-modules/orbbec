@@ -65,14 +65,14 @@ else ifeq ($(OS),darwin)
 	meta.json \
     first_run.sh \
 	-C $(ORBBEC_SDK_DIR) lib/ \
-    -C ../$(dir $(BIN)) $(OUTPUT_NAME)
-else iifeq ($(OS),Windows_NT)
-	copy "$(BIN)" "$(TAR_BIN_NAME)" > nul
+    -C ../$(dir $(BIN)) $(TAR_BIN_NAME)
+else ifeq ($(OS),Windows_NT)
+	cp "$(BIN)" "$(TAR_BIN_NAME)" > nul
 	tar -czvf module.tar.gz \
 	meta.json \
 	-C .\$(ORBBEC_SDK_DIR) lib \
 	-C bin OrbbecSDK.dll extensions \
-    -C ../../$(dir $(BIN)) $(TAR_BIN_NAME)
+    $(TAR_BIN_NAME)
 endif
 
 build: $(BIN)
