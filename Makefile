@@ -95,16 +95,14 @@ clean-all: clean
 
 setup:
 ifeq ($(OS),Windows_NT)
-	set ORBBEC_SDK_VERSION=$(ORBBEC_SDK_VERSION); \
-	set ORBBEC_SDK_DIR=$(ORBBEC_SDK_DIR); \
-	powershell -ExecutionPolicy Bypass -File bin\setup$(SCRIPT_EXT) `
+	powershell -ExecutionPolicy Bypass -Command "$$env:ORBBEC_SDK_VERSION='$(ORBBEC_SDK_VERSION)'; $$env:ORBBEC_SDK_DIR='$(ORBBEC_SDK_DIR)'; ./bin/setup.ps1"
 else
 	export ORBBEC_SDK_VERSION=$(ORBBEC_SDK_VERSION); \
 	export ORBBEC_SDK_DIR=$(ORBBEC_SDK_DIR); \
 	export OS=$(OS); \
 	export ARCH=${SOURCE_ARCH}; \
 	export TARGET_OS=$(OS); \
-	bin\setup$(SCRIPT_EXT)
+	bin/setup$(SCRIPT_EXT)
 endif
 
 lint:
