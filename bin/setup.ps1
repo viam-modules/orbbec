@@ -5,15 +5,6 @@ if (-not (Get-Command choco.exe -ErrorAction SilentlyContinue)) {
     exit 1
 }
 
-
-# Install required tools using Chocolatey
-$packages = @(
-    "cmake",
-    "python --version=3.11.0",  # ensures Python 3.11
-    "wget",
-    "unzip"
-)
-
 choco install -y cmake wget python311 unzip git
 
 # Ensure that things installed with choco are visible to us
@@ -36,7 +27,6 @@ Invoke-WebRequest -Uri $downloadUrl -OutFile "$env:ORBBEC_SDK_DIR.zip"
 
 Write-Host "Extracting Windows SDK zip to folder $env:ORBBEC_SDK_DIR"
 Expand-Archive -Path "$env:ORBBEC_SDK_DIR.zip" -DestinationPath "$env:ORBBEC_SDK_DIR" -Force
-
 
 # Path to virtual environment activate script
 $venvActivate = ".\venv\Scripts\Activate.ps1"
