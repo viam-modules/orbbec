@@ -13,7 +13,7 @@ TAR_BIN_NAME = orbbec-module
 OUTPUT_NAME = orbbec-module$(BIN_SUFFIX)
 BIN := build-conan/build/RelWithDebInfo/$(OUTPUT_NAME)
 TAG_VERSION?=latest
-APPIMAGE := packaging/appimages/deploy/$(OUTPUT_NAME)-$(TAG_VERSION)-$(TARGET_ARCH).AppImage
+APPIMAGE := packaging/appimages/deploy/$(OUTPUT_NAME)-$(TAG_VERSION)-$(ARCH).AppImage
 
 ifeq ($(OS),darwin)
   ORBBEC_SDK_VERSION=v2.4.3
@@ -23,7 +23,7 @@ ifeq ($(OS),darwin)
 else ifeq ($(OS),linux)
    ORBBEC_SDK_VERSION=v2.4.8
    ORBBEC_SDK_COMMIT=ec8e3469
-   ORBBEC_SDK_DIR = OrbbecSDK_$(ORBBEC_SDK_VERSION)_$(ORBBEC_SDK_TIMESTAMP)_$(ORBBEC_SDK_COMMIT)_linux_$(TARGET_ARCH)
+   ORBBEC_SDK_DIR = OrbbecSDK_$(ORBBEC_SDK_VERSION)_$(ORBBEC_SDK_TIMESTAMP)_$(ORBBEC_SDK_COMMIT)_linux_$(ARCH)
   ifeq ($(ARCH),x86_64)
     ORBBEC_SDK_TIMESTAMP = 202507031325
    else ifeq ($(ARCH), aarch64)
@@ -120,5 +120,5 @@ $(APPIMAGE): $(BIN)
 	cd packaging/appimages && \
 	mkdir -p deploy && \
 	rm -f deploy/$(OUTPUT_NAME)* && \
-	appimage-builder --recipe $(OUTPUT_NAME)-$(TARGET_ARCH).yml
-	cp ./packaging/appimages/$(OUTPUT_NAME)-$(TAG_VERSION)-$(TARGET_ARCH).AppImage ./packaging/appimages/deploy/
+	appimage-builder --recipe $(OUTPUT_NAME)-$(ARCH).yml
+	cp ./packaging/appimages/$(OUTPUT_NAME)-$(TAG_VERSION)-$(ARCH).AppImage ./packaging/appimages/deploy/
