@@ -22,6 +22,9 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
+
+#include <filesystem>  // For path manipulation and absolute paths
+#include <fstream>     // <-- Add this line near your other includes
 #include <iostream>
 #include <memory>
 #include <mutex>
@@ -174,6 +177,7 @@ uint64_t timeSinceFrameUs(uint64_t nowUs, uint64_t imageTimeUs) {
 
 std::vector<std::uint8_t> RGBPointsToPCD(std::shared_ptr<ob::Frame> frame, float scale) {
     int numPoints = frame->dataSize() / sizeof(OBColorPoint);
+    VIAM_SDK_LOG(info) << "[RGBPointsToPCD] input numPoints: " << numPoints;
 
     OBColorPoint* points = (OBColorPoint*)frame->data();
     std::vector<PointXYZRGB> pcdPoints;
@@ -191,6 +195,8 @@ std::vector<std::uint8_t> RGBPointsToPCD(std::shared_ptr<ob::Frame> frame, float
         pt.rgb = rgb;
         pcdPoints.push_back(pt);
     }
+
+    VIAM_SDK_LOG(info) << "[RGBPointsToPCD] PCD number of points generated: " << pcdPoints.size();
 
     std::stringstream header;
     header << "VERSION .7\n"
@@ -370,8 +376,18 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
                                    << " format: " << ob::TypeHelper::convertOBFormatTypeToString(depthVsp->getFormat()) << "\n";
                 // If support, create a config for hardware depth-to-color alignment
                 auto hwD2CAlignConfig = std::make_shared<ob::Config>();
-                hwD2CAlignConfig->enableStream(colorProfile);       // enable color stream
-                hwD2CAlignConfig->enableStream(depthProfile);       // enable depth stream
+                VIAM_SDK_LOG(info) << "Enabling hardware depth-to-color alignment";
+                VIAM_SDK_LOG(info) << "Color stream: width: " << colorVsp->getWidth() << " height: " << colorVsp->getHeight()
+                                   << " format: " << ob::TypeHelper::convertOBFormatTypeToString(colorVsp->getFormat())
+                                   << " fps: " << colorVsp->getFps();
+                VIAM_SDK_LOG(info) << "Depth stream: width: " << depthVsp->getWidth() << " height: " << depthVsp->getHeight()
+                                   << " format: " << ob::TypeHelper::convertOBFormatTypeToString(depthVsp->getFormat())
+                                   << " fps: " << depthVsp->getFps();
+
+                // hwD2CAlignConfig->enableStream(colorProfile);       // enable color stream
+                // hwD2CAlignConfig->enableStream(depthProfile);       // enable depth stream
+                hwD2CAlignConfig->enableVideoStream(OB_STREAM_DEPTH, 800, 600, 30, OB_FORMAT_Y16);
+                hwD2CAlignConfig->enableVideoStream(OB_STREAM_COLOR, 800, 600, 30, OB_FORMAT_MJPEG);
                 hwD2CAlignConfig->setAlignMode(ALIGN_D2C_HW_MODE);  // enable hardware depth-to-color alignment
                 hwD2CAlignConfig->setFrameAggregateOutputMode(OB_FRAME_AGGREGATE_OUTPUT_ALL_TYPE_FRAME_REQUIRE);  // output
                                                                                                                   // frameset
@@ -1440,6 +1456,19 @@ vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const v
 
         std::vector<std::uint8_t> data =
             RGBPointsToPCD(my_dev->pointCloudFilter->process(my_dev->align->process(fs)), scale * mmToMeterMultiple);
+
+        auto timestamp = getNowUs();
+        std::stringstream outfile_name;
+        outfile_name << "pointcloud_" << timestamp << ".pcd";
+        std::ofstream outfile(outfile_name.str(), std::ios::out | std::ios::binary);
+        outfile.write((const char*)&data[0], data.size());
+        std::filesystem::path file_path(outfile_name.str());
+        std::filesystem::path absolute_path = std::filesystem::absolute(file_path);
+        std::string absolute_path_str = absolute_path.string();
+        outfile.close();
+        VIAM_SDK_LOG(info) << "[get_point_cloud] wrote PCD to location: " << absolute_path_str;
+
+        // std::vector<unsigned char> data = RGBPointsToPCD(my_dev->pointCloudFilter->process(fs), scale * mmToMeterMultiple);
 
         VIAM_SDK_LOG(debug) << "[get_point_cloud] end";
         return vsdk::Camera::point_cloud{kPcdMimeType, data};
