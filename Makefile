@@ -68,7 +68,7 @@ else ifeq ($(OS),darwin)
 	-C $(ORBBEC_SDK_DIR) lib/ \
     -C ../$(dir $(BIN)) $(TAR_BIN_NAME)
 else ifeq ($(OS),Windows_NT)
-	cp "$(BIN)" "$(TAR_BIN_NAME)" > nul
+	copy "$(BIN)" "$(TAR_BIN_NAME)" > nul
 	tar -czvf module.tar.gz \
 	meta.json \
 	-C .\$(ORBBEC_SDK_DIR) lib \
