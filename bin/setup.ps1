@@ -26,7 +26,7 @@ if (Test-Path "$env:ORBBEC_SDK_DIR.zip") {
 }
 
 if (Test-Path "$env:ORBBEC_SDK_DIR") {
-    Remove-Item -Force -Resurce -ErrorAction SilentlyContinue "$env:ORBBEC_SDK_DIR"
+    Remove-Item -Force -Recurse -ErrorAction SilentlyContinue "$env:ORBBEC_SDK_DIR"
 }
 
 # Download the SDK zip
