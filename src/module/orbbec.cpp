@@ -19,6 +19,8 @@
 #include <cstdint>
 #include <cstdio>
 
+#include <filesystem>  // For path manipulation and absolute paths
+#include <fstream>     // <-- Add this line near your other includes
 #include <iostream>
 #include <memory>
 #include <mutex>
@@ -142,6 +144,7 @@ uint64_t timeSinceFrameUs(uint64_t nowUs, uint64_t imageTimeUs) {
 
 std::vector<unsigned char> RGBPointsToPCD(std::shared_ptr<ob::Frame> frame, float scale) {
     int numPoints = frame->dataSize() / sizeof(OBColorPoint);
+    VIAM_SDK_LOG(info) << "[RGBPointsToPCD] input numPoints: " << numPoints;
 
     OBColorPoint* points = (OBColorPoint*)frame->data();
     std::vector<PointXYZRGB> pcdPoints;
@@ -159,6 +162,8 @@ std::vector<unsigned char> RGBPointsToPCD(std::shared_ptr<ob::Frame> frame, floa
         pt.rgb = rgb;
         pcdPoints.push_back(pt);
     }
+
+    VIAM_SDK_LOG(info) << "[RGBPointsToPCD] PCD number of points generated: " << pcdPoints.size();
 
     std::stringstream header;
     header << "VERSION .7\n"
@@ -249,8 +254,9 @@ bool checkIfSupportHWD2CAlign(std::shared_ptr<ob::Pipeline> pipe,
         auto vsp = sp->as<ob::VideoStreamProfile>();
         if (vsp->getWidth() == depthVsp->getWidth() && vsp->getHeight() == depthVsp->getHeight() &&
             vsp->getFormat() == depthVsp->getFormat() && vsp->getFps() == depthVsp->getFps()) {
-            VIAM_SDK_LOG(info) << "using width: " << vsp->getWidth() << " height: " << vsp->getHeight() << " format: " << vsp->getFormat()
-                               << " fps: " << vsp->getFps() << "\n";
+            VIAM_SDK_LOG(info) << "using width: " << vsp->getWidth() << " height: " << vsp->getHeight()
+                               << " format: " << ob::TypeHelper::convertOBFormatTypeToString(vsp->getFormat()) << " fps: " << vsp->getFps()
+                               << "\n";
             // Found a matching depth stream profile, it means the given stream
             // profiles support hardware depth-to-color alignment
             return true;
@@ -286,8 +292,18 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
             if (checkIfSupportHWD2CAlign(pipe, colorProfile, depthProfile)) {
                 // If support, create a config for hardware depth-to-color alignment
                 auto hwD2CAlignConfig = std::make_shared<ob::Config>();
-                hwD2CAlignConfig->enableStream(colorProfile);       // enable color stream
-                hwD2CAlignConfig->enableStream(depthProfile);       // enable depth stream
+                VIAM_SDK_LOG(info) << "Enabling hardware depth-to-color alignment";
+                VIAM_SDK_LOG(info) << "Color stream: width: " << colorVsp->getWidth() << " height: " << colorVsp->getHeight()
+                                   << " format: " << ob::TypeHelper::convertOBFormatTypeToString(colorVsp->getFormat())
+                                   << " fps: " << colorVsp->getFps();
+                VIAM_SDK_LOG(info) << "Depth stream: width: " << depthVsp->getWidth() << " height: " << depthVsp->getHeight()
+                                   << " format: " << ob::TypeHelper::convertOBFormatTypeToString(depthVsp->getFormat())
+                                   << " fps: " << depthVsp->getFps();
+
+                // hwD2CAlignConfig->enableStream(colorProfile);       // enable color stream
+                // hwD2CAlignConfig->enableStream(depthProfile);       // enable depth stream
+                hwD2CAlignConfig->enableVideoStream(OB_STREAM_DEPTH, 800, 600, 30, OB_FORMAT_Y16);
+                hwD2CAlignConfig->enableVideoStream(OB_STREAM_COLOR, 800, 600, 30, OB_FORMAT_MJPEG);
                 hwD2CAlignConfig->setAlignMode(ALIGN_D2C_HW_MODE);  // enable hardware depth-to-color alignment
                 hwD2CAlignConfig->setFrameAggregateOutputMode(OB_FRAME_AGGREGATE_OUTPUT_ALL_TYPE_FRAME_REQUIRE);  // output
                                                                                                                   // frameset
@@ -299,6 +315,23 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
         }
     }
     return nullptr;
+}
+
+void displayPresets(std::shared_ptr<ob::Device> device) {
+    std::shared_ptr<ob::DevicePresetList> presetLists = device->getAvailablePresetList();
+    if (presetLists && presetLists->getCount() == 0) {
+        VIAM_SDK_LOG(error) << "The current device does not support preset mode" << std::endl;
+        return;
+    }
+
+    VIAM_SDK_LOG(info) << "Available Presets:" << std::endl;
+    for (uint32_t index = 0; index < presetLists->getCount(); index++) {
+        // Print available preset name.
+        VIAM_SDK_LOG(info) << " - " << index << "." << presetLists->getName(index) << std::endl;
+    }
+
+    // Print current preset name.
+    VIAM_SDK_LOG(info) << "Current PresetName: " << device->getCurrentPresetName() << std::endl;
 }
 
 void startDevice(std::string serialNumber, std::string resourceName) {
@@ -373,6 +406,18 @@ void startDevice(std::string serialNumber, std::string resourceName) {
 
     my_dev->pipe->start(my_dev->config, std::move(frameCallback));
     my_dev->started = true;
+
+    displayPresets(my_dev->device);
+
+    VIAM_SDK_LOG(info) << "[startDevice] starting device with streams: ";
+    auto streamProfiles = my_dev->pipe->getConfig()->getEnabledStreamProfileList();
+    for (uint32_t i = 0; i < streamProfiles->getCount(); i++) {
+        auto sp = streamProfiles->getProfile(i);
+        auto vsp = sp->as<ob::VideoStreamProfile>();
+        VIAM_SDK_LOG(info) << "[startDevice]   stream " << i << " w:" << vsp->getWidth() << ", h:" << vsp->getHeight()
+                           << ", format:" << ob::TypeHelper::convertOBFormatTypeToString(vsp->getFormat()) << ", fps:" << vsp->getFps();
+    }
+
     VIAM_SDK_LOG(info) << service_name << ": device started " << serialNumber;
 }
 
@@ -784,8 +829,26 @@ vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const v
             throw std::invalid_argument("device is not started");
         }
 
+        std::shared_ptr<ob::ColorFrame> colorFrame = color->as<ob::ColorFrame>();
+
+        VIAM_SDK_LOG(info) << "[get_point_cloud] colorFrame width: " << colorFrame->getWidth() << ", height: " << colorFrame->getHeight();
+        VIAM_SDK_LOG(info) << "[get_point_cloud] depthFrame width: " << depthFrame->getWidth() << ", height: " << depthFrame->getHeight();
+
         std::vector<unsigned char> data =
             RGBPointsToPCD(my_dev->pointCloudFilter->process(my_dev->align->process(fs)), scale * mmToMeterMultiple);
+
+        auto timestamp = getNowUs();
+        std::stringstream outfile_name;
+        outfile_name << "pointcloud_" << timestamp << ".pcd";
+        std::ofstream outfile(outfile_name.str(), std::ios::out | std::ios::binary);
+        outfile.write((const char*)&data[0], data.size());
+        std::filesystem::path file_path(outfile_name.str());
+        std::filesystem::path absolute_path = std::filesystem::absolute(file_path);
+        std::string absolute_path_str = absolute_path.string();
+        outfile.close();
+        VIAM_SDK_LOG(info) << "[get_point_cloud] wrote PCD to location: " << absolute_path_str;
+
+        // std::vector<unsigned char> data = RGBPointsToPCD(my_dev->pointCloudFilter->process(fs), scale * mmToMeterMultiple);
 
         VIAM_SDK_LOG(debug) << "[get_point_cloud] end";
         return vsdk::Camera::point_cloud{kPcdMimeType, data};
