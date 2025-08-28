@@ -95,7 +95,7 @@ clean-all: clean
 
 setup:
 	ifeq ($(OS),Windows_NT)
-		cmd /C set ORBBEC_SDK_VERSION=$(ORBBEC_SDK_VERSION) && \
+		cmd /C set ORBBEC_SDK_VERSION=$(ORBBEC_SDK_VERSION) && ^
 		set ORBBEC_SDK_DIR=$(ORBBEC_SDK_DIR)
 	else
 		export ORBBEC_SDK_VERSION=$(ORBBEC_SDK_VERSION); \
