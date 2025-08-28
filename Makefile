@@ -68,13 +68,11 @@ else ifeq ($(OS),darwin)
 	-C $(ORBBEC_SDK_DIR) lib/ \
     -C ../$(dir $(BIN)) $(TAR_BIN_NAME)
 else ifeq ($(OS),Windows_NT)
-	cmd /C "copy \"$(BIN)\" \"$(TAR_BIN_NAME)\""
 	tar -czvf module.tar.gz \
 	meta.json \
 	-C .\$(ORBBEC_SDK_DIR) lib \
 	-C bin OrbbecSDK.dll extensions \
-    $(TAR_BIN_NAME)
-	cmd /C "del /F /Q \"$(TAR_BIN_NAME)\""
+	--transform='s|.*orbbec-module.exe|orbbec-module|' $(BIN)
 endif
 
 build: $(BIN)
