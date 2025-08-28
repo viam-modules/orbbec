@@ -332,10 +332,10 @@ size_t writeFileCallback(void* contents, size_t size, size_t nmemb, void* userp)
     return totalSize;
 }
 
-void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev) {
+void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev, std::shared_ptr<ob::Context> ctx) {
 // On linux, orbbec reccomends to set libuvc backend for firmware update
 #if defined(__linux__)
-    ob_ctx_->setUvcBackendType(OB_UVC_BACKEND_TYPE_LIBUVC);
+    ctx->setUvcBackendType(OB_UVC_BACKEND_TYPE_LIBUVC);
 #endif
 
     CURL* curl = curl_easy_init();
@@ -452,7 +452,7 @@ void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev) {
     };
     my_dev->device->updateFirmwareFromData(binData.data(), binData.size(), std::move(firmwareUpdateCallback), false);
 #if defined(__linux__)
-    ob_ctx_->setUvcBackendType(OB_UVC_BACKEND_TYPE_AUTO);
+    ctx->setUvcBackendType(OB_UVC_BACKEND_TYPE_AUTO);
 #endif
 }
 
@@ -914,7 +914,7 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
 
                 VIAM_SDK_LOG(info) << "Updating device firmware...";
                 try {
-                    updateFirmware(dev);
+                    updateFirmware(dev, ob_ctx_);
                 } catch (const std::exception& e) {
                     std::ostringstream buffer;
                     buffer << "firmware update failed: " << e.what();
