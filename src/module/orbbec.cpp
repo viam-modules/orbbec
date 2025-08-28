@@ -300,10 +300,10 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
                                    << " format: " << ob::TypeHelper::convertOBFormatTypeToString(depthVsp->getFormat())
                                    << " fps: " << depthVsp->getFps();
 
-                // hwD2CAlignConfig->enableStream(colorProfile);       // enable color stream
-                // hwD2CAlignConfig->enableStream(depthProfile);       // enable depth stream
-                hwD2CAlignConfig->enableVideoStream(OB_STREAM_DEPTH, 800, 600, 30, OB_FORMAT_Y16);
-                hwD2CAlignConfig->enableVideoStream(OB_STREAM_COLOR, 800, 600, 30, OB_FORMAT_MJPEG);
+                hwD2CAlignConfig->enableStream(colorProfile);       // enable color stream
+                hwD2CAlignConfig->enableStream(depthProfile);       // enable depth stream
+                // hwD2CAlignConfig->enableVideoStream(OB_STREAM_DEPTH, 800, 600, 30, OB_FORMAT_Y16);
+                // hwD2CAlignConfig->enableVideoStream(OB_STREAM_COLOR, 800, 600, 30, OB_FORMAT_MJPEG);
                 hwD2CAlignConfig->setAlignMode(ALIGN_D2C_HW_MODE);  // enable hardware depth-to-color alignment
                 hwD2CAlignConfig->setFrameAggregateOutputMode(OB_FRAME_AGGREGATE_OUTPUT_ALL_TYPE_FRAME_REQUIRE);  // output
                                                                                                                   // frameset
