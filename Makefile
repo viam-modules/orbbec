@@ -5,6 +5,9 @@ ARCH ?= $(shell uname -m)
 
 ifeq ($(OS),Windows_NT)
     BIN_SUFFIX := .exe
+	SCRIPT_EXT := .ps1
+else
+	SCRIPT_EXT = .sh
 endif
 
 TAR_BIN_NAME = orbbec-module
@@ -12,8 +15,6 @@ OUTPUT_NAME = orbbec-module$(BIN_SUFFIX)
 BIN := build-conan/build/RelWithDebInfo/$(OUTPUT_NAME)
 TAG_VERSION?=latest
 APPIMAGE := packaging/appimages/deploy/$(OUTPUT_NAME)-$(TAG_VERSION)-$(TARGET_ARCH).AppImage
-
-$(info OS=$(OS))
 
 ifeq ($(OS),darwin)
   ORBBEC_SDK_VERSION=v2.4.3
@@ -81,7 +82,7 @@ build: $(BIN)
 $(BIN): conanfile.py src/* bin/*
 	export ORBBEC_SDK_DIR=$(ORBBEC_SDK_DIR); \
 	export TARGET_OS=$(OS); \
-	bin/build.sh
+	bin/build$(SCRIPT_EXT)
 
 clean:
 	rm -rf packaging/appimages/deploy module.tar.gz
@@ -99,8 +100,7 @@ setup:
 	export OS=$(OS); \
 	export ARCH=${SOURCE_ARCH}; \
 	export TARGET_OS=$(OS); \
-	export WINDRESFLAGS="-I/usr/x86_64-w64-mingw32/include"; \
-	bin/setup.sh
+	bin/setup$(SCRIPT_EXT)
 
 lint:
 	./bin/run-clang-format.sh
