@@ -3,7 +3,6 @@
 OS ?= $(shell uname -s | tr '[:upper:]' '[:lower:]')
 ARCH ?= $(shell uname -m)
 
-
 ifeq ($(OS),Windows_NT)
     BIN_SUFFIX := .exe
 endif
@@ -13,6 +12,8 @@ OUTPUT_NAME = orbbec-module$(BIN_SUFFIX)
 BIN := build-conan/build/RelWithDebInfo/$(OUTPUT_NAME)
 TAG_VERSION?=latest
 APPIMAGE := packaging/appimages/deploy/$(OUTPUT_NAME)-$(TAG_VERSION)-$(TARGET_ARCH).AppImage
+
+$(info OS=$(OS))
 
 ifeq ($(OS),darwin)
   ORBBEC_SDK_VERSION=v2.4.3
