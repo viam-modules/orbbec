@@ -22,11 +22,11 @@ refreshenv
 
 # Remove previous SDK files if they exist
 if (Test-Path "$env:ORBBEC_SDK_DIR.zip") {
-    Remove-Item -Force -Recurse "$env:ORBBEC_SDK_DIR.zip"
+    Remove-Item -Force -ErrorAction SilentlyContinue "$env:ORBBEC_SDK_DIR.zip"
 }
 
 if (Test-Path "$env:ORBBEC_SDK_DIR") {
-    Remove-Item -Force -Recurse "$env:ORBBEC_SDK_DIR"
+    Remove-Item -Force -ErrorAction SilentlyContinue "$env:ORBBEC_SDK_DIR"
 }
 
 # Download the SDK zip
