@@ -30,10 +30,10 @@ else ifeq ($(OS),linux)
 	ORBBEC_SDK_TIMESTAMP = 202507031330
    endif
 else ifeq ($(OS),Windows_NT)
-  ORBBEC_SDK_VERSION:=v2.4.8
-  ORBBEC_SDK_COMMIT:=ec8e346
-  ORBBEC_SDK_TIMESTAMP:=202507032159
-  ORBBEC_SDK_DIR:=OrbbecSDK_$(ORBBEC_SDK_VERSION)_$(ORBBEC_SDK_TIMESTAMP)_$(ORBBEC_SDK_COMMIT)_win_x64
+  ORBBEC_SDK_VERSION=v2.4.8
+  ORBBEC_SDK_COMMIT=ec8e346
+  ORBBEC_SDK_TIMESTAMP=202507032159
+  ORBBEC_SDK_DIR=OrbbecSDK_$(ORBBEC_SDK_VERSION)_$(ORBBEC_SDK_TIMESTAMP)_$(ORBBEC_SDK_COMMIT)_win_x64
 else
   $(error Unsupported OS: $(OS))
 endif
@@ -79,9 +79,12 @@ endif
 build: $(BIN)
 
 $(BIN): conanfile.py src/* bin/*
+ifeq ($(OS),Windows_NT)
+	cmd /V:ON /C "set ORBBEC_SDK_DIR=$(ORBBEC_SDK_DIR) && bin\build$(SCRIPT_EXT)"
+else
 	export ORBBEC_SDK_DIR=$(ORBBEC_SDK_DIR); \
-	export TARGET_OS=$(OS); \
 	bin/build$(SCRIPT_EXT)
+endif
 
 clean:
 	rm -rf packaging/appimages/deploy module.tar.gz
@@ -100,8 +103,7 @@ else
 	export ORBBEC_SDK_VERSION=$(ORBBEC_SDK_VERSION); \
 	export ORBBEC_SDK_DIR=$(ORBBEC_SDK_DIR); \
 	export OS=$(OS); \
-	export ARCH=${SOURCE_ARCH}; \
-	export TARGET_OS=$(OS); \
+	export ARCH=${ARCH}; \
 	bin/setup$(SCRIPT_EXT)
 endif
 
