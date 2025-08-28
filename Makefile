@@ -4,7 +4,7 @@ ARCH ?= $(shell uname -m)
 
 ifeq ($(OS),Windows_NT)
     BIN_SUFFIX := .exe
-	SCRIPT_EXT := .ps1
+	SCRIPT_EXT := .bat
 else
 	SCRIPT_EXT = .sh
 endif
@@ -95,7 +95,7 @@ clean-all: clean
 
 setup:
 ifeq ($(OS),Windows_NT)
-	powershell -ExecutionPolicy Bypass -Command "$$env:ORBBEC_SDK_VERSION='$(ORBBEC_SDK_VERSION)'; $$env:ORBBEC_SDK_DIR='$(ORBBEC_SDK_DIR)'; ./bin/setup.ps1"
+	cmd /V:ON /C "set ORBBEC_SDK_VERSION=$(ORBBEC_SDK_VERSION) && set ORBBEC_SDK_DIR=$(ORBBEC_SDK_DIR) && bin\setup$(SCRIPT_EXT)"
 else
 	export ORBBEC_SDK_VERSION=$(ORBBEC_SDK_VERSION); \
 	export ORBBEC_SDK_DIR=$(ORBBEC_SDK_DIR); \
