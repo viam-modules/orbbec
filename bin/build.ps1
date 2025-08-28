@@ -31,4 +31,11 @@ conan build . `
       -s:a "&:build_type=RelWithDebInfo" `
       -s:a compiler.cppstd=17 `
 
+# Rename the executable to remove .exe extension
+$exePath = "build-conan\build\RelWithDebInfo\orbbec-module.exe"
+if (Test-Path $exePath) {
+    Copy-Item $exePath ($exePath -replace '\.exe$', '')
+    Remove-Item $exePath
+}
+
 

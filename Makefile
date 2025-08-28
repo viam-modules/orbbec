@@ -72,7 +72,7 @@ else ifeq ($(OS),Windows_NT)
 	meta.json \
 	-C .\$(ORBBEC_SDK_DIR) lib \
 	-C bin OrbbecSDK.dll extensions \
-	--transform='s|.*orbbec-module.exe|orbbec-module|' $(BIN)
+    $(TAR_BIN_NAME)
 endif
 
 build: $(BIN)
