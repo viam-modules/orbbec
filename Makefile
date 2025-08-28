@@ -1,34 +1,34 @@
 # Detect OS
 
-SOURCE_OS ?= $(shell uname -s | tr '[:upper:]' '[:lower:]')
-SOURCE_ARCH ?= $(shell uname -m)
-TARGET_OS ?= $(SOURCE_OS)
-TARGET_ARCH ?= $(SOURCE_ARCH)
+OS ?= $(shell uname -s | tr '[:upper:]' '[:lower:]')
+ARCH ?= $(shell uname -m)
 
-ifeq ($(TARGET_OS),windows)
+
+ifeq ($(OS),Windows_NT)
     BIN_SUFFIX := .exe
 endif
 
+TAR_BIN_NAME = orbbec-module
 OUTPUT_NAME = orbbec-module$(BIN_SUFFIX)
 BIN := build-conan/build/RelWithDebInfo/$(OUTPUT_NAME)
 TAG_VERSION?=latest
 APPIMAGE := packaging/appimages/deploy/$(OUTPUT_NAME)-$(TAG_VERSION)-$(TARGET_ARCH).AppImage
 
-ifeq ($(TARGET_OS),darwin)
+ifeq ($(OS),darwin)
   ORBBEC_SDK_VERSION=v2.4.3
   ORBBEC_SDK_COMMIT=045a0e76
   ORBBEC_SDK_TIMESTAMP=202505192200
   ORBBEC_SDK_DIR = OrbbecSDK_$(ORBBEC_SDK_VERSION)_$(ORBBEC_SDK_TIMESTAMP)_$(ORBBEC_SDK_COMMIT)_macOS_beta
-else ifeq ($(TARGET_OS),linux)
+else ifeq ($(OS),linux)
    ORBBEC_SDK_VERSION=v2.4.8
    ORBBEC_SDK_COMMIT=ec8e3469
    ORBBEC_SDK_DIR = OrbbecSDK_$(ORBBEC_SDK_VERSION)_$(ORBBEC_SDK_TIMESTAMP)_$(ORBBEC_SDK_COMMIT)_linux_$(TARGET_ARCH)
-  ifeq ($(TARGET_ARCH),x86_64)
+  ifeq ($(ARCH),x86_64)
     ORBBEC_SDK_TIMESTAMP = 202507031325
-   else ifeq ($(TARGET_ARCH), aarch64)
+   else ifeq ($(ARCH), aarch64)
 	ORBBEC_SDK_TIMESTAMP = 202507031330
    endif
-else ifeq ($(TARGET_OS),windows)
+else ifeq ($(OS),Windows_NT)
   ORBBEC_SDK_VERSION=v2.4.8
   ORBBEC_SDK_COMMIT=ec8e346
   ORBBEC_SDK_TIMESTAMP=202507032159
@@ -40,12 +40,12 @@ endif
 
 .PHONY: build setup appimage
 
-ifeq ($(TARGET_OS),linux)
+ifeq ($(OS),linux)
 module.tar.gz: $(APPIMAGE) meta.json
 else
 module.tar.gz: $(BIN) meta.json
 endif
-ifeq ($(TARGET_OS),linux)
+ifeq ($(OS),linux)
 	mv $(APPIMAGE) $(OUTPUT_NAME)
 	tar -czvf module.tar.gz \
 		$(OUTPUT_NAME) \
@@ -53,7 +53,7 @@ ifeq ($(TARGET_OS),linux)
 		./first_run.sh \
 		./install_udev_rules.sh \
 		./99-obsensor-libusb.rules
-else ifeq ($(TARGET_OS),darwin)
+else ifeq ($(OS),darwin)
  # update the rpath https://en.wikipedia.org/wiki/Rpath to look for the orbbec dynamic library
  # in the ./lib folder in the folder produced by the module.tar.gz on the computer that runs the module
  # rather than the build directory of the build machine
@@ -66,19 +66,20 @@ else ifeq ($(TARGET_OS),darwin)
     first_run.sh \
 	-C $(ORBBEC_SDK_DIR) lib/ \
     -C ../$(dir $(BIN)) $(OUTPUT_NAME)
-else ifeq ($(TARGET_OS),windows)
+else iifeq ($(OS),Windows_NT)
+	copy "$(BIN)" "$(TAR_BIN_NAME)" > nul
 	tar -czvf module.tar.gz \
 	meta.json \
 	-C .\$(ORBBEC_SDK_DIR) lib \
 	-C bin OrbbecSDK.dll extensions \
-    -C ../../$(dir $(BIN)) $(OUTPUT_NAME)
+    -C ../../$(dir $(BIN)) $(TAR_BIN_NAME)
 endif
 
 build: $(BIN)
 
 $(BIN): conanfile.py src/* bin/*
 	export ORBBEC_SDK_DIR=$(ORBBEC_SDK_DIR); \
-	export TARGET_OS=$(TARGET_OS); \
+	export TARGET_OS=$(OS); \
 	bin/build.sh
 
 clean:
@@ -94,9 +95,9 @@ clean-all: clean
 setup:
 	export ORBBEC_SDK_VERSION=$(ORBBEC_SDK_VERSION); \
 	export ORBBEC_SDK_DIR=$(ORBBEC_SDK_DIR); \
-	export OS=$(SOURCE_OS); \
+	export OS=$(OS); \
 	export ARCH=${SOURCE_ARCH}; \
-	export TARGET_OS=$(TARGET_OS); \
+	export TARGET_OS=$(OS); \
 	export WINDRESFLAGS="-I/usr/x86_64-w64-mingw32/include"; \
 	bin/setup.sh
 

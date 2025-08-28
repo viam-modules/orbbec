@@ -18,5 +18,5 @@
       "short_description": "A discovery service to find connected Orbbec cameras"
     }
   ],
-  "entrypoint": "orbbec-module.exe"
+  "entrypoint": "orbbec-module"
 }
