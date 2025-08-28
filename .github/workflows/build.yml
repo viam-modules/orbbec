@@ -12,26 +12,15 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            target_os: darwin
-            target_arch: amd64
           - os: ubuntu-latest
-            target_os: linux
-            target_arch: x86_64
             container:
                 image: ghcr.io/viamrobotics/rdk-devenv:amd64
                 options: --platform linux/amd64
           - os: buildjet-8vcpu-ubuntu-2204-arm
-            target_os: linux
-            target_arch: aarch64
             container:
               image: ghcr.io/viamrobotics/rdk-devenv:arm64
               options: --platform linux/arm64
-          - os: ubuntu-latest
-            target_os: windows
-            target_arch: amd64
-            container:
-                image: ghcr.io/viamrobotics/rdk-devenv:amd64
-                options: --platform linux/amd64
+          - os: windows-2019
 
 
     runs-on: ${{ matrix.os }}
@@ -43,8 +32,8 @@ jobs:
 
       - name: Set up build environment
         run: |
-            TARGET_OS=${{ matrix.target_os }} TARGET_ARCH=${{ matrix.target_arch }} make setup
+          make setup
 
       - name: Make module.tar.gz
         run: |
-            TARGET_OS=${{ matrix.target_os }} TARGET_ARCH=${{ matrix.target_arch }} make module.tar.gz
+          make module.tar.gz
