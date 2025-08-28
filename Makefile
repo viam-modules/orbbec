@@ -1,5 +1,4 @@
 # Detect OS
-
 OS ?= $(shell uname -s | tr '[:upper:]' '[:lower:]')
 ARCH ?= $(shell uname -m)
 
@@ -95,11 +94,16 @@ clean-all: clean
 	rm -f $(OUTPUT_NAME)
 
 setup:
-	export ORBBEC_SDK_VERSION=$(ORBBEC_SDK_VERSION); \
-	export ORBBEC_SDK_DIR=$(ORBBEC_SDK_DIR); \
-	export OS=$(OS); \
-	export ARCH=${SOURCE_ARCH}; \
-	export TARGET_OS=$(OS); \
+	ifeq ($(OS),Windows_NT)
+		set ORBBEC_SDK_VERSION=$(ORBBEC_SDK_VERSION) && ^
+		set ORBBEC_SDK_DIR=$(ORBBEC_SDK_DIR)
+	else
+		export ORBBEC_SDK_VERSION=$(ORBBEC_SDK_VERSION); \
+		export ORBBEC_SDK_DIR=$(ORBBEC_SDK_DIR); \
+		export OS=$(OS); \
+		export ARCH=${SOURCE_ARCH}; \
+		export TARGET_OS=$(OS); \
+	endif
 	bin/setup$(SCRIPT_EXT)
 
 lint:
