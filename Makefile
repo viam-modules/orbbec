@@ -68,13 +68,12 @@ else ifeq ($(OS),darwin)
 	-C $(ORBBEC_SDK_DIR) lib/ \
     -C ../$(dir $(BIN)) $(TAR_BIN_NAME)
 else ifeq ($(OS),Windows_NT)
-	powershell -Command "(Get-Content meta.json | ConvertFrom-Json) | Select-Object -Property * -ExcludeProperty first_run | ConvertTo-Json > meta.json.win"
+	powershell -Command "(Get-Content meta.json | ConvertFrom-Json) | Select-Object -Property * -ExcludeProperty first_run | ConvertTo-Json" > meta.json
 	tar -czvf module.tar.gz \
-	meta.json.win \
+	meta.json \
 	-C .\$(ORBBEC_SDK_DIR) lib \
 	-C bin OrbbecSDK.dll extensions \
     -C ../../$(dir $(BIN)) $(TAR_BIN_NAME)
-	cmd /C del meta.json.win
 endif
 
 build: $(BIN)
