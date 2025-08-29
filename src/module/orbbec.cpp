@@ -520,6 +520,14 @@ void startDevice(std::string serialNumber, std::string resourceName) {
         throw std::invalid_argument(buffer.str());
     }
 
+    // Check if the device is an Astra 2
+    std::shared_ptr<ob::DeviceInfo> deviceInfo = search->second->device->getDeviceInfo();
+    if (!strstr(deviceInfo->name(), "Astra 2")) {
+        std::ostringstream buffer;
+        buffer << service_name << ": device " << serialNumber << " is not an Astra 2 (found: " << deviceInfo->name() << ")";
+        throw std::invalid_argument(buffer.str());
+    }
+
     std::unique_ptr<ViamOBDevice>& my_dev = search->second;
     if (my_dev->started) {
         std::ostringstream buffer;
