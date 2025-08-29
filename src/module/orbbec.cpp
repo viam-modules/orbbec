@@ -1428,6 +1428,10 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
 
                 VIAM_SDK_LOG(info) << "[do_command] key: " << key << ", value: " << value_str;
 
+                if (key == "get_depth_soft_filter") {
+                    return {{"depth_soft_filter", my_dev->device->getBoolProperty(OB_PROP_DEPTH_NOISE_REMOVAL_FILTER_BOOL)}};
+                }
+
                 if (key == "set_depth_soft_filter") {
                     if (not value.is_a<bool>()) {
                         VIAM_SDK_LOG(error) << "[do_command] set_depth_soft_filter: expected bool, got " << value.kind();
