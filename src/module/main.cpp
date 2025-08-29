@@ -16,17 +16,17 @@ std::vector<std::shared_ptr<vsdk::ModelRegistration>> create_all_model_registrat
     std::vector<std::shared_ptr<vsdk::ModelRegistration>> registrations;
 
     registrations.push_back(std::make_shared<vsdk::ModelRegistration>(
-        vsdk::API::get<vsdk::Camera>(), orbbec::Orbbec::model, [ctx](vsdk::Dependencies deps, vsdk::ResourceConfig config) {
-            return std::make_unique<orbbec::Orbbec>(std::move(deps), std::move(config), ctx);
-        }));
-
-    registrations.push_back(std::make_shared<vsdk::ModelRegistration>(
-        vsdk::API::get<vsdk::Discovery>(),
-        discovery::OrbbecDiscovery::model,
+        vsdk::API::get<vsdk::Camera>(),
+        orbbec::Orbbec::model,
         [ctx](vsdk::Dependencies deps, vsdk::ResourceConfig config) {
-            return std::make_unique<discovery::OrbbecDiscovery>(std::move(deps), std::move(config), ctx);
+            return std::make_unique<orbbec::Orbbec>(std::move(deps), std::move(config), ctx);
         },
         orbbec::Orbbec::validate));
+
+    registrations.push_back(std::make_shared<vsdk::ModelRegistration>(
+        vsdk::API::get<vsdk::Discovery>(), discovery::OrbbecDiscovery::model, [ctx](vsdk::Dependencies deps, vsdk::ResourceConfig config) {
+            return std::make_unique<discovery::OrbbecDiscovery>(std::move(deps), std::move(config), ctx);
+        }));
 
     return registrations;
 }
