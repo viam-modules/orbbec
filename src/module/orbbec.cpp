@@ -339,7 +339,9 @@ struct Cleanup {
     using value_type = std::remove_pointer_t<pointer_type>;
 
     void operator()(pointer_type p) {
-        cleanup_fp(p);
+        if (p != nullptr) {
+            cleanup_fp(p);
+        }
     }
 };
 
@@ -370,49 +372,52 @@ void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev, std::shared_ptr<ob::C
         throw std::invalid_argument(buffer.str());
     }
 
-    // create zip file
+    std::vector<uint8_t> binData;
     zip_error_t ziperror;
     zip_error_init(&ziperror);
 
-    CleanupPtr<zip_source_free> src(zip_source_buffer_create(zipBuffer.data(), zipBuffer.size(), 0, &ziperror));
+    zip_source_t* src = zip_source_buffer_create(zipBuffer.data(), zipBuffer.size(), 0, &ziperror);
     if (!src) {
         std::ostringstream buffer;
         buffer << "failed to create zip buffer: " << zip_error_strerror(&ziperror);
         throw std::runtime_error(buffer.str());
     }
 
-    CleanupPtr<zip_close> zip(zip_open_from_source(src.get(), 0, &ziperror));
+    // Ensure src cleanup if zip_open fails
+    CleanupPtr<zip_source_free> srcCleanup(src);
 
+    // If this succeeds, zip takes ownership of src, so src will be freed when zip_close is called.
+    zip_t* zip = zip_open_from_source(src, 0, &ziperror);
     if (!zip) {
         std::ostringstream buffer;
         buffer << "failed to open zip from source: " << zip_error_strerror(&ziperror);
         throw std::runtime_error(buffer.str());
     }
 
-    // Confirm there is only 1 file inside the zip
-    if (zip_get_num_entries(zip.get(), 0) != 1) {
+    srcCleanup.release();
+    CleanupPtr<zip_close> zipCleanup(zip);
+
+    if (zip_get_num_entries(zip, 0) != 1) {
         throw std::runtime_error("unexpected number of files in firmware zip");
     }
 
-    const char* fileName = zip_get_name(zip.get(), 0, 0);
+    const char* fileName = zip_get_name(zip, 0, 0);
     if (!fileName) {
         throw std::runtime_error("couldn't get bin file name");
     }
 
-    // open the .bin file inside the zip
-    CleanupPtr<zip_fclose> binFile(zip_fopen(zip.get(), fileName, 0));
+    CleanupPtr<zip_fclose> binFile(zip_fopen(zip, fileName, 0));
     if (!binFile) {
         throw std::runtime_error("failed to open the firmware bin file");
     }
 
     zip_stat_t stats;
     zip_stat_init(&stats);
-    if (zip_stat(zip.get(), fileName, 0, &stats) != 0) {
+    if (zip_stat(zip, fileName, 0, &stats) != 0) {
         throw std::invalid_argument("failed to stat file");
     }
 
-    // read data from binary file to vector
-    std::vector<uint8_t> binData(stats.size);
+    binData.resize(stats.size);
     zip_int64_t bytesRead = zip_fread(binFile.get(), binData.data(), stats.size);
     if (bytesRead == -1) {
         zip_error_t* err = zip_file_get_error(binFile.get());
@@ -453,7 +458,18 @@ void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev, std::shared_ptr<ob::C
         }
         VIAM_SDK_LOG(info) << "Firmware update in progress: " << message;
     };
-    my_dev->device->updateFirmwareFromData(binData.data(), binData.size(), std::move(firmwareUpdateCallback), false);
+
+    try {
+        my_dev->device->updateFirmwareFromData(binData.data(), binData.size(), std::move(firmwareUpdateCallback), false);
+    } catch (...) {
+        // Reset UVC backend type before re-throwing
+#if defined(__linux__)
+        ctx->setUvcBackendType(OB_UVC_BACKEND_TYPE_AUTO);
+#endif
+        throw;
+    }
+
+    // Reset UVC backend type on success
 #if defined(__linux__)
     ctx->setUvcBackendType(OB_UVC_BACKEND_TYPE_AUTO);
 #endif
