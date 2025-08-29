@@ -336,7 +336,6 @@ size_t writeFileCallback(void* contents, size_t size, size_t nmemb, void* userp)
 template <auto cleanup_fp>
 struct Cleanup {
     using pointer_type = std::tuple_element_t<0, boost::callable_traits::args_t<decltype(cleanup_fp)>>;
-
     using value_type = std::remove_pointer_t<pointer_type>;
 
     void operator()(pointer_type p) {
@@ -374,14 +373,16 @@ void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev, std::shared_ptr<ob::C
     // create zip file
     zip_error_t ziperror;
     zip_error_init(&ziperror);
-    CleanupPtr<zip_source_free> src(zip_source_create(zipBuffer.data(), zipBuffer.size(), 0, &ziperror));
+
+    CleanupPtr<zip_source_free> src(zip_source_buffer_create(zipBuffer.data(), zipBuffer.size(), 0, &ziperror));
     if (!src) {
         std::ostringstream buffer;
         buffer << "failed to create zip buffer: " << zip_error_strerror(&ziperror);
         throw std::runtime_error(buffer.str());
     }
 
-    zip_t* zip = zip_open_from_source(src, 0, &ziperror);
+    CleanupPtr<zip_close> zip(zip_open_from_source(src.get(), 0, &ziperror));
+
     if (!zip) {
         std::ostringstream buffer;
         buffer << "failed to open zip from source: " << zip_error_strerror(&ziperror);
@@ -389,53 +390,42 @@ void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev, std::shared_ptr<ob::C
     }
 
     // Confirm there is only 1 file inside the zip
-    if (zip_get_num_entries(zip, 0) != 1) {
-        zip_close(zip);
+    if (zip_get_num_entries(zip.get(), 0) != 1) {
         throw std::runtime_error("unexpected number of files in firmware zip");
     }
 
-    const char* fileName = zip_get_name(zip, 0, 0);
+    const char* fileName = zip_get_name(zip.get(), 0, 0);
     if (!fileName) {
-        zip_close(zip);
         throw std::runtime_error("couldn't get bin file name");
     }
 
     // open the .bin file inside the zip
-    zip_file_t* binFile = zip_fopen(zip, fileName, 0);
+    CleanupPtr<zip_fclose> binFile(zip_fopen(zip.get(), fileName, 0));
     if (!binFile) {
-        zip_close(zip);
         throw std::runtime_error("failed to open the firmware bin file");
     }
 
     zip_stat_t stats;
     zip_stat_init(&stats);
-    if (zip_stat(zip, fileName, 0, &stats) != 0) {
-        zip_close(zip);
+    if (zip_stat(zip.get(), fileName, 0, &stats) != 0) {
         throw std::invalid_argument("failed to stat file");
     }
 
     // read data from binary file to vector
     std::vector<uint8_t> binData(stats.size);
-    zip_int64_t bytesRead = zip_fread(binFile, binData.data(), stats.size);
+    zip_int64_t bytesRead = zip_fread(binFile.get(), binData.data(), stats.size);
     if (bytesRead == -1) {
-        zip_close(zip);
-        zip_fclose(binFile);
-        zip_error_t* err = zip_file_get_error(binFile);
+        zip_error_t* err = zip_file_get_error(binFile.get());
         std::ostringstream buffer;
         buffer << "failed to read bin: " << zip_error_strerror(err);
         throw std::runtime_error(buffer.str());
     }
 
     if (bytesRead != stats.size) {
-        zip_close(zip);
-        zip_fclose(binFile);
         std::ostringstream buffer;
         buffer << "failed to fully read binary file, file size: " << stats.size << "bytes read: " << bytesRead;
         throw std::runtime_error(buffer.str());
     }
-
-    zip_close(zip);
-    zip_fclose(binFile);
 
     auto firmwareUpdateCallback = [](OBFwUpdateState state, const char* message, uint8_t percent) {
         switch (state) {
