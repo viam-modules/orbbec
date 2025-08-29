@@ -1399,7 +1399,7 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
                 case vsdk::ProtoValue::Kind::k_null:
                     break;
                 case vsdk::ProtoValue::Kind::k_bool:
-                    value_str = value.get_unchecked<std::string>();
+                    value_str = value.get_unchecked<bool>() ? "true" : "false";
                     break;
                 case vsdk::ProtoValue::Kind::k_double:
                     value_str = std::to_string(value.get_unchecked<double>());
@@ -1429,15 +1429,12 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
                 VIAM_SDK_LOG(info) << "[do_command] key: " << key << ", value: " << value_str;
 
                 if (key == "set_depth_soft_filter") {
-                    if (value.is_a<bool>()) {
-                        auto search = devices_by_serial().find(serialNumber);
-                        if (search == devices_by_serial().end()) {
-                            VIAM_SDK_LOG(error) << service_name << ": unable to stop undetected device " << serialNumber;
-                            return vsdk::ProtoStruct{};
-                        }
+                    if (not value.is_a<bool>()) {
+                        VIAM_SDK_LOG(error) << "[do_command] set_depth_soft_filter: expected bool, got " << value.kind();
+                        return vsdk::ProtoStruct{{"error", "expected bool"}};
                     }
-
-                    setDepthSoftFilter(my_dev->device, value.get<bool>());
+                    setDepthSoftFilter(my_dev->device, value.get_unchecked<bool>());
+                    return {{"depth_soft_filter", my_dev->device->getBoolProperty(OB_PROP_DEPTH_NOISE_REMOVAL_FILTER_BOOL)}};
                 }
 
                 if (key == "get_depth_gain") {
