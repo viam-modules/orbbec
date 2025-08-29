@@ -47,18 +47,18 @@ namespace vsdk = ::viam::sdk;
 
 vsdk::Model Orbbec::model("viam", "orbbec", "astra2");
 
+// CONSTANTS BEGIN
 const std::string kColorSourceName = "color";
 const std::string kColorMimeTypeJPEG = "image/jpeg";
 const std::string kDepthSourceName = "depth";
 const std::string kDepthMimeTypeViamDep = "image/vnd.viam.dep";
 const std::string kPcdMimeType = "pointcloud/pcd";
+// If the firmwareUrl is changed to a new version, also change the requiredFirmwareVer const.
 const std::string firmwareUrl = "https://orbbec-debian-repos-aws.s3.amazonaws.com/product/Astra2_Release_2.8.20.zip";
-
-// CONSTANTS BEGIN
+const std::string requiredFirmwareVer = "2.8.20";
 constexpr char service_name[] = "viam_orbbec";
 const float mmToMeterMultiple = 0.001;
 const uint64_t maxFrameAgeUs = 1e6;  // time until a frame is considered stale, in microseconds (equal to 1 sec)
-std::string requiredFirmwareVer = "2.8.20";
 
 // CONSTANTS END
 
@@ -902,7 +902,7 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
                 serial_number = config_->serial_number;
             }
             {
-                // note: under lock for the entire firmware update
+                // note: under lock for the entire firmware update to ensure device can't be destructed.
                 const std::lock_guard<std::mutex> lock(devices_by_serial_mu());
                 auto search = devices_by_serial().find(serial_number);
                 if (search == devices_by_serial().end()) {
