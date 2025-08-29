@@ -38,6 +38,7 @@
 #include <viam/sdk/resource/reconfigurable.hpp>
 #include <viam/sdk/rpc/server.hpp>
 
+#include <boost/callable_traits/args.hpp>
 #include <libobsensor/ObSensor.hpp>
 
 namespace orbbec {
@@ -332,35 +333,48 @@ size_t writeFileCallback(void* contents, size_t size, size_t nmemb, void* userp)
     return totalSize;
 }
 
+template <auto cleanup_fp>
+struct Cleanup {
+    using pointer_type = std::tuple_element_t<0, boost::callable_traits::args_t<decltype(cleanup_fp)>>;
+
+    using value_type = std::remove_pointer_t<pointer_type>;
+
+    void operator()(pointer_type p) {
+        cleanup_fp(p);
+    }
+};
+
+template <auto cleanup_fp>
+using CleanupPtr = std::unique_ptr<typename Cleanup<cleanup_fp>::value_type, Cleanup<cleanup_fp>>;
+
 void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev, std::shared_ptr<ob::Context> ctx) {
 // On linux, orbbec reccomends to set libuvc backend for firmware update
 #if defined(__linux__)
     ctx->setUvcBackendType(OB_UVC_BACKEND_TYPE_LIBUVC);
 #endif
 
-    CURL* curl = curl_easy_init();
+    CleanupPtr<curl_easy_cleanup> curl(curl_easy_init());
     if (!curl) {
         throw std::invalid_argument("curl easy init failed");
     }
 
     // Download the firmware and write it to a buffer
     std::vector<char> zipBuffer;
-    curl_easy_setopt(curl, CURLOPT_URL, firmwareUrl.c_str());
-    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeFileCallback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &zipBuffer);
-    CURLcode res = curl_easy_perform(curl);
+    curl_easy_setopt(curl.get(), CURLOPT_URL, firmwareUrl.c_str());
+    curl_easy_setopt(curl.get(), CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, writeFileCallback);
+    curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, &zipBuffer);
+    CURLcode res = curl_easy_perform(curl.get());
     if (res != CURLE_OK) {
         std::ostringstream buffer;
         buffer << "curl early perform failed: " << curl_easy_strerror(res);
         throw std::invalid_argument(buffer.str());
     }
-    curl_easy_cleanup(curl);
 
     // create zip file
     zip_error_t ziperror;
     zip_error_init(&ziperror);
-    zip_source_t* src = zip_source_buffer_create(zipBuffer.data(), zipBuffer.size(), 0, &ziperror);
+    CleanupPtr<zip_source_free> src(zip_source_create(zipBuffer.data(), zipBuffer.size(), 0, &ziperror));
     if (!src) {
         std::ostringstream buffer;
         buffer << "failed to create zip buffer: " << zip_error_strerror(&ziperror);
@@ -369,7 +383,6 @@ void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev, std::shared_ptr<ob::C
 
     zip_t* zip = zip_open_from_source(src, 0, &ziperror);
     if (!zip) {
-        zip_source_free(src);
         std::ostringstream buffer;
         buffer << "failed to open zip from source: " << zip_error_strerror(&ziperror);
         throw std::runtime_error(buffer.str());
