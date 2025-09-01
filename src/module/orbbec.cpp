@@ -1569,6 +1569,22 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
                     return depth_sensor_control::setDepthExposure(my_dev->device, value, key);
                 }
 
+                if (key == "get_depth_unit") {
+                    return depth_sensor_control::getDepthUnit(my_dev->device, key);
+                }
+
+                if (key == "set_depth_unit") {
+                    return depth_sensor_control::setDepthUnit(my_dev->device, value, key);
+                }
+
+                if (key == "get_depth_working_mode") {
+                    return depth_sensor_control::getDepthWorkingMode(my_dev->device, key);
+                }
+
+                if (key == "set_depth_working_mode") {
+                    return depth_sensor_control::setDepthWorkingMode(my_dev, value, key);
+                }
+
                 if (key == "get_camera_params") {
                     return getCameraParams(my_dev->pipe);
                 }
