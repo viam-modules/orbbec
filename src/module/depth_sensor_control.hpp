@@ -157,6 +157,9 @@ viam::sdk::ProtoStruct applyPostProcessDepthFilters(std::unique_ptr<ViamDeviceT>
 
 template <typename DeviceT>
 viam::sdk::ProtoStruct getDepthSoftFilter(std::shared_ptr<DeviceT>& device, std::string const& command) {
+    if (not device) {
+        return viam::sdk::ProtoStruct{{"error", "Device not found"}};
+    }
     return {{command, device->getBoolProperty(OB_PROP_DEPTH_NOISE_REMOVAL_FILTER_BOOL)}};
 }
 
@@ -164,6 +167,9 @@ template <typename DeviceT>
 viam::sdk::ProtoStruct setDepthSoftFilter(std::shared_ptr<DeviceT>& device,
                                           viam::sdk::ProtoValue const& value,
                                           std::string const& command) {
+    if (not device) {
+        return viam::sdk::ProtoStruct{{"error", "Device not found"}};
+    }
     if (not value.template is_a<bool>()) {
         VIAM_SDK_LOG(error) << "[do_command] set_depth_soft_filter: expected bool, got " << value.kind();
         return viam::sdk::ProtoStruct{{"error", "expected bool"}};
@@ -188,6 +194,9 @@ viam::sdk::ProtoStruct setDepthSoftFilter(std::shared_ptr<DeviceT>& device,
 
 template <typename DeviceT>
 viam::sdk::ProtoStruct getDepthGain(std::shared_ptr<DeviceT>& device) {
+    if (not device) {
+        return viam::sdk::ProtoStruct{{"error", "Device not found"}};
+    }
     try {
         if (device->isPropertySupported(OB_PROP_DEPTH_GAIN_INT, OB_PERMISSION_READ)) {
             OBIntPropertyRange valueRange = device->getIntPropertyRange(OB_PROP_DEPTH_GAIN_INT);
@@ -205,6 +214,9 @@ viam::sdk::ProtoStruct getDepthGain(std::shared_ptr<DeviceT>& device) {
 
 template <typename DeviceT>
 viam::sdk::ProtoStruct setDepthGain(std::shared_ptr<DeviceT>& device, viam::sdk::ProtoValue const& value) {
+    if (not device) {
+        return viam::sdk::ProtoStruct{{"error", "Device not found"}};
+    }
     try {
         if (device->isPropertySupported(OB_PROP_DEPTH_GAIN_INT, OB_PERMISSION_WRITE)) {
             if (!value.is_a<double>()) {
@@ -246,6 +258,7 @@ viam::sdk::ProtoStruct getDepthAutoExposure(std::shared_ptr<DeviceT>& device, st
             return {{"error", error_ss.str()}};
         }
     }
+    return {{"error", "Device not found."}};
 }
 
 template <typename DeviceT>
@@ -270,6 +283,154 @@ viam::sdk::ProtoStruct setDepthAutoExposure(std::shared_ptr<DeviceT>& device,
                      << "\ntype:" << e.getExceptionType() << std::endl;
             return {{"error", error_ss.str()}};
         }
+    }
+    return {{"error", "Device not found."}};
+}
+
+template <typename DeviceT>
+viam::sdk::ProtoStruct getLaser(std::shared_ptr<DeviceT>& device, std::string const& command) {
+    if (device) {
+        try {
+            if (device->isPropertySupported(OB_PROP_LASER_BOOL, OB_PERMISSION_READ)) {
+                bool value = device->getBoolProperty(OB_PROP_LASER_BOOL);
+                return {{command, value}};
+            } else {
+                return {{"error", "Laser property is not supported."}};
+            }
+        } catch (ob::Error& e) {
+            std::stringstream error_ss;
+            error_ss << "function:" << e.getFunction() << "\nargs:" << e.getArgs() << "\nmessage:" << e.what()
+                     << "\ntype:" << e.getExceptionType() << std::endl;
+            return {{"error", error_ss.str()}};
+        }
+    }
+    return {{"error", "Device not found."}};
+}
+
+template <typename DeviceT>
+viam::sdk::ProtoStruct setLaser(std::shared_ptr<DeviceT>& device, viam::sdk::ProtoValue const& value, std::string const& command) {
+    if (not value.template is_a<bool>()) {
+        return {{"error", "Invalid value type for Laser. Expected boolean."}};
+    }
+    bool const enable = value.get_unchecked<bool>();
+    if (device) {
+        try {
+            if (device->isPropertySupported(OB_PROP_LASER_BOOL, OB_PERMISSION_WRITE)) {
+                device->setBoolProperty(OB_PROP_LASER_BOOL, enable);
+                return getLaser(device, command);
+            } else {
+                return {{"error", "Laser property is not supported."}};
+            }
+        } catch (ob::Error& e) {
+            std::stringstream error_ss;
+            error_ss << "function:" << e.getFunction() << "\nargs:" << e.getArgs() << "\nmessage:" << e.what()
+                     << "\ntype:" << e.getExceptionType() << std::endl;
+            return {{"error", error_ss.str()}};
+        }
+    }
+    return {{"error", "Device not found."}};
+}
+
+template <typename DeviceT>
+viam::sdk::ProtoStruct getDepthMirror(std::shared_ptr<DeviceT>& device, std::string const& command) {
+    if (device) {
+        try {
+            if (device->isPropertySupported(OB_PROP_DEPTH_MIRROR_BOOL, OB_PERMISSION_READ)) {
+                bool value = device->getBoolProperty(OB_PROP_DEPTH_MIRROR_BOOL);
+                return {{command, value}};
+            } else {
+                return {{"error", "Depth mirror property is not supported."}};
+            }
+        } catch (ob::Error& e) {
+            std::stringstream error_ss;
+            error_ss << "function:" << e.getFunction() << "\nargs:" << e.getArgs() << "\nmessage:" << e.what()
+                     << "\ntype:" << e.getExceptionType() << std::endl;
+            return {{"error", error_ss.str()}};
+        }
+    }
+    return {{"error", "Device not found."}};
+}
+
+template <typename DeviceT>
+viam::sdk::ProtoStruct setDepthMirror(std::shared_ptr<DeviceT>& device, viam::sdk::ProtoValue const& value, std::string const& command) {
+    if (not value.template is_a<bool>()) {
+        return {{"error", "Invalid value type for Depth Mirror. Expected boolean."}};
+    }
+    bool const enable = value.get_unchecked<bool>();
+    if (device) {
+        try {
+            if (device->isPropertySupported(OB_PROP_DEPTH_MIRROR_BOOL, OB_PERMISSION_WRITE)) {
+                device->setBoolProperty(OB_PROP_DEPTH_MIRROR_BOOL, enable);
+                return getDepthMirror(device, command);
+            } else {
+                return {{"error", "Depth mirror property is not supported."}};
+            }
+        } catch (ob::Error& e) {
+            std::stringstream error_ss;
+            error_ss << "function:" << e.getFunction() << "\nargs:" << e.getArgs() << "\nmessage:" << e.what()
+                     << "\ntype:" << e.getExceptionType() << std::endl;
+            return {{"error", error_ss.str()}};
+        }
+    }
+    return {{"error", "Device not found."}};
+}
+
+template <typename DeviceT>
+viam::sdk::ProtoStruct getDepthExposure(std::shared_ptr<DeviceT>& device, std::string const& command) {
+    if (not device) {
+        return viam::sdk::ProtoStruct{{"error", "Device not found"}};
+    }
+    try {
+        if (device->isPropertySupported(OB_PROP_DEPTH_AUTO_EXPOSURE_BOOL, OB_PERMISSION_READ)) {
+            bool value = device->getBoolProperty(OB_PROP_DEPTH_AUTO_EXPOSURE_BOOL);
+            if (value) {
+                return {{"error", "Cannot get depth exposure value when auto exposure is enabled."}};
+            }
+        }
+        if (device->isPropertySupported(OB_PROP_DEPTH_EXPOSURE_INT, OB_PERMISSION_READ)) {
+            // get the value range
+            OBIntPropertyRange valueRange = device->getIntPropertyRange(OB_PROP_DEPTH_EXPOSURE_INT);
+            std::cout << "Depth current exposure max:" << valueRange.max << ", min:" << valueRange.min << std::endl;
+
+            int value = device->getIntProperty(OB_PROP_DEPTH_EXPOSURE_INT);
+            std::cout << "Depth current exposure:" << value << std::endl;
+            return {{"current_depth_exposure", value}, {"min_depth_exposure", valueRange.min}, {"max_depth_exposure", valueRange.max}};
+        } else {
+            return {{"error", "Depth exposure get property is not supported."}};
+        }
+    } catch (const std::exception& e) {
+        VIAM_SDK_LOG(error) << "[getDepthExposure] " << e.what();
+        return viam::sdk::ProtoStruct{{"error", e.what()}};
+    }
+}
+
+template <typename DeviceT>
+viam::sdk::ProtoStruct setDepthExposure(std::shared_ptr<DeviceT>& device, viam::sdk::ProtoValue const& value, std::string const& command) {
+    if (not device) {
+        return {{"error", "Device not found."}};
+    }
+    if (not value.template is_a<double>()) {
+        return {{"error", "Invalid value type for Depth Exposure. Expected double."}};
+    }
+    int const exposure = value.get_unchecked<double>();
+    try {
+        if (device->isPropertySupported(OB_PROP_DEPTH_AUTO_EXPOSURE_BOOL, OB_PERMISSION_READ)) {
+            bool value = device->getBoolProperty(OB_PROP_DEPTH_AUTO_EXPOSURE_BOOL);
+            if (value) {
+                return {{"error", "Cannot set depth exposure value when auto exposure is enabled."}};
+            }
+        }
+        if (device->isPropertySupported(OB_PROP_DEPTH_EXPOSURE_INT, OB_PERMISSION_WRITE)) {
+            device->setIntProperty(OB_PROP_DEPTH_EXPOSURE_INT, exposure);
+            return getDepthExposure(device, command);
+        } else {
+            return {{"error", "Depth exposure property is not supported."}};
+        }
+    } catch (ob::Error& e) {
+        std::stringstream error_ss;
+        error_ss << "function:" << e.getFunction() << "\nargs:" << e.getArgs() << "\nmessage:" << e.what()
+                 << "\ntype:" << e.getExceptionType() << std::endl;
+        return {{"error", error_ss.str()}};
     }
 }
 

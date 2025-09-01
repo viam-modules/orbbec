@@ -853,6 +853,30 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
                 if (key == "set_depth_auto_exposure") {
                     return depth_sensor_control::setDepthAutoExposure(my_dev->device, value, key);
                 }
+
+                if (key == "get_laser") {
+                    return depth_sensor_control::getLaser(my_dev->device, key);
+                }
+
+                if (key == "set_laser") {
+                    return depth_sensor_control::setLaser(my_dev->device, value, key);
+                }
+
+                if (key == "get_depth_mirror") {
+                    return depth_sensor_control::getDepthMirror(my_dev->device, key);
+                }
+
+                if (key == "set_depth_mirror") {
+                    return depth_sensor_control::setDepthMirror(my_dev->device, value, key);
+                }
+
+                if (key == "get_depth_exposure") {
+                    return depth_sensor_control::getDepthExposure(my_dev->device, key);
+                }
+
+                if (key == "set_depth_exposure") {
+                    return depth_sensor_control::setDepthExposure(my_dev->device, value, key);
+                }
             }
         }
     } catch (const std::exception& e) {
