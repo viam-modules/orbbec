@@ -1346,6 +1346,60 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
     }
 }
 
+vsdk::ProtoStruct getCameraParams(std::shared_ptr<ob::Pipeline> pipe) {
+    if (pipe == nullptr) {
+        return {{"error", "pipe is null"}};
+    }
+    auto const config = pipe->getConfig();
+    if (!config) {
+        return {{"error", "failed to get pipeline config"}};
+    }
+
+    auto enabledStreamProfileListPtr = config->getEnabledStreamProfileList();
+
+    vsdk::ProtoStruct result;
+    if (enabledStreamProfileListPtr) {
+        auto const& enabledStreamProfileList = *enabledStreamProfileListPtr;
+        auto const count = enabledStreamProfileList.getCount();
+        for (int i = 0; i < count; i++) {
+            auto sp = enabledStreamProfileList.getProfile(i);
+            auto vsp = sp->as<ob::VideoStreamProfile>();
+            std::string sensorName = ob::TypeHelper::convertOBStreamTypeToString(sp->getType());
+            vsdk::ProtoStruct profile;
+            profile["width"] = static_cast<int>(vsp->getWidth());
+            profile["height"] = static_cast<int>(vsp->getHeight());
+            profile["format"] = ob::TypeHelper::convertOBFormatTypeToString(vsp->getFormat());
+            profile["fps"] = static_cast<int>(vsp->getFps());
+
+            vsdk::ProtoStruct intrinsics_struct;
+            auto intrinsics = vsp->getIntrinsic();
+            intrinsics_struct["fx"] = static_cast<double>(intrinsics.fx);
+            intrinsics_struct["fy"] = static_cast<double>(intrinsics.fy);
+            intrinsics_struct["cx"] = static_cast<double>(intrinsics.cx);
+            intrinsics_struct["cy"] = static_cast<double>(intrinsics.cy);
+            intrinsics_struct["width"] = static_cast<double>(intrinsics.width);
+            intrinsics_struct["height"] = static_cast<double>(intrinsics.height);
+            profile["intrinsics"] = intrinsics_struct;
+
+            vsdk::ProtoStruct distortion_struct;
+            auto distortion = vsp->getDistortion();
+            distortion_struct["k1"] = static_cast<double>(distortion.k1);
+            distortion_struct["k2"] = static_cast<double>(distortion.k2);
+            distortion_struct["k3"] = static_cast<double>(distortion.k3);
+            distortion_struct["k4"] = static_cast<double>(distortion.k4);
+            distortion_struct["k5"] = static_cast<double>(distortion.k5);
+            distortion_struct["k6"] = static_cast<double>(distortion.k6);
+            distortion_struct["p1"] = static_cast<double>(distortion.p1);
+            distortion_struct["p2"] = static_cast<double>(distortion.p2);
+            profile["distortion"] = distortion_struct;
+
+            result[sensorName] = profile;
+        }
+    }
+
+    return result;
+}
+
 vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
     try {
         viam::sdk::ProtoStruct resp = viam::sdk::ProtoStruct{};
@@ -1513,6 +1567,10 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
 
                 if (key == "set_depth_exposure") {
                     return depth_sensor_control::setDepthExposure(my_dev->device, value, key);
+                }
+
+                if (key == "get_camera_params") {
+                    return getCameraParams(my_dev->pipe);
                 }
             }
         }
