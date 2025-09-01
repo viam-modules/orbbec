@@ -229,4 +229,48 @@ viam::sdk::ProtoStruct setDepthGain(std::shared_ptr<DeviceT>& device, viam::sdk:
     }
 }
 
+template <typename DeviceT>
+viam::sdk::ProtoStruct getDepthAutoExposure(std::shared_ptr<DeviceT>& device, std::string const& command) {
+    if (device) {
+        try {
+            if (device->isPropertySupported(OB_PROP_DEPTH_AUTO_EXPOSURE_BOOL, OB_PERMISSION_READ)) {
+                bool value = device->getBoolProperty(OB_PROP_DEPTH_AUTO_EXPOSURE_BOOL);
+                return {{command, value}};
+            } else {
+                return {{"error", "Depth Auto-Exposure switch property is not supported."}};
+            }
+        } catch (ob::Error& e) {
+            std::stringstream error_ss;
+            error_ss << "function:" << e.getFunction() << "\nargs:" << e.getArgs() << "\nmessage:" << e.what()
+                     << "\ntype:" << e.getExceptionType() << std::endl;
+            return {{"error", error_ss.str()}};
+        }
+    }
+}
+
+template <typename DeviceT>
+viam::sdk::ProtoStruct setDepthAutoExposure(std::shared_ptr<DeviceT>& device,
+                                            viam::sdk::ProtoValue const& value,
+                                            std::string const& command) {
+    if (not value.template is_a<bool>()) {
+        return {{"error", "Invalid value type for Depth Auto-Exposure. Expected boolean."}};
+    }
+    bool const enable = value.get_unchecked<bool>();
+    if (device) {
+        try {
+            if (device->isPropertySupported(OB_PROP_DEPTH_AUTO_EXPOSURE_BOOL, OB_PERMISSION_WRITE)) {
+                device->setBoolProperty(OB_PROP_DEPTH_AUTO_EXPOSURE_BOOL, enable);
+                return getDepthAutoExposure(device, command);
+            } else {
+                return {{"error", "Depth Auto-Exposure switch property is not supported."}};
+            }
+        } catch (ob::Error& e) {
+            std::stringstream error_ss;
+            error_ss << "function:" << e.getFunction() << "\nargs:" << e.getArgs() << "\nmessage:" << e.what()
+                     << "\ntype:" << e.getExceptionType() << std::endl;
+            return {{"error", error_ss.str()}};
+        }
+    }
+}
+
 }  // namespace depth_sensor_control

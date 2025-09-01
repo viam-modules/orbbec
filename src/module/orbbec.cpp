@@ -1482,6 +1482,14 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
                         return depth_sensor_control::setDepthGain(my_dev->device, value);
                     }
                 }
+
+                if (key == "get_depth_auto_exposure") {
+                    return depth_sensor_control::getDepthAutoExposure(my_dev->device, key);
+                }
+
+                if (key == "set_depth_auto_exposure") {
+                    return depth_sensor_control::setDepthAutoExposure(my_dev->device, value, key);
+                }
             }
         }
     } catch (const std::exception& e) {
