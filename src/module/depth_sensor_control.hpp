@@ -2,6 +2,52 @@
 #include <viam/sdk/common/proto_value.hpp>
 
 namespace depth_sensor_control {
+
+inline double depthPrecisionLevelToUnit(OBDepthPrecisionLevel precision) {
+    switch (precision) {
+        case OB_PRECISION_1MM:
+            return 1.0;
+        case OB_PRECISION_0MM8:
+            return 0.8;
+        case OB_PRECISION_0MM4:
+            return 0.4;
+        case OB_PRECISION_0MM1:
+            return 0.1;
+        case OB_PRECISION_0MM2:
+            return 0.2;
+        case OB_PRECISION_0MM5:
+            return 0.5;
+        case OB_PRECISION_0MM05:
+            return 0.05;
+        default:
+            break;
+    }
+    throw std::invalid_argument("Unregistered depth precision level");
+}
+
+inline bool areAlmostEqual(double a, double b, double epsilon = 1e-5) {
+    return std::abs(a - b) < epsilon;
+}
+
+inline OBDepthPrecisionLevel depthUnitToPrecisionLevel(double unit) {
+    if (areAlmostEqual(1.0, unit)) {
+        return OB_PRECISION_1MM;
+    } else if (areAlmostEqual(0.8, unit)) {
+        return OB_PRECISION_0MM8;
+    } else if (areAlmostEqual(0.4, unit)) {
+        return OB_PRECISION_0MM4;
+    } else if (areAlmostEqual(0.1, unit)) {
+        return OB_PRECISION_0MM1;
+    } else if (areAlmostEqual(0.2, unit)) {
+        return OB_PRECISION_0MM2;
+    } else if (areAlmostEqual(0.5, unit)) {
+        return OB_PRECISION_0MM5;
+    } else if (areAlmostEqual(0.05, unit)) {
+        return OB_PRECISION_0MM05;
+    }
+    throw std::invalid_argument("Unsupported unit to depth precision level");
+}
+
 template <typename DeviceT>
 void setDepthSoftFilter(std::shared_ptr<DeviceT> device, bool enable) {
     try {
@@ -425,6 +471,132 @@ viam::sdk::ProtoStruct setDepthExposure(std::shared_ptr<DeviceT>& device, viam::
             return getDepthExposure(device, command);
         } else {
             return {{"error", "Depth exposure property is not supported."}};
+        }
+    } catch (ob::Error& e) {
+        std::stringstream error_ss;
+        error_ss << "function:" << e.getFunction() << "\nargs:" << e.getArgs() << "\nmessage:" << e.what()
+                 << "\ntype:" << e.getExceptionType() << std::endl;
+        return {{"error", error_ss.str()}};
+    }
+}
+
+template <typename DeviceT>
+viam::sdk::ProtoStruct getDepthUnit(std::shared_ptr<DeviceT>& device, std::string const& command) {
+    if (not device) {
+        return {{"error", "Device not found."}};
+    }
+    try {
+        if (device->isPropertySupported(OB_PROP_DEPTH_PRECISION_LEVEL_INT, OB_PERMISSION_READ)) {
+            double value = depthPrecisionLevelToUnit((OBDepthPrecisionLevel)device->getIntProperty(OB_PROP_DEPTH_PRECISION_LEVEL_INT));
+            // value is aproximated to the nearest 0.01
+            // value = std::round(value * 100.0) / 100.0;
+            viam::sdk::ProtoList availableDepthPrecisionLevelsProto;
+            availableDepthPrecisionLevelsProto.push_back("1.0");
+            availableDepthPrecisionLevelsProto.push_back("0.8");
+            availableDepthPrecisionLevelsProto.push_back("0.5");
+            availableDepthPrecisionLevelsProto.push_back("0.4");
+            availableDepthPrecisionLevelsProto.push_back("0.2");
+            availableDepthPrecisionLevelsProto.push_back("0.1");
+            availableDepthPrecisionLevelsProto.push_back("0.05");
+
+            return {{"depth_precision_level_mm", value}, {"available_depth_precision_levels_mm", availableDepthPrecisionLevelsProto}};
+        } else {
+            return {{"error", "Depth precision level property is not supported."}};
+        }
+    } catch (const std::exception& e) {
+        VIAM_SDK_LOG(error) << "[getDepthUnit] " << e.what();
+        return viam::sdk::ProtoStruct{{"error", e.what()}};
+    }
+}
+
+template <typename DeviceT>
+viam::sdk::ProtoStruct setDepthUnit(std::shared_ptr<DeviceT>& device, viam::sdk::ProtoValue const& value, std::string const& command) {
+    if (not device) {
+        return {{"error", "Device not found."}};
+    }
+    if (not value.template is_a<double>()) {
+        return {{"error", "Invalid value type for Depth Unit. Expected double."}};
+    }
+    double const depthUnit = value.get_unchecked<double>();
+    try {
+        if (device->isPropertySupported(OB_PROP_DEPTH_PRECISION_LEVEL_INT, OB_PERMISSION_WRITE)) {
+            device->setIntProperty(OB_PROP_DEPTH_PRECISION_LEVEL_INT, depthUnitToPrecisionLevel(depthUnit));
+            return getDepthUnit(device, command);
+        } else {
+            return {{"error", "Depth unit property is not supported."}};
+        }
+    } catch (ob::Error& e) {
+        std::stringstream error_ss;
+        error_ss << "function:" << e.getFunction() << "\nargs:" << e.getArgs() << "\nmessage:" << e.what()
+                 << "\ntype:" << e.getExceptionType() << std::endl;
+        return {{"error", error_ss.str()}};
+    }
+}
+
+template <typename DeviceT>
+viam::sdk::ProtoStruct getDepthWorkingMode(std::shared_ptr<DeviceT>& device, std::string const& command) {
+    if (not device) {
+        return {{"error", "Device not found."}};
+    }
+    try {
+        if (device->isPropertySupported(OB_STRUCT_CURRENT_DEPTH_ALG_MODE, OB_PERMISSION_READ)) {
+            viam::sdk::ProtoStruct depthModeListProto;
+            auto curDepthMode = device->getCurrentDepthWorkMode();
+            depthModeListProto["current_depth_working_mode"] = curDepthMode.name;
+
+            auto depthModeList = device->getDepthWorkModeList();
+            viam::sdk::ProtoList depthModesAvailable;
+            for (uint32_t i = 0; i < depthModeList->getCount(); i++) {
+                depthModesAvailable.push_back((*depthModeList)[i].name);
+            }
+            depthModeListProto["available_depth_working_modes"] = depthModesAvailable;
+
+            return depthModeListProto;
+        } else {
+            return {{"error", "Depth working mode property is not supported."}};
+        }
+    } catch (ob::Error& e) {
+        std::stringstream error_ss;
+        error_ss << "function:" << e.getFunction() << "\nargs:" << e.getArgs() << "\nmessage:" << e.what()
+                 << "\ntype:" << e.getExceptionType() << std::endl;
+        return {{"error", error_ss.str()}};
+    }
+}
+
+template <typename ViamDeviceT>
+viam::sdk::ProtoStruct setDepthWorkingMode(std::unique_ptr<ViamDeviceT>& viam_device,
+                                           viam::sdk::ProtoValue const& value,
+                                           std::string const& command) {
+    if (not value.template is_a<std::string>()) {
+        return {{"error", "Invalid value type for Depth Working Mode. Expected string."}};
+    }
+    auto device = viam_device->device;
+    if (not device) {
+        return {{"error", "Device not found."}};
+    }
+    std::string const mode = value.get_unchecked<std::string>();
+    try {
+        if (device->isPropertySupported(OB_STRUCT_CURRENT_DEPTH_ALG_MODE, OB_PERMISSION_WRITE)) {
+            auto depthModeList = device->getDepthWorkModeList();
+            bool modeFound = false;
+            for (uint32_t i = 0; i < depthModeList->getCount(); i++) {
+                if ((*depthModeList)[i].name == mode) {
+                    modeFound = true;
+                    break;
+                }
+            }
+            if (!modeFound) {
+                std::stringstream error_ss;
+                error_ss << "Depth working mode " << mode << " not found. Available modes are: ";
+                for (uint32_t i = 0; i < depthModeList->getCount(); i++) {
+                    error_ss << (*depthModeList)[i].name << " ";
+                }
+                return {{"error", error_ss.str()}};
+            }
+            device->switchDepthWorkMode(mode.c_str());
+            return getDepthWorkingMode(device, command);
+        } else {
+            return {{"error", "Depth working mode property is not supported."}};
         }
     } catch (ob::Error& e) {
         std::stringstream error_ss;
