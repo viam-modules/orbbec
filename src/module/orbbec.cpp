@@ -864,37 +864,54 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
 
         // Base registry paths
         std::vector<std::string> searchTrees = {
+            // KSCATEGORY_CAPTURE class,used for video capture devices
             "SYSTEM\\CurrentControlSet\\Control\\DeviceClasses\\{e5323777-f976-4f5b-9b55-b94699c46e44}",
+            //KSCATEGORY_RENDER class, used for rendering deviced
             "SYSTEM\\CurrentControlSet\\Control\\DeviceClasses\\{65E8773D-8F56-11D0-A3B9-00A0C9223196}"
         };
 
         uint16_t vid = dev->getDeviceInfo().vid;
         uint16_t pid = dev->getDeviceInfo().pid;
 
-        std::string baseDeviceId = "USB\\VID_" + intToHex(vid) + "&PID_" + intToHex(pid);
+        std::string baseDeviceId = "##?#USB#VID_" + intToHex(vid) + "&PID_" + intToHex(pid);
         std::vector<std::string> interfaces = { "MI_00", "MI_04" }; // Depth and Color
 
 
         for (const auto& subtree : searchTrees) {
             for (const auto& mi : interfaces) {
             std::cout << "\nProcessing Registry branch: " << subtree << "\n";
-            std::string deviceId = baseDeviceId + "&" + mi;
+           // std::string deviceId = baseDeviceId + "&" + mi;
             std::string devicePath = subtree + "\\" + deviceId + "\\#global\\Device Parameters";
             HKEY hkey;
-            if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, devicePath.c_str(), 0, KEY_SET_VALUE | KEY_READ, &hKey) != ERROR_SUCCESS)
+            // This opens the subtree (all video/audio devices in the windows device registry)
+            if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, subtree.c_str(), 0, KEY_ENUMERATE_SUB_KEYS, &hKey) != ERROR_SUCCESS)
                 VIAM_SDK_ERROR("could not set reg value")
-
+                throw("could not open the subtee value")
+            }
             DWORD existing = 0;
-            DWORD dataSize = sizeof(existing);
+            char name[512];
+            DDWORD nameSize;
+            // while (true) {
+            //     nameSize = sizeof(name);
+            //     if (RegEnumKeyExA(hClassKey, index, name, &nameSize, NULL, NULL, NULL, NULL) != ERROR_SUCCESS)
+            //         break;
+
+            //     std::string subKeyName(name);
+            //     if (subKeyName.find("USB#VID_" + intToHex(vid) + "&PID_" + intToHex(pid)) != std::string::npos) {
+            //         // Found your device, now open its Device Parameters
+            //     }
+
+            //     index++;
+            // }
             RegQueryValueExA(hKey, valueName.c_str(), nullptr, nullptr, reinterpret_cast<LPBYTE>(&existing), &dataSize);
 
-            if (existing == 0) { // Only write if not present
-                RegSetValueExA(hKey, valueName.c_str(), 0, REG_DWORD, reinterpret_cast<const BYTE*>(&value), sizeof(value));
-                std::cout << "Added key " << valueName << " = " << value << " to " << subKey << "\n";
-            }
+            // if (existing == 0) { // Only write if not present
+            //     RegSetValueExA(hKey, valueName.c_str(), 0, REG_DWORD, reinterpret_cast<const BYTE*>(&value), sizeof(value));
+            //     std::cout << "Added key " << valueName << " = " << value << " to " << subKey << "\n";
+            // }
 
-            RegCloseKey(hKey);
-            return true;
+            // RegCloseKey(hKey);
+            // return true;
 
             }
     }
