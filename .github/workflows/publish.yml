@@ -3,6 +3,7 @@ name: Build & publish module to registry
 on:
   release:
     types: [published]
+  workflow_trigger:
 
 jobs:
   build:
@@ -48,6 +49,8 @@ jobs:
 
   publish:
     needs: build
+    # If the workflow was manually triggered it will be a dry run that does not push to the registry.
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/viamrobotics/rdk-devenv:amd64
