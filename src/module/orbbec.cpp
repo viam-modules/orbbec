@@ -926,9 +926,10 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
 
             // RegCloseKey(hKey);
             // return true;
-    } catch (const std::exception& e) {
-        VIAM_SDK_LOG(error) << "error in windows " << e.what();
-        throw std::runtime_error("error" + std::string(e.what()));
+    } catch (...) {
+        throw std::runtime_error("GOT EXCEPTION!");
+        //VIAM_SDK_LOG(error) << "error in windows " << e.what();
+       // throw std::runtime_error("error" + std::string(e.what()));
     }
 #endif
     {
