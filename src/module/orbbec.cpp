@@ -851,7 +851,7 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
     pointCloudFilter->setCreatePointFormat(OB_FORMAT_RGB_POINT);
 
 
- #if defined(__win32__)
+#ifdef _WIN32
     VIAM_SDK_LOG(info) << "HERE WIN 32"
      // Command to set PowerShell execution policy to obtain metadata
      //TODO: may have to run as admin
