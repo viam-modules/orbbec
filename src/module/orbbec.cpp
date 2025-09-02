@@ -895,21 +895,24 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
             }
 
             std::cout << "done calling " << subtree << "\n";
-            // DWORD existing = 0;
-            // char name[512];
-            // DDWORD nameSize;
-            // while (true) {
-            //     nameSize = sizeof(name);
+            char name[512];
+            DWORD nameSize;
+            DWORDe index = 0;
+            while (true) {
+                // reset before each call
+                nameSize = sizeof(name);
                 // enumerate all of the keys in the reg folder
-            //     if (RegEnumKeyExA(hkey, index, name, &nameSize, NULL, NULL, NULL, NULL) != ERROR_SUCCESS) {
-                    // VIAM_SDK_ERROR("could not enumerate")
-            //         break;
+                if (RegEnumKeyExA(hkey, index, name, &nameSize, NULL, NULL, NULL, NULL) != ERROR_SUCCESS) {
+                    VIAM_SDK_ERROR("could not enumerate")
+                    break;
+                }
+                std::string subKeyName(name);
+                if (subKeyName.find("USB#VID_" + intToHex(vid) + "&PID_" + intToHex(pid)) != std::string::npos) {
+                    std::cout << "Matched device: " << subKeyName << "\n";
+                }
+            }
         }
     }
-
-            //     std::string subKeyName(name);
-            //     if (subKeyName.find("USB#VID_" + intToHex(vid) + "&PID_" + intToHex(pid)) != std::string::npos) {
-            //         std::cout << "Matched device: " << subKeyName << "\n";
 
             // Build full path to Device Parameters
                 // std::string deviceParamsPath = classKeyPath + "\\" + subKeyName + "\\#GLOBAL\\Device Parameters";
