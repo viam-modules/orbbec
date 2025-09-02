@@ -1,12 +1,13 @@
 # Detect OS
 OS ?= $(shell uname -s | tr '[:upper:]' '[:lower:]')
-ARCH ?= $(shell uname -m)
 
 ifeq ($(OS),Windows_NT)
+    ARCH := $(PROCESSOR_ARCHITECTURE)
     BIN_SUFFIX := .exe
 	SCRIPT_EXT := .bat
 else
 	SCRIPT_EXT = .sh
+	ARCH ?= $(shell uname -m)
 endif
 
 TAR_BIN_NAME = orbbec-module
