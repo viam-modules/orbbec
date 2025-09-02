@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include "orbbec.hpp"
-#include "depth_sensor_control.hpp"
+#include "device_control.hpp"
 #include "encoding.hpp"
 
 #include <curl/curl.h>
@@ -1466,7 +1466,7 @@ viam::sdk::ProtoStruct setDepthWorkingMode(std::unique_ptr<ViamOBDevice>& viam_d
 
             viam_device->pipe->start(config, [serialNumber](std::shared_ptr<ob::FrameSet> frameSet) { frameCallback(serialNumber); });
             viam_device->started = true;
-            return depth_sensor_control::getDepthWorkingMode(device, command);
+            return device_control::getDepthWorkingMode(device, command);
         } else {
             return {{"error", "Depth working mode property is not supported."}};
         }
@@ -1765,98 +1765,98 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
                         return {{"skip_alignment", my_dev->skipAlignment}};
                     }
                     if (key == "apply_post_process_depth_filters") {
-                        return depth_sensor_control::applyPostProcessDepthFilters(my_dev, value, key);
+                        return device_control::applyPostProcessDepthFilters(my_dev, value, key);
                     }
                     if (key == "get_recommended_post_process_depth_filters") {
-                        return depth_sensor_control::getRecommendedPostProcessDepthFilters(my_dev->device);
+                        return device_control::getRecommendedPostProcessDepthFilters(my_dev->device);
                     }
 
                     if (key == "set_recommended_post_process_depth_filters") {
-                        return depth_sensor_control::setRecommendedPostProcessDepthFilters(my_dev);
+                        return device_control::setRecommendedPostProcessDepthFilters(my_dev);
                     }
 
                     if (key == "get_post_process_depth_filters") {
-                        return depth_sensor_control::getPostProcessDepthFilters(my_dev->postProcessDepthFilters, key);
+                        return device_control::getPostProcessDepthFilters(my_dev->postProcessDepthFilters, key);
                     }
 
                     if (key == "set_post_process_depth_filters") {
-                        return depth_sensor_control::setPostProcessDepthFilters(my_dev->postProcessDepthFilters, value, key);
+                        return device_control::setPostProcessDepthFilters(my_dev->postProcessDepthFilters, value, key);
                     }
 
                     if (key == "get_depth_noise_removal_filter") {
-                        return depth_sensor_control::getDepthNoiseRemovalFilter(my_dev->device, key);
+                        return device_control::getDepthNoiseRemovalFilter(my_dev->device, key);
                     }
 
                     if (key == "set_depth_noise_removal_filter") {
-                        return depth_sensor_control::setDepthNoiseRemovalFilter(my_dev->device, value, key);
+                        return device_control::setDepthNoiseRemovalFilter(my_dev->device, value, key);
                     }
 
                     if (key == "get_depth_gain") {
-                        return depth_sensor_control::getDepthGain(my_dev->device);
+                        return device_control::getDepthGain(my_dev->device);
                     }
 
                     if (key == "set_depth_gain") {
-                        return depth_sensor_control::setDepthGain(my_dev->device, value);
+                        return device_control::setDepthGain(my_dev->device, value);
                     }
 
                     if (key == "get_depth_auto_exposure") {
-                        return depth_sensor_control::getDepthAutoExposure(my_dev->device, key);
+                        return device_control::getDepthAutoExposure(my_dev->device, key);
                     }
 
                     if (key == "set_depth_auto_exposure") {
-                        return depth_sensor_control::setDepthAutoExposure(my_dev->device, value, key);
+                        return device_control::setDepthAutoExposure(my_dev->device, value, key);
                     }
 
                     if (key == "get_laser") {
-                        return depth_sensor_control::getLaser(my_dev->device, key);
+                        return device_control::getLaser(my_dev->device, key);
                     }
 
                     if (key == "set_laser") {
-                        return depth_sensor_control::setLaser(my_dev->device, value, key);
+                        return device_control::setLaser(my_dev->device, value, key);
                     }
 
                     if (key == "get_depth_mirror") {
-                        return depth_sensor_control::getDepthMirror(my_dev->device, key);
+                        return device_control::getDepthMirror(my_dev->device, key);
                     }
 
                     if (key == "set_depth_mirror") {
-                        return depth_sensor_control::setDepthMirror(my_dev->device, value, key);
+                        return device_control::setDepthMirror(my_dev->device, value, key);
                     }
 
                     if (key == "get_depth_exposure") {
-                        return depth_sensor_control::getDepthExposure(my_dev->device, key);
+                        return device_control::getDepthExposure(my_dev->device, key);
                     }
 
                     if (key == "set_depth_exposure") {
-                        return depth_sensor_control::setDepthExposure(my_dev->device, value, key);
+                        return device_control::setDepthExposure(my_dev->device, value, key);
                     }
 
                     if (key == "get_depth_unit") {
-                        return depth_sensor_control::getDepthUnit(my_dev->device, key);
+                        return device_control::getDepthUnit(my_dev->device, key);
                     }
 
                     if (key == "set_depth_unit") {
-                        return depth_sensor_control::setDepthUnit(my_dev->device, value, key);
+                        return device_control::setDepthUnit(my_dev->device, value, key);
                     }
 
                     if (key == "get_depth_working_mode") {
-                        return depth_sensor_control::getDepthWorkingMode(my_dev->device, key);
+                        return device_control::getDepthWorkingMode(my_dev->device, key);
                     }
 
                     if (key == "set_depth_working_mode") {
                         return setDepthWorkingMode(my_dev, value, serialNumber, key);
                     }
                     if (key == "get_device_properties") {
-                        return getDeviceProperties(my_dev->device);
+                        return device_control::getDeviceProperties(my_dev->device, key);
                     }
                     if (key == "set_device_properties") {
-                        return setDeviceProperties(my_dev->device, value);
+                        return device_control::setDeviceProperties(my_dev->device, value, key);
                     }
                     if (key == "get_device_property") {
-                        return getDeviceProperty(my_dev->device, value);
+                        return device_control::getDeviceProperty(my_dev->device, value, key);
                     }
                     if (key == "set_device_property") {
-                        return setDeviceProperty(my_dev->device, value);
+                        return device_control::setDeviceProperty(my_dev->device, value, key);
                     }
                     if (key == "get_camera_params") {
                         return getCameraParams(my_dev->pipe);
