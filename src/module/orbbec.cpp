@@ -885,11 +885,15 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
            // std::string deviceId = baseDeviceId + "&" + mi;
            // std::string devicePath = subtree + "\\" + deviceId + "\\#global\\Device Parameters";
             HKEY hkey;
+
+            std::cout << "calling the regopenkey enumerate " << subtree << "\n";
             // This opens the subtree (all video/audio devices in the windows device registry)
             if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, subtree.c_str(), 0, KEY_ENUMERATE_SUB_KEYS, &hkey) != ERROR_SUCCESS)
                 VIAM_SDK_LOG(error) << "could not get subkeys";
                 throw("could not open the subtee value");
             }
+
+            std::cout << "done calling " << subtree << "\n";
             // DWORD existing = 0;
             // char name[512];
             // DDWORD nameSize;
