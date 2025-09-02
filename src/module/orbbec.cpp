@@ -885,11 +885,11 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
 
             // Open the device registry key
             if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, subtree.c_str(), 0, KEY_ENUMERATE_SUB_KEYS, &hkey) != ERROR_SUCCESS) {
-                VIAM_SDK_LOG(error) << "could not get subkeys";
-                throw std::runtime_error("could not open the subtree value");
+                VIAM_SDK_LOG(error) << "Could not open subtree: " << subtree;
+                continue;
             }
 
-            VIAM_SDK_LOG(info) << "successfully opened the key " << subtree;
+            VIAM_SDK_LOG(info) << "successfully opened the key: " << subtree;
 
             char name[512];
             DWORD nameSize;
@@ -908,12 +908,16 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
                 }
                 std::cout <<  "name is " << name << "\n";
                 std::string subKeyName(name);
-                if (subKeyName.find("USB#VID_" + intToHex(vid) + "&PID_" + intToHex(pid)) != std::string::npos) {
-                    std::cout << "Matched device: " << subKeyName << "\n";
+                if (subKeyName.find("USB#VID_" + intToHex(vid) + "&PID_" + intToHex(pid)) == std::string::npos) {
+                    // not a match for an orbbec device, go to next key
+                    ++index;
+                    continue;
+                }
+                std::cout << "Matched device: " << subKeyName << "\n";
                 std::string deviceParamsKey = subtree + "\\" + subKeyName + "\\#GLOBAL\\Device Parameters";
                 std::string valueName = "MetadataBufferSizeInKB0";
                 HKEY hDeviceKey;
-                // open the device parameters key (folder)
+                // open the orbbec device parameters key (folder)
                 result = RegOpenKeyExA(
                     HKEY_LOCAL_MACHINE,
                     deviceParamsKey.c_str(),
@@ -923,11 +927,13 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
                 );
                 if (result != ERROR_SUCCESS) {
                     VIAM_SDK_LOG(error) << "Couldn't open device parameters key: " << deviceParamsKey;
+                    ++index;
                     continue;
                 }
                 // check if the value metadata exists
                 DWORD data;
                 DWORD dataSize = sizeof(data);
+                // find the value of the bufferSize if it exists
                 result = RegQueryValueExA(hDeviceKey, valueName.c_str(), nullptr, nullptr, reinterpret_cast<BYTE*>(&data), &dataSize);
                 if (result == ERROR_FILE_NOT_FOUND) {
                         // value does not exist yet, create it.
@@ -942,23 +948,17 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
                             sizeof(value)
                         );
                         if (result != ERROR_SUCCESS) {
-                            VIAM_SDK_LOG(error) << "couldn't set the metadata registery value";
-                            continue;
+                            VIAM_SDK_LOG(error) << "Couldn't set metadata registry value for key " << deviceParamsKey;
+                        } else {
+                            VIAM_SDK_LOG(info) << "Created value " << valueName << " = " << value << " for key " << deviceParamsKey;
                         }
-                        VIAM_SDK_LOG(info) << "Created value " << valueName << " = " << value;
-                }
-                else if(result == ERROR_SUCCESS) {
-                    VIAM_SDK_LOG(info) << "value already created on key" << deviceParamsKey << ", skipping."
-                    continue;
-                }
-                else {
-                    VIAM_SDK_LOG(error) << "Error getting the metadata value for key " << deviceParamsKey;
-                    continue;
-                }
+                } else if (result == ERROR_SUCCESS) {
+                    VIAM_SDK_LOG(info) << "Value already exists on key " << deviceParamsKey << ", skipping.";
+                } else {
+                    VIAM_SDK_LOG(error) << "Error reading metadata value for key " << deviceParamsKey << ": " << result;
             }
             RegCloseKey(hDeviceKey);
-            }
-                index++;
+            ++index;
             }
             RegCloseKey(hkey);
     }
