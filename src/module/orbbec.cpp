@@ -322,23 +322,6 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
     return nullptr;
 }
 
-void displayPresets(std::shared_ptr<ob::Device> device) {
-    std::shared_ptr<ob::DevicePresetList> presetLists = device->getAvailablePresetList();
-    if (presetLists && presetLists->getCount() == 0) {
-        VIAM_SDK_LOG(error) << "The current device does not support preset mode" << std::endl;
-        return;
-    }
-
-    VIAM_SDK_LOG(info) << "Available Presets:" << std::endl;
-    for (uint32_t index = 0; index < presetLists->getCount(); index++) {
-        // Print available preset name.
-        VIAM_SDK_LOG(info) << " - " << index << "." << presetLists->getName(index) << std::endl;
-    }
-
-    // Print current preset name.
-    VIAM_SDK_LOG(info) << "Current PresetName: " << device->getCurrentPresetName() << std::endl;
-}
-
 void frameCallback(std::string const& serialNumber, std::shared_ptr<ob::FrameSet> frameSet) {
     if (frameSet->getCount() != 2) {
         std::cerr << "got non 2 frame count: " << frameSet->getCount() << "\n";
@@ -411,8 +394,6 @@ void startDevice(std::string serialNumber, std::string resourceName) {
 
     my_dev->pipe->start(my_dev->config, [serialNumber](std::shared_ptr<ob::FrameSet> frameSet) { frameCallback(serialNumber, frameSet); });
     my_dev->started = true;
-
-    displayPresets(my_dev->device);
 
     VIAM_SDK_LOG(info) << "[startDevice] starting device with streams: ";
     auto streamProfiles = my_dev->pipe->getConfig()->getEnabledStreamProfileList();
@@ -874,6 +855,27 @@ viam::sdk::ProtoStruct setDepthWorkingMode(std::unique_ptr<ViamOBDevice>& viam_d
     }
 }
 
+vsdk::ProtoStruct getCameraPresets(std::shared_ptr<ob::Device> device, std::string const& command) {
+    std::shared_ptr<ob::DevicePresetList> presetLists = device->getAvailablePresetList();
+    if (presetLists && presetLists->getCount() == 0) {
+        VIAM_SDK_LOG(error) << "The current device does not support preset mode" << std::endl;
+        return {{"error", "The current device does not support preset mode"}};
+    }
+
+    vsdk::ProtoList presets;
+    VIAM_SDK_LOG(info) << "Available Presets:" << std::endl;
+    for (uint32_t index = 0; index < presetLists->getCount(); index++) {
+        // Print available preset name.
+        VIAM_SDK_LOG(info) << " - " << index << "." << presetLists->getName(index) << std::endl;
+        presets.push_back(presetLists->getName(index));
+    }
+
+    // Print current preset name.
+    VIAM_SDK_LOG(info) << "Current PresetName: " << device->getCurrentPresetName() << std::endl;
+
+    return {{"presets", presets}, {"current_preset", device->getCurrentPresetName()}};
+}
+
 vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
     try {
         for (auto const& [key, value] : command) {
@@ -1021,6 +1023,9 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
                 }
                 if (key == "get_camera_params") {
                     return getCameraParams(my_dev->pipe);
+                }
+                if (key == "get_camera_presets") {
+                    return getCameraPresets(my_dev->device, key);
                 }
             }
         }
