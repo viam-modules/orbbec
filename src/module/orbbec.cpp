@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "orbbec.hpp"
+#include <windows.h>
 
 #include <math.h>
 #include <chrono>
@@ -38,7 +39,6 @@
 #include <viam/sdk/rpc/server.hpp>
 
 #include <libobsensor/ObSensor.hpp>
-#include <windows.h>
 
 namespace orbbec {
 
@@ -852,7 +852,6 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
 
 
 #ifdef _WIN32
-    VIAM_SDK_LOG(info) << "HERE WIN 32"
      // Command to set PowerShell execution policy to obtain metadata
      //TODO: may have to run as admin
     const char* command = "powershell -Command \"Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force\"";
@@ -861,9 +860,10 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
         // command failed, try the backup
         command = "powershell -Command \"Set-ExecutionPolicy -ExecutionPolicy Unrestricted -Scope CurrentUser -Force\"";
         int result = std::system(command);
-        if result != 0 {
-            VIAM_SDK_LOG(warning) << "Could not set execution policy"
+        if (result != 0) {
+            VIAM_SDK_LOG(error) << "Could not set execution policy";
         }
+    }
 
         // Base registry paths
         std::vector<std::string> searchTrees = {
@@ -873,23 +873,22 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
             "SYSTEM\\CurrentControlSet\\Control\\DeviceClasses\\{65E8773D-8F56-11D0-A3B9-00A0C9223196}"
         };
 
-        uint16_t vid = dev->getDeviceInfo().vid;
-        uint16_t pid = dev->getDeviceInfo().pid;
+        uint16_t vid = dev->getDeviceInfo().vid();
+        uint16_t pid = dev->getDeviceInfo().pid();
 
         std::string baseDeviceId = "##?#USB#VID_" + intToHex(vid) + "&PID_" + intToHex(pid);
         std::vector<std::string> interfaces = { "MI_00", "MI_04" }; // Depth and Color
-
 
         for (const auto& subtree : searchTrees) {
             for (const auto& mi : interfaces) {
             std::cout << "\nProcessing Registry branch: " << subtree << "\n";
            // std::string deviceId = baseDeviceId + "&" + mi;
-            std::string devicePath = subtree + "\\" + deviceId + "\\#global\\Device Parameters";
+           // std::string devicePath = subtree + "\\" + deviceId + "\\#global\\Device Parameters";
             HKEY hkey;
             // This opens the subtree (all video/audio devices in the windows device registry)
             if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, subtree.c_str(), 0, KEY_ENUMERATE_SUB_KEYS, &hKey) != ERROR_SUCCESS)
-                VIAM_SDK_ERROR("could not set reg value")
-                throw("could not open the subtee value")
+                VIAM_SDK_LOG(error) << "could not get subkeys";
+                throw("could not open the subtee value");
             }
             DWORD existing = 0;
             char name[512];
@@ -922,10 +921,6 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
 
             // RegCloseKey(hKey);
             // return true;
-
-            }
-    }
-
 #endif
     {
         std::lock_guard<std::mutex> lock(devices_by_serial_mu());
