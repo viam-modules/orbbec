@@ -69,7 +69,11 @@ else ifeq ($(OS),darwin)
 	-C $(ORBBEC_SDK_DIR) lib/ \
     -C ../$(dir $(BIN)) $(TAR_BIN_NAME)
 else ifeq ($(OS),Windows_NT)
-	powershell -Command "( $$json = Get-Content meta.json | ConvertFrom-Json; $$json.PSObject.Properties.Remove('first_run'); $$json | ConvertTo-Json -Compress | Set-Content temp_meta.json -Encoding UTF8 )"
+	powershell -Command "& {
+		$$json = Get-Content meta.json | ConvertFrom-Json
+		$$json.PSObject.Properties.Remove('first_run')
+		$$json | ConvertTo-Json -Compress | Set-Content temp_meta.json -Encoding UTF8
+	}"
 	move /Y temp_meta.json meta.json
 	tar -czvf module.tar.gz \
 	meta.json \
