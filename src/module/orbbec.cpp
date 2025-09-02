@@ -878,29 +878,26 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
         uint16_t pid = dev->getDeviceInfo()->pid();
 
         std::string baseDeviceId = "##?#USB#VID_" + intToHex(vid) + "&PID_" + intToHex(pid);
-        std::vector<std::string> interfaces = { "MI_00", "MI_04" }; // Depth and Color
 
         for (const auto& subtree : searchTrees) {
-            for (const auto& mi : interfaces) {
             std::cout << "\nProcessing Registry branch: " << subtree << "\n";
-           // std::string deviceId = baseDeviceId + "&" + mi;
-           // std::string devicePath = subtree + "\\" + deviceId + "\\#global\\Device Parameters";
             HKEY hkey;
 
-            std::cout << "calling the regopenkey enumerate " << subtree << "\n";
-            // This opens the subtree (all video/audio devices in the windows device registry)
+            // Open the device registry key
             if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, subtree.c_str(), 0, KEY_ENUMERATE_SUB_KEYS, &hkey) != ERROR_SUCCESS) {
                 VIAM_SDK_LOG(error) << "could not get subkeys";
                 throw std::runtime_error("could not open the subtree value");
             }
 
-            std::cout << "done calling " << subtree << "\n";
+            VIAM_SDK_LOG(info) << "successfully opened the key " << subtree;
+
             char name[512];
             DWORD nameSize;
             DWORD index = 0;
             while (true) {
                 // reset before each call
                 nameSize = sizeof(name);
+
                 // enumerate all of the keys in the reg folder
                 LONG result = RegEnumKeyExA(hkey, index, name, &nameSize, NULL, NULL, NULL, NULL);
                 if (result == ERROR_NO_MORE_ITEMS) {
@@ -913,9 +910,6 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
                 std::string subKeyName(name);
                 if (subKeyName.find("USB#VID_" + intToHex(vid) + "&PID_" + intToHex(pid)) != std::string::npos) {
                     std::cout << "Matched device: " << subKeyName << "\n";
-                }
-
-
                 std::string deviceParamsKey = subtree + "\\" + subKeyName + "\\#GLOBAL\\Device Parameters";
                 std::string valueName = "MetadataBufferSizeInKB0";
                 HKEY hDeviceKey;
@@ -949,33 +943,16 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
                         );
                         if (result != ERROR_SUCCESS) {
                             VIAM_SDK_LOG(error) << "couldn't set the metadata registery value";
-                            return;
+                            continue;
                         }
                         VIAM_SDK_LOG(info) << "Created value " << valueName << " = " << value;
                     }
                     RegCloseKey(hDeviceKey);
-
+                }
+                    RegCloseKey(hkey);
                 index++;
             }
-        }
     }
-
-            // Build full path to Device Parameters
-                // std::string deviceParamsPath = classKeyPath + "\\" + subKeyName + "\\#GLOBAL\\Device Parameters";
-
-            //     }
-
-            //     index++;
-            // }
-            //RegQueryValueExA(hKey, valueName.c_str(), nullptr, nullptr, reinterpret_cast<LPBYTE>(&existing), &dataSize);
-
-            // if (existing == 0) { // Only write if not present
-            //     RegSetValueExA(hKey, valueName.c_str(), 0, REG_DWORD, reinterpret_cast<const BYTE*>(&value), sizeof(value));
-            //     std::cout << "Added key " << valueName << " = " << value << " to " << subKey << "\n";
-            // }
-
-            // RegCloseKey(hKey);
-            // return true;EXCEE
     } catch (const std::exception& e) {
         //throw std::runtime_error("GOT EXCEPTION!");
         VIAM_SDK_LOG(error) << "error in windows " << e.what();
