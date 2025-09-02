@@ -512,6 +512,7 @@ void Orbbec::reconfigure(const vsdk::Dependencies& deps, const vsdk::ResourceCon
 
 vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::ProtoStruct& extra) {
     try {
+        auto start = std::chrono::high_resolution_clock::now();
         VIAM_SDK_LOG(debug) << "[get_image] start";
         std::string serial_number;
         {
@@ -822,6 +823,13 @@ std::unique_ptr<orbbec::ObResourceConfig> Orbbec::configure_(vsdk::Dependencies 
 }
 // RESOURCE END
 
+// Convert integer to uppercase 4-digit hex string
+std::string intToHex(uint16_t value) {
+    std::stringstream ss;
+    ss << std::uppercase << std::hex << std::setw(4) << std::setfill('0') << value;
+    return ss.str();
+}
+
 // ORBBEC SDK DEVICE REGISTRY START
 void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
     VIAM_SDK_LOG(info) << "starting " << serialNumber;
@@ -840,6 +848,58 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
 
     pointCloudFilter->setCreatePointFormat(OB_FORMAT_RGB_POINT);
 
+
+ #if defined(__win32__)
+     // Command to set PowerShell execution policy to obtain metadata
+     //TODO: may have to run as admin
+    const char* command = "powershell -Command \"Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force\"";
+    int result = std::system(command);
+    if(result != 0) {
+        // command failed, try the backup
+        command = "powershell -Command \"Set-ExecutionPolicy -ExecutionPolicy Unrestricted -Scope CurrentUser -Force\"";
+        int result = std::system(command);
+        if result != 0 {
+            VIAM_SDK_LOG(warning) << "Could not set execution policy"
+        }
+
+        // Base registry paths
+        std::vector<std::string> searchTrees = {
+            "SYSTEM\\CurrentControlSet\\Control\\DeviceClasses\\{e5323777-f976-4f5b-9b55-b94699c46e44}",
+            "SYSTEM\\CurrentControlSet\\Control\\DeviceClasses\\{65E8773D-8F56-11D0-A3B9-00A0C9223196}"
+        };
+
+        uint16_t vid = dev->getDeviceInfo().vid;
+        uint16_t pid = dev->getDeviceInfo().pid;
+
+        std::string baseDeviceId = "USB\\VID_" + intToHex(vid) + "&PID_" + intToHex(pid);
+        std::vector<std::string> interfaces = { "MI_00", "MI_04" }; // Depth and Color
+
+
+        for (const auto& subtree : searchTrees) {
+            for (const auto& mi : interfaces) {
+            std::cout << "\nProcessing Registry branch: " << subtree << "\n";
+            std::string deviceId = baseDeviceId + "&" + mi;
+            std::string devicePath = subtree + "\\" + deviceId + "\\#global\\Device Parameters";
+            HKEY hkey;
+            if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, devicePath.c_str(), 0, KEY_SET_VALUE | KEY_READ, &hKey) != ERROR_SUCCESS)
+                VIAM_SDK_ERROR("could not set reg value")
+
+            DWORD existing = 0;
+            DWORD dataSize = sizeof(existing);
+            RegQueryValueExA(hKey, valueName.c_str(), nullptr, nullptr, reinterpret_cast<LPBYTE>(&existing), &dataSize);
+
+            if (existing == 0) { // Only write if not present
+                RegSetValueExA(hKey, valueName.c_str(), 0, REG_DWORD, reinterpret_cast<const BYTE*>(&value), sizeof(value));
+                std::cout << "Added key " << valueName << " = " << value << " to " << subKey << "\n";
+            }
+
+            RegCloseKey(hKey);
+            return true;
+
+            }
+    }
+
+#endif
     {
         std::lock_guard<std::mutex> lock(devices_by_serial_mu());
         std::unique_ptr<ViamOBDevice> my_dev = std::make_unique<ViamOBDevice>();
