@@ -926,7 +926,6 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
                         VIAM_SDK_LOG(error) << "RegOpenKeyExA failed with error code " << result;
                         return;
                     }
-                }
                 index++;
             }
         }
