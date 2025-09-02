@@ -854,6 +854,7 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
 #ifdef _WIN32
      // Command to set PowerShell execution policy to obtain metadata
      //TODO: may have to run as admin
+    try {
     const char* command = "powershell -Command \"Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force\"";
     int result = std::system(command);
     if(result != 0) {
@@ -887,7 +888,6 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
             HKEY hkey;
 
             std::cout << "calling the regopenkey enumerate " << subtree << "\n";
-            try {
             // This opens the subtree (all video/audio devices in the windows device registry)
             if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, subtree.c_str(), 0, KEY_ENUMERATE_SUB_KEYS, &hkey) != ERROR_SUCCESS)
                 VIAM_SDK_LOG(error) << "could not get subkeys";
