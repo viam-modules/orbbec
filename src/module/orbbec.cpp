@@ -852,6 +852,7 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
 
 
  #if defined(__win32__)
+    VIAM_SDK_LOG(info) << "HERE WIN 32"
      // Command to set PowerShell execution policy to obtain metadata
      //TODO: may have to run as admin
     const char* command = "powershell -Command \"Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force\"";
