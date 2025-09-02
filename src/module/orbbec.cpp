@@ -902,8 +902,11 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
                 // reset before each call
                 nameSize = sizeof(name);
                 // enumerate all of the keys in the reg folder
-                if (RegEnumKeyExA(hkey, index, name, &nameSize, NULL, NULL, NULL, NULL) != ERROR_SUCCESS) {
-                    VIAM_SDK_LOG(error) << "could not enumerate";
+                LONG result = RegEnumKeyExA(hkey, index, name, &nameSize, NULL, NULL, NULL, NULL);
+                if (result == ERROR_NO_MORE_ITEMS) {
+                    break;  // normal end of enumeration
+                } else if (result != ERROR_SUCCESS) {
+                    VIAM_SDK_LOG(error) << "Enumeration failed: " << result;
                     break;
                 }
                 std::cout <<  "name is " << name << "\n";
@@ -915,26 +918,29 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
 
                 std::string deviceParamsPath = subtree + "\\" + subKeyName + "\\#GLOBAL\\Device Parameters";
                 std::string valueName = "MetadataBufferSizeInKB0";
-                std::string key1 = deviceParamsPath + "\\" + valueName;
-                LONG result = RegOpenKeyExA(HKEY_LOCAL_MACHINE, key1.c_str(), 0, KEY_READ, &hkey);
-                    if (result == ERROR_FILE_NOT_FOUND) {
-                        // value does not exist yet, add it.
+                HKEY hDeviceKey;
+                // open the device parameters key (folder)
+                LONG result = RegQueryValueExA(
+                    HKEY_LOCAL_MACHINE,
+                    deviceParamsKey.c_str(),
+                    0
+                    KEY_READ | KEY_SET_VALUE,
+                    &hDeviceKey
+                );
+                if (result != ERROR_SUCCESS) {
+                    VIAM_SDK_LOG(error) << "Couldn't open device parameters key: " << deviceParamsPath;
+                    continue;
+                }
+                // check if the value metadata exists
+                DWORD data;
+                DWORD dataSize = sizeof(data);
+                result = RegQueryValueExA(hDeviceKey, valueName.c_str(), nullptr, nullptr, reinterpret_cast<BYTE*>(&data), &dataSize);
+                if result == ERROR_FILE_NOT_FOUND {
+                        // value does not exist yet, create it.
                         VIAM_SDK_LOG(info) << "VALUE DOES NOT YET EXIST " << result;
-                        LONG result = RegOpenKeyExA(
-                            HKEY_LOCAL_MACHINE,
-                            deviceParamsPath.c_str(),
-                            0,
-                            KEY_SET_VALUE,
-                            &hkey
-                        );
-                        if (result != ERROR_SUCCESS) {
-                            VIAM_SDK_LOG(error) << "couldn't open the full device path";
-                            return;
-                        }
-
                         DWORD value = 5;
                         result = RegSetValueExA(
-                            hkey,
+                            hDeviceKey,
                             valueName.c_str(),
                             0,
                             REG_DWORD,
@@ -945,13 +951,10 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
                             VIAM_SDK_LOG(error) << "couldn't set the metadata registery value";
                             return;
                         }
+                        VIAM_SDK_LOG(info) << "Created value " << valueName << " = " << value;
                     }
-                    else if (result == ERROR_SUCCESS) {
-                        RegCloseKey(hkey);   // key exists, clean up
-                    } else {
-                        VIAM_SDK_LOG(error) << "RegOpenKeyExA failed with error code " << result;
-                        return;
-                    }
+                    RegCloseKey(hDeviceKey);
+
                 index++;
             }
         }
