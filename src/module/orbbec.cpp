@@ -913,8 +913,8 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
                 }
 
 
-                std::string deviceParamsPath = classKeyPath + "\\" + subKeyName + "\\#GLOBAL\\Device Parameters";
-                std::string key1 = deviceParamsPath + "\\MetadataBufferSizeInKB0"
+                std::string deviceParamsPath = subTree + "\\" + subKeyName + "\\#GLOBAL\\Device Parameters";
+                std::string key1 = deviceParamsPath + "\\MetadataBufferSizeInKB0";
                 LONG result = RegOpenKeyExA(HKEY_LOCAL_MACHINE, key1.c_str(), 0, KEY_READ, &hkey)
                     if (result == ERROR_FILE_NOT_FOUND) {
                         // value does not exist yet, add it.
