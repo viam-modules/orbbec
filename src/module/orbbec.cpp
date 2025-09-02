@@ -37,6 +37,7 @@
 #include <viam/sdk/rpc/server.hpp>
 
 #include <libobsensor/ObSensor.hpp>
+#include <winreg.h>
 
 namespace orbbec {
 
@@ -893,17 +894,24 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
             DDWORD nameSize;
             // while (true) {
             //     nameSize = sizeof(name);
-            //     if (RegEnumKeyExA(hClassKey, index, name, &nameSize, NULL, NULL, NULL, NULL) != ERROR_SUCCESS)
+                // enumerate all of the keys in the reg folder
+            //     if (RegEnumKeyExA(hkey, index, name, &nameSize, NULL, NULL, NULL, NULL) != ERROR_SUCCESS) {
+                    // VIAM_SDK_ERROR("could not enumerate")
             //         break;
+        }
 
             //     std::string subKeyName(name);
             //     if (subKeyName.find("USB#VID_" + intToHex(vid) + "&PID_" + intToHex(pid)) != std::string::npos) {
-            //         // Found your device, now open its Device Parameters
+            //         std::cout << "Matched device: " << subKeyName << "\n";
+
+            // Build full path to Device Parameters
+                // std::string deviceParamsPath = classKeyPath + "\\" + subKeyName + "\\#GLOBAL\\Device Parameters";
+
             //     }
 
             //     index++;
             // }
-            RegQueryValueExA(hKey, valueName.c_str(), nullptr, nullptr, reinterpret_cast<LPBYTE>(&existing), &dataSize);
+            //RegQueryValueExA(hKey, valueName.c_str(), nullptr, nullptr, reinterpret_cast<LPBYTE>(&existing), &dataSize);
 
             // if (existing == 0) { // Only write if not present
             //     RegSetValueExA(hKey, valueName.c_str(), 0, REG_DWORD, reinterpret_cast<const BYTE*>(&value), sizeof(value));
