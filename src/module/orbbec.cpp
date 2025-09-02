@@ -946,12 +946,21 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
                             continue;
                         }
                         VIAM_SDK_LOG(info) << "Created value " << valueName << " = " << value;
-                    }
-                    RegCloseKey(hDeviceKey);
                 }
-                    RegCloseKey(hkey);
+                else if(result == ERROR_SUCCESS) {
+                    VIAM_SDK_LOG(info) << "value already created on key" << deviceParamsKey << ", skipping."
+                    continue;
+                }
+                else {
+                    VIAM_SDK_LOG(error) << "Error getting the metadata value for key " << deviceParamsKey;
+                    continue;
+                }
+            }
+            RegCloseKey(hDeviceKey);
+            }
                 index++;
             }
+            RegCloseKey(hkey);
     }
     } catch (const std::exception& e) {
         //throw std::runtime_error("GOT EXCEPTION!");
