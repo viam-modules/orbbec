@@ -941,7 +941,7 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
                             reinterpret_cast<const BYTE*>(&value),
                             sizeof(value)
                         );
-                        if result != ERROR_SUCCESS {
+                        if (result != ERROR_SUCCESS) {
                             VIAM_SDK_LOG(error) << "couldn't set the metadata registery value";
                             return;
                         }
