@@ -929,17 +929,22 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
                         );
                         if (result != ERROR_SUCCESS) {
                             VIAM_SDK_LOG(error) << "couldn't open the full device path";
+                            return
                         }
 
                         DWORD value = 5;
                         result = RegSetValueExA(
                             hkey,
                             valueName.c_str(),
-                            0,                       // Reserved
-                            REG_DWORD,               // Value type
+                            0,
+                            REG_DWORD,VAK
                             reinterpret_cast<const BYTE*>(&value),
                             sizeof(value)
                         );
+                        if result != ERROR_SUCCESS {
+                            VIAM_SDK_LOG(error) << "couldn't set the metadata registery value";
+                            return;
+                        }
 
                     }
                     else if (result == ERROR_SUCCESS) {
