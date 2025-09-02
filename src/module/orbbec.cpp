@@ -887,6 +887,7 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
             HKEY hkey;
 
             std::cout << "calling the regopenkey enumerate " << subtree << "\n";
+            try {
             // This opens the subtree (all video/audio devices in the windows device registry)
             if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, subtree.c_str(), 0, KEY_ENUMERATE_SUB_KEYS, &hkey) != ERROR_SUCCESS)
                 VIAM_SDK_LOG(error) << "could not get subkeys";
@@ -925,6 +926,10 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
 
             // RegCloseKey(hKey);
             // return true;
+    } catch (const std::exception& e) {
+        VIAM_SDK_LOG(error) << "error in windows " << e.what();
+        throw std::runtime_error("error" + std::string(e.what()));
+    }
 #endif
     {
         std::lock_guard<std::mutex> lock(devices_by_serial_mu());
