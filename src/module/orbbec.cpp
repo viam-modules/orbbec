@@ -897,19 +897,20 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
             std::cout << "done calling " << subtree << "\n";
             char name[512];
             DWORD nameSize;
-            DWORDe index = 0;
+            DWORD index = 0;
             while (true) {
                 // reset before each call
                 nameSize = sizeof(name);
                 // enumerate all of the keys in the reg folder
                 if (RegEnumKeyExA(hkey, index, name, &nameSize, NULL, NULL, NULL, NULL) != ERROR_SUCCESS) {
-                    VIAM_SDK_ERROR("could not enumerate")
+                    VIAM_SDK_LOG(error) << "could not enumerate";
                     break;
                 }
                 std::string subKeyName(name);
                 if (subKeyName.find("USB#VID_" + intToHex(vid) + "&PID_" + intToHex(pid)) != std::string::npos) {
                     std::cout << "Matched device: " << subKeyName << "\n";
                 }
+                index++;
             }
         }
     }
