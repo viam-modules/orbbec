@@ -563,47 +563,4 @@ viam::sdk::ProtoStruct getDepthWorkingMode(std::shared_ptr<DeviceT>& device, std
     }
 }
 
-template <typename ViamDeviceT>
-viam::sdk::ProtoStruct setDepthWorkingMode(std::unique_ptr<ViamDeviceT>& viam_device,
-                                           viam::sdk::ProtoValue const& value,
-                                           std::string const& command) {
-    if (not value.template is_a<std::string>()) {
-        return {{"error", "Invalid value type for Depth Working Mode. Expected string."}};
-    }
-    auto device = viam_device->device;
-    if (not device) {
-        return {{"error", "Device not found."}};
-    }
-    std::string const mode = value.get_unchecked<std::string>();
-    try {
-        if (device->isPropertySupported(OB_STRUCT_CURRENT_DEPTH_ALG_MODE, OB_PERMISSION_WRITE)) {
-            auto depthModeList = device->getDepthWorkModeList();
-            bool modeFound = false;
-            for (uint32_t i = 0; i < depthModeList->getCount(); i++) {
-                if ((*depthModeList)[i].name == mode) {
-                    modeFound = true;
-                    break;
-                }
-            }
-            if (!modeFound) {
-                std::stringstream error_ss;
-                error_ss << "Depth working mode " << mode << " not found. Available modes are: ";
-                for (uint32_t i = 0; i < depthModeList->getCount(); i++) {
-                    error_ss << (*depthModeList)[i].name << " ";
-                }
-                return {{"error", error_ss.str()}};
-            }
-            device->switchDepthWorkMode(mode.c_str());
-            return getDepthWorkingMode(device, command);
-        } else {
-            return {{"error", "Depth working mode property is not supported."}};
-        }
-    } catch (ob::Error& e) {
-        std::stringstream error_ss;
-        error_ss << "function:" << e.getFunction() << "\nargs:" << e.getArgs() << "\nmessage:" << e.what()
-                 << "\ntype:" << e.getExceptionType() << std::endl;
-        return {{"error", error_ss.str()}};
-    }
-}
-
 }  // namespace depth_sensor_control

@@ -339,6 +339,58 @@ void displayPresets(std::shared_ptr<ob::Device> device) {
     VIAM_SDK_LOG(info) << "Current PresetName: " << device->getCurrentPresetName() << std::endl;
 }
 
+void frameCallback(std::string const& serialNumber, std::shared_ptr<ob::FrameSet> frameSet) {
+    if (frameSet->getCount() != 2) {
+        std::cerr << "got non 2 frame count: " << frameSet->getCount() << "\n";
+        return;
+    }
+    std::shared_ptr<ob::Frame> color = frameSet->getFrame(OB_FRAME_COLOR);
+    if (color == nullptr) {
+        std::cerr << "no color frame\n" << frameSet->getCount() << "\n";
+        return;
+    }
+
+    std::shared_ptr<ob::Frame> depth = frameSet->getFrame(OB_FRAME_DEPTH);
+    if (depth == nullptr) {
+        std::cerr << "no depth frame\n";
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(frame_set_by_serial_mu());
+    uint64_t nowUs = getNowUs();
+    uint64_t diff = timeSinceFrameUs(nowUs, color->getSystemTimeStampUs());
+    if (diff > maxFrameAgeUs) {
+        std::cerr << "color frame is " << diff << "us older than now, nowUs: " << nowUs << " frameTimeUs " << color->getSystemTimeStampUs()
+                  << "\n";
+    }
+    diff = timeSinceFrameUs(nowUs, depth->getSystemTimeStampUs());
+    if (diff > maxFrameAgeUs) {
+        std::cerr << "depth frame is " << diff << "us older than now, nowUs: " << nowUs << " frameTimeUs " << depth->getSystemTimeStampUs()
+                  << "\n";
+    }
+
+    auto it = frame_set_by_serial().find(serialNumber);
+    if (it != frame_set_by_serial().end()) {
+        std::shared_ptr<ob::Frame> prevColor = it->second->getFrame(OB_FRAME_COLOR);
+        std::shared_ptr<ob::Frame> prevDepth = it->second->getFrame(OB_FRAME_DEPTH);
+        if (prevColor != nullptr && prevDepth != nullptr) {
+            diff = timeSinceFrameUs(color->getSystemTimeStampUs(), prevColor->getSystemTimeStampUs());
+            if (diff > maxFrameAgeUs) {
+                std::cerr << "previous color frame is " << diff
+                          << "us older than current color frame. previousUs: " << prevColor->getSystemTimeStampUs()
+                          << " currentUs: " << color->getSystemTimeStampUs() << "\n";
+            }
+            diff = timeSinceFrameUs(depth->getSystemTimeStampUs(), prevDepth->getSystemTimeStampUs());
+            if (diff > maxFrameAgeUs) {
+                std::cerr << "previous depth frame is " << diff
+                          << "us older than current depth frame. previousUs: " << prevDepth->getSystemTimeStampUs()
+                          << " currentUs: " << depth->getSystemTimeStampUs() << "\n";
+            }
+        }
+    }
+    frame_set_by_serial()[serialNumber] = frameSet;
+};
+
 void startDevice(std::string serialNumber, std::string resourceName) {
     VIAM_SDK_LOG(info) << service_name << ": starting device " << serialNumber;
     std::lock_guard<std::mutex> lock(devices_by_serial_mu());
@@ -357,59 +409,7 @@ void startDevice(std::string serialNumber, std::string resourceName) {
         throw std::invalid_argument(buffer.str());
     }
 
-    auto frameCallback = [serialNumber](std::shared_ptr<ob::FrameSet> frameSet) {
-        if (frameSet->getCount() != 2) {
-            std::cerr << "got non 2 frame count: " << frameSet->getCount() << "\n";
-            return;
-        }
-        std::shared_ptr<ob::Frame> color = frameSet->getFrame(OB_FRAME_COLOR);
-        if (color == nullptr) {
-            std::cerr << "no color frame\n" << frameSet->getCount() << "\n";
-            return;
-        }
-
-        std::shared_ptr<ob::Frame> depth = frameSet->getFrame(OB_FRAME_DEPTH);
-        if (depth == nullptr) {
-            std::cerr << "no depth frame\n";
-            return;
-        }
-
-        std::lock_guard<std::mutex> lock(frame_set_by_serial_mu());
-        uint64_t nowUs = getNowUs();
-        uint64_t diff = timeSinceFrameUs(nowUs, color->getSystemTimeStampUs());
-        if (diff > maxFrameAgeUs) {
-            std::cerr << "color frame is " << diff << "us older than now, nowUs: " << nowUs << " frameTimeUs "
-                      << color->getSystemTimeStampUs() << "\n";
-        }
-        diff = timeSinceFrameUs(nowUs, depth->getSystemTimeStampUs());
-        if (diff > maxFrameAgeUs) {
-            std::cerr << "depth frame is " << diff << "us older than now, nowUs: " << nowUs << " frameTimeUs "
-                      << depth->getSystemTimeStampUs() << "\n";
-        }
-
-        auto it = frame_set_by_serial().find(serialNumber);
-        if (it != frame_set_by_serial().end()) {
-            std::shared_ptr<ob::Frame> prevColor = it->second->getFrame(OB_FRAME_COLOR);
-            std::shared_ptr<ob::Frame> prevDepth = it->second->getFrame(OB_FRAME_DEPTH);
-            if (prevColor != nullptr && prevDepth != nullptr) {
-                diff = timeSinceFrameUs(color->getSystemTimeStampUs(), prevColor->getSystemTimeStampUs());
-                if (diff > maxFrameAgeUs) {
-                    std::cerr << "previous color frame is " << diff
-                              << "us older than current color frame. previousUs: " << prevColor->getSystemTimeStampUs()
-                              << " currentUs: " << color->getSystemTimeStampUs() << "\n";
-                }
-                diff = timeSinceFrameUs(depth->getSystemTimeStampUs(), prevDepth->getSystemTimeStampUs());
-                if (diff > maxFrameAgeUs) {
-                    std::cerr << "previous depth frame is " << diff
-                              << "us older than current depth frame. previousUs: " << prevDepth->getSystemTimeStampUs()
-                              << " currentUs: " << depth->getSystemTimeStampUs() << "\n";
-                }
-            }
-        }
-        frame_set_by_serial()[serialNumber] = frameSet;
-    };
-
-    my_dev->pipe->start(my_dev->config, std::move(frameCallback));
+    my_dev->pipe->start(my_dev->config, [serialNumber](std::shared_ptr<ob::FrameSet> frameSet) { frameCallback(serialNumber, frameSet); });
     my_dev->started = true;
 
     displayPresets(my_dev->device);
@@ -814,6 +814,66 @@ vsdk::ProtoStruct getCameraParams(std::shared_ptr<ob::Pipeline> pipe) {
     return result;
 }
 
+viam::sdk::ProtoStruct setDepthWorkingMode(std::unique_ptr<ViamOBDevice>& viam_device,
+                                           viam::sdk::ProtoValue const& value,
+                                           std::string const& serialNumber,
+                                           std::string const& command) {
+    if (not value.is_a<std::string>()) {
+        return {{"error", "Invalid value type for Depth Working Mode. Expected string."}};
+    }
+    auto device = viam_device->device;
+    if (not device) {
+        return {{"error", "Device not found."}};
+    }
+    std::string const mode = value.get_unchecked<std::string>();
+    if (mode == "In-scene Calibration") {
+        return {{"error", "In-scene Calibration mode is apparently not supported by the SDK."}};
+    }
+    try {
+        if (device->isPropertySupported(OB_STRUCT_CURRENT_DEPTH_ALG_MODE, OB_PERMISSION_WRITE)) {
+            auto depthModeList = device->getDepthWorkModeList();
+            bool modeFound = false;
+            for (uint32_t i = 0; i < depthModeList->getCount(); i++) {
+                if ((*depthModeList)[i].name == mode) {
+                    modeFound = true;
+                    break;
+                }
+            }
+            if (!modeFound) {
+                std::stringstream error_ss;
+                error_ss << "Depth working mode " << mode << " not found. Available modes are: ";
+                for (uint32_t i = 0; i < depthModeList->getCount(); i++) {
+                    error_ss << (*depthModeList)[i].name << " ";
+                }
+                return {{"error", error_ss.str()}};
+            }
+            viam_device->started = false;
+            viam_device->pipe->stop();
+
+            device->switchDepthWorkMode(mode.c_str());
+
+            std::shared_ptr<ob::Pipeline> pipe = std::make_shared<ob::Pipeline>(device);
+            std::shared_ptr<ob::Config> config = createHwD2CAlignConfig(pipe);
+
+            pipe->enableFrameSync();
+            viam_device->pipe = pipe;
+            viam_device->config = config;
+
+            viam_device->pipe->start(config,
+                                     [serialNumber](std::shared_ptr<ob::FrameSet> frameSet) { frameCallback(serialNumber, frameSet); });
+            viam_device->started = true;
+            return depth_sensor_control::getDepthWorkingMode(device, command);
+        } else {
+            return {{"error", "Depth working mode property is not supported."}};
+        }
+    } catch (ob::Error& e) {
+        std::stringstream error_ss;
+        error_ss << "function:" << e.getFunction() << "\nargs:" << e.getArgs() << "\nmessage:" << e.what()
+                 << "\ntype:" << e.getExceptionType() << std::endl;
+        return {{"error", error_ss.str()}};
+    }
+}
+
 vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
     try {
         for (auto const& [key, value] : command) {
@@ -945,7 +1005,7 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
                 }
 
                 if (key == "set_depth_working_mode") {
-                    return depth_sensor_control::setDepthWorkingMode(my_dev, value, key);
+                    return setDepthWorkingMode(my_dev, value, serialNumber, key);
                 }
 
                 if (key == "get_camera_params") {
