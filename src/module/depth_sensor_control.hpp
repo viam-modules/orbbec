@@ -202,17 +202,22 @@ viam::sdk::ProtoStruct applyPostProcessDepthFilters(std::unique_ptr<ViamDeviceT>
 }
 
 template <typename DeviceT>
-viam::sdk::ProtoStruct getDepthSoftFilter(std::shared_ptr<DeviceT>& device, std::string const& command) {
+viam::sdk::ProtoStruct getDepthNoiseRemovalFilter(std::shared_ptr<DeviceT>& device, std::string const& command) {
     if (not device) {
         return viam::sdk::ProtoStruct{{"error", "Device not found"}};
     }
-    return {{command, device->getBoolProperty(OB_PROP_DEPTH_NOISE_REMOVAL_FILTER_BOOL)}};
+    auto range = device->getBoolPropertyRange(OB_PROP_DEPTH_NOISE_REMOVAL_FILTER_BOOL);
+    viam::sdk::ProtoStruct properties;
+    properties["current"] = range.cur;
+    properties["default"] = range.def;
+    properties["name"] = "OB_PROP_DEPTH_NOISE_REMOVAL_FILTER_BOOL";
+    return {{command, properties}};
 }
 
 template <typename DeviceT>
-viam::sdk::ProtoStruct setDepthSoftFilter(std::shared_ptr<DeviceT>& device,
-                                          viam::sdk::ProtoValue const& value,
-                                          std::string const& command) {
+viam::sdk::ProtoStruct setDepthNoiseRemovalFilter(std::shared_ptr<DeviceT>& device,
+                                                  viam::sdk::ProtoValue const& value,
+                                                  std::string const& command) {
     if (not device) {
         return viam::sdk::ProtoStruct{{"error", "Device not found"}};
     }
@@ -225,17 +230,16 @@ viam::sdk::ProtoStruct setDepthSoftFilter(std::shared_ptr<DeviceT>& device,
         if (device->isPropertySupported(OB_PROP_DEPTH_NOISE_REMOVAL_FILTER_BOOL, OB_PERMISSION_WRITE)) {
             device->setBoolProperty(OB_PROP_DEPTH_NOISE_REMOVAL_FILTER_BOOL, enable);
             VIAM_SDK_LOG(info) << "[setDepthSoftFilter] " << (enable ? "enabled" : "disabled") << " depth soft filter" << std::endl;
+            return getDepthNoiseRemovalFilter(device, command);
         } else {
             VIAM_SDK_LOG(error) << "[setDepthSoftFilter] OB_PROP_DEPTH_NOISE_REMOVAL_FILTER_BOOL is not supported";
+            return viam::sdk::ProtoStruct{{"error", "property not supported"}};
         }
     } catch (ob::Error& e) {
         VIAM_SDK_LOG(error) << "function:" << e.getFunction() << "\nargs:" << e.getArgs() << "\nmessage:" << e.what()
                             << "\ntype:" << e.getExceptionType() << std::endl;
         return viam::sdk::ProtoStruct{{"error", e.what()}};
     }
-
-    depth_sensor_control::setDepthSoftFilter(device, value.template get_unchecked<bool>(), command);
-    return getDepthSoftFilter(device, command);
 }
 
 template <typename DeviceT>
