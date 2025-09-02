@@ -920,7 +920,7 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
                 std::string valueName = "MetadataBufferSizeInKB0";
                 HKEY hDeviceKey;
                 // open the device parameters key (folder)
-                result = RegQueryValueExA(
+                result = RegOpenKeyExA(
                     HKEY_LOCAL_MACHINE,
                     deviceParamsKey.c_str(),
                     0
@@ -928,7 +928,7 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
                     &hDeviceKey
                 );
                 if (result != ERROR_SUCCESS) {
-                    VIAM_SDK_LOG(error) << "Couldn't open device parameters key: " << deviceParamsPath;
+                    VIAM_SDK_LOG(error) << "Couldn't open device parameters key: " << deviceParamsKey;
                     continue;
                 }
                 // check if the value metadata exists
