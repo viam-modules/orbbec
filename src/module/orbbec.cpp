@@ -916,11 +916,11 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
                 }
 
 
-                std::string deviceParamsPath = subtree + "\\" + subKeyName + "\\#GLOBAL\\Device Parameters";
+                std::string deviceParamsKey = subtree + "\\" + subKeyName + "\\#GLOBAL\\Device Parameters";
                 std::string valueName = "MetadataBufferSizeInKB0";
                 HKEY hDeviceKey;
                 // open the device parameters key (folder)
-                LONG result = RegQueryValueExA(
+                result = RegQueryValueExA(
                     HKEY_LOCAL_MACHINE,
                     deviceParamsKey.c_str(),
                     0
@@ -935,7 +935,7 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
                 DWORD data;
                 DWORD dataSize = sizeof(data);
                 result = RegQueryValueExA(hDeviceKey, valueName.c_str(), nullptr, nullptr, reinterpret_cast<BYTE*>(&data), &dataSize);
-                if result == ERROR_FILE_NOT_FOUND {
+                if (result == ERROR_FILE_NOT_FOUND) {
                         // value does not exist yet, create it.
                         VIAM_SDK_LOG(info) << "VALUE DOES NOT YET EXIST " << result;
                         DWORD value = 5;
