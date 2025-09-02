@@ -415,6 +415,23 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
     return nullptr;
 }
 
+void displayPresets(std::shared_ptr<ob::Device> device) {
+    std::shared_ptr<ob::DevicePresetList> presetLists = device->getAvailablePresetList();
+    if (presetLists && presetLists->getCount() == 0) {
+        VIAM_SDK_LOG(error) << "The current device does not support preset mode" << std::endl;
+        return;
+    }
+
+    VIAM_SDK_LOG(info) << "Available Presets:" << std::endl;
+    for (uint32_t index = 0; index < presetLists->getCount(); index++) {
+        // Print available preset name.
+        VIAM_SDK_LOG(info) << " - " << index << "." << presetLists->getName(index) << std::endl;
+    }
+
+    // Print current preset name.
+    VIAM_SDK_LOG(info) << "Current PresetName: " << device->getCurrentPresetName() << std::endl;
+}
+
 void setDepthSoftFilter(std::shared_ptr<ob::Device> device, bool enable) {
     try {
         if (device->isPropertySupported(OB_PROP_DEPTH_NOISE_REMOVAL_FILTER_BOOL, OB_PERMISSION_WRITE)) {
@@ -1400,6 +1417,67 @@ vsdk::ProtoStruct getCameraParams(std::shared_ptr<ob::Pipeline> pipe) {
     return result;
 }
 
+viam::sdk::ProtoStruct setDepthWorkingMode(std::unique_ptr<ViamOBDevice>& viam_device,
+                                           viam::sdk::ProtoValue const& value,
+                                           std::string const& serialNumber,
+                                           std::string const& command) {
+    if (not value.is_a<std::string>()) {
+        return {{"error", "Invalid value type for Depth Working Mode. Expected string."}};
+    }
+    auto device = viam_device->device;
+    if (not device) {
+        return {{"error", "Device not found."}};
+    }
+    std::string const mode = value.get_unchecked<std::string>();
+    if (mode == "In-scene Calibration") {
+        return {{"error", "In-scene Calibration mode is apparently not supported by the SDK."}};
+    }
+    try {
+        if (device->isPropertySupported(OB_STRUCT_CURRENT_DEPTH_ALG_MODE, OB_PERMISSION_WRITE)) {
+            auto depthModeList = device->getDepthWorkModeList();
+            bool modeFound = false;
+            for (uint32_t i = 0; i < depthModeList->getCount(); i++) {
+                if ((*depthModeList)[i].name == mode) {
+                    modeFound = true;
+                    break;
+                }
+            }
+            if (!modeFound) {
+                std::stringstream error_ss;
+                error_ss << "Depth working mode " << mode << " not found. Available modes are: ";
+                for (uint32_t i = 0; i < depthModeList->getCount(); i++) {
+                    error_ss << (*depthModeList)[i].name << " ";
+                }
+                return {{"error", error_ss.str()}};
+            }
+            viam_device->started = false;
+            viam_device->pipe->stop();
+
+            device->switchDepthWorkMode(mode.c_str());
+            auto resolution_opt = config_by_serial().at(serialNumber).device_resolution;
+            auto format_opt = config_by_serial().at(serialNumber).device_format;
+
+            std::shared_ptr<ob::Pipeline> pipe = std::make_shared<ob::Pipeline>(device);
+            std::shared_ptr<ob::Config> config = createHwD2CAlignConfig(pipe, resolution_opt, format_opt);
+
+            pipe->enableFrameSync();
+            viam_device->pipe = pipe;
+            viam_device->config = config;
+
+            viam_device->pipe->start(config, [serialNumber](std::shared_ptr<ob::FrameSet> frameSet) { frameCallback(serialNumber); });
+            viam_device->started = true;
+            return depth_sensor_control::getDepthWorkingMode(device, command);
+        } else {
+            return {{"error", "Depth working mode property is not supported."}};
+        }
+    } catch (ob::Error& e) {
+        std::stringstream error_ss;
+        error_ss << "function:" << e.getFunction() << "\nargs:" << e.getArgs() << "\nmessage:" << e.what()
+                 << "\ntype:" << e.getExceptionType() << std::endl;
+        return {{"error", error_ss.str()}};
+    }
+}
+
 vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
     try {
         viam::sdk::ProtoStruct resp = viam::sdk::ProtoStruct{};
@@ -1535,58 +1613,58 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
                     if (key == "set_depth_gain") {
                         return depth_sensor_control::setDepthGain(my_dev->device, value);
                     }
-                }
 
-                if (key == "get_depth_auto_exposure") {
-                    return depth_sensor_control::getDepthAutoExposure(my_dev->device, key);
-                }
+                    if (key == "get_depth_auto_exposure") {
+                        return depth_sensor_control::getDepthAutoExposure(my_dev->device, key);
+                    }
 
-                if (key == "set_depth_auto_exposure") {
-                    return depth_sensor_control::setDepthAutoExposure(my_dev->device, value, key);
-                }
+                    if (key == "set_depth_auto_exposure") {
+                        return depth_sensor_control::setDepthAutoExposure(my_dev->device, value, key);
+                    }
 
-                if (key == "get_laser") {
-                    return depth_sensor_control::getLaser(my_dev->device, key);
-                }
+                    if (key == "get_laser") {
+                        return depth_sensor_control::getLaser(my_dev->device, key);
+                    }
 
-                if (key == "set_laser") {
-                    return depth_sensor_control::setLaser(my_dev->device, value, key);
-                }
+                    if (key == "set_laser") {
+                        return depth_sensor_control::setLaser(my_dev->device, value, key);
+                    }
 
-                if (key == "get_depth_mirror") {
-                    return depth_sensor_control::getDepthMirror(my_dev->device, key);
-                }
+                    if (key == "get_depth_mirror") {
+                        return depth_sensor_control::getDepthMirror(my_dev->device, key);
+                    }
 
-                if (key == "set_depth_mirror") {
-                    return depth_sensor_control::setDepthMirror(my_dev->device, value, key);
-                }
+                    if (key == "set_depth_mirror") {
+                        return depth_sensor_control::setDepthMirror(my_dev->device, value, key);
+                    }
 
-                if (key == "get_depth_exposure") {
-                    return depth_sensor_control::getDepthExposure(my_dev->device, key);
-                }
+                    if (key == "get_depth_exposure") {
+                        return depth_sensor_control::getDepthExposure(my_dev->device, key);
+                    }
 
-                if (key == "set_depth_exposure") {
-                    return depth_sensor_control::setDepthExposure(my_dev->device, value, key);
-                }
+                    if (key == "set_depth_exposure") {
+                        return depth_sensor_control::setDepthExposure(my_dev->device, value, key);
+                    }
 
-                if (key == "get_depth_unit") {
-                    return depth_sensor_control::getDepthUnit(my_dev->device, key);
-                }
+                    if (key == "get_depth_unit") {
+                        return depth_sensor_control::getDepthUnit(my_dev->device, key);
+                    }
 
-                if (key == "set_depth_unit") {
-                    return depth_sensor_control::setDepthUnit(my_dev->device, value, key);
-                }
+                    if (key == "set_depth_unit") {
+                        return depth_sensor_control::setDepthUnit(my_dev->device, value, key);
+                    }
 
-                if (key == "get_depth_working_mode") {
-                    return depth_sensor_control::getDepthWorkingMode(my_dev->device, key);
-                }
+                    if (key == "get_depth_working_mode") {
+                        return depth_sensor_control::getDepthWorkingMode(my_dev->device, key);
+                    }
 
-                if (key == "set_depth_working_mode") {
-                    return depth_sensor_control::setDepthWorkingMode(my_dev, value, key);
-                }
+                    if (key == "set_depth_working_mode") {
+                        return setDepthWorkingMode(my_dev, value, serialNumber, key);
+                    }
 
-                if (key == "get_camera_params") {
-                    return getCameraParams(my_dev->pipe);
+                    if (key == "get_camera_params") {
+                        return getCameraParams(my_dev->pipe);
+                    }
                 }
             }
         }
