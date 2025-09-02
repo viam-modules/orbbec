@@ -911,6 +911,22 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
                 if (subKeyName.find("USB#VID_" + intToHex(vid) + "&PID_" + intToHex(pid)) != std::string::npos) {
                     std::cout << "Matched device: " << subKeyName << "\n";
                 }
+
+
+                std::string deviceParamsPath = classKeyPath + "\\" + subKeyName + "\\#GLOBAL\\Device Parameters";
+                std::string key1 = deviceParamsPath + "\\MetadataBufferSizeInKB0"
+                LONG result = RegOpenKeyExA(HKEY_LOCAL_MACHINE, key1.c_str(), 0, KEY_READ, &hkey)
+                    if (result == ERROR_FILE_NOT_FOUND) {
+                        // value does not exist yet, add it.
+                        VIAM_SDK_LOG(info) << "VALUE DOES NOT YET EXIST " << result;
+                    }
+                    else if (result == ERROR_SUCCESS) {
+                        RegCloseKey(hkey);   // key exists, clean up
+                    } else {
+                        VIAM_SDK_LOG(error) << "RegOpenKeyExA failed with error code " << result;
+                        return;
+                    }
+                }
                 index++;
             }
         }
