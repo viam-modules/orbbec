@@ -874,6 +874,88 @@ viam::sdk::ProtoStruct setDepthWorkingMode(std::unique_ptr<ViamOBDevice>& viam_d
     }
 }
 
+bool isPrimaryTypeProperty(OBPropertyItem propertyItem) {
+    return propertyItem.type == OB_INT_PROPERTY || propertyItem.type == OB_FLOAT_PROPERTY || propertyItem.type == OB_BOOL_PROPERTY;
+}
+
+std::string permissionToString(OBPermissionType permission) {
+    switch (permission) {
+        case OB_PERMISSION_DENY:
+            return "deny";
+        case OB_PERMISSION_READ:
+            return "read";
+        case OB_PERMISSION_WRITE:
+            return "write";
+        case OB_PERMISSION_READ_WRITE:
+            return "read_write";
+        case OB_PERMISSION_ANY:
+            return "any";
+        default:
+            return "unknown";
+    }
+}
+
+std::string propertyTypeToString(OBPropertyType type) {
+    switch (type) {
+        case OB_BOOL_PROPERTY:
+            return "bool";
+        case OB_INT_PROPERTY:
+            return "int";
+        case OB_FLOAT_PROPERTY:
+            return "float";
+        case OB_STRUCT_PROPERTY:
+            return "struct";
+        default:
+            return "unknown";
+    }
+}
+
+// Get property list
+vsdk::ProtoStruct getDeviceProperties(std::shared_ptr<ob::Device> device) {
+    vsdk::ProtoStruct properties_list;
+    uint32_t size = device->getSupportedPropertyCount();
+    for (uint32_t i = 0; i < size; i++) {
+        OBPropertyItem property_item = device->getSupportedProperty(i);
+        if (/*isPrimaryTypeProperty(property_item) && property_item.permission != OB_PERMISSION_DENY*/ true) {
+            vsdk::ProtoStruct properties;
+            properties["id"] = property_item.id;
+            properties["type"] = propertyTypeToString(property_item.type);
+            properties["permission"] = permissionToString(property_item.permission);
+            if (property_item.type == OB_INT_PROPERTY) {
+                OBIntPropertyRange valueRange = device->getIntPropertyRange(property_item.id);
+                properties["current"] = valueRange.cur;
+                properties["min"] = valueRange.min;
+                properties["max"] = valueRange.max;
+                properties["step"] = valueRange.step;
+                properties["default"] = valueRange.def;
+            } else if (property_item.type == OB_FLOAT_PROPERTY) {
+                OBFloatPropertyRange valueRange = device->getFloatPropertyRange(property_item.id);
+                properties["current"] = valueRange.cur;
+                properties["min"] = valueRange.min;
+                properties["max"] = valueRange.max;
+                properties["step"] = valueRange.step;
+                properties["default"] = valueRange.def;
+            } else if (property_item.type == OB_BOOL_PROPERTY) {
+                OBBoolPropertyRange valueRange = device->getBoolPropertyRange(property_item.id);
+                properties["current"] = valueRange.cur;
+                properties["default"] = valueRange.def;
+            } else if (property_item.type == OB_STRUCT_PROPERTY) {
+                // For struct properties, we can add more detailed handling if needed
+                // uint32_t bufferSize = 65536;  // Choose a size you expect to be sufficient
+                // std::vector<uint8_t> buffer(bufferSize);
+                // device->getStructuredData(property_item.id, buffer.data(), &bufferSize);
+                // VIAM_SDK_LOG(info) << "Retrieved structured data for property " << property_item.id << ", size: " << bufferSize;
+                properties["current_value"] = "struct_property";
+            } else {
+                properties["current_value"] = "unknown_type";
+            }
+
+            properties_list[property_item.name] = properties;
+        }
+    }
+    return properties_list;
+}
+
 vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
     try {
         for (auto const& [key, value] : command) {
@@ -1008,6 +1090,9 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
                     return setDepthWorkingMode(my_dev, value, serialNumber, key);
                 }
 
+                if (key == "get_device_properties") {
+                    return getDeviceProperties(my_dev->device);
+                }
                 if (key == "get_camera_params") {
                     return getCameraParams(my_dev->pipe);
                 }
