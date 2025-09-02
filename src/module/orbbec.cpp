@@ -37,7 +37,7 @@
 #include <viam/sdk/rpc/server.hpp>
 
 #include <libobsensor/ObSensor.hpp>
-#include <winreg.h>
+#include <windows.h>
 
 namespace orbbec {
 
