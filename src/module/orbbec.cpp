@@ -914,11 +914,33 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
 
 
                 std::string deviceParamsPath = subtree + "\\" + subKeyName + "\\#GLOBAL\\Device Parameters";
+                std::string valueName = "MetadataBufferSizeInKB0"
                 std::string key1 = deviceParamsPath + "\\MetadataBufferSizeInKB0";
                 LONG result = RegOpenKeyExA(HKEY_LOCAL_MACHINE, key1.c_str(), 0, KEY_READ, &hkey);
                     if (result == ERROR_FILE_NOT_FOUND) {
                         // value does not exist yet, add it.
                         VIAM_SDK_LOG(info) << "VALUE DOES NOT YET EXIST " << result;
+                        LONG result = RegOpenKeyExA(
+                            HKEY_LOCAL_MACHINE,
+                            deviceParamsPath.c_str(),
+                            0,
+                            KEY_SET_VALUE,
+                            &hkey
+                        );
+                        if (result != ERROR_SUCCESS) {
+                            VIAM_SDK_LOG(error) << "couldn't open the full device path";
+                        }
+
+                        DWORD value = 5;
+                        result = RegSetValueExA(
+                            hkey,
+                            valueName,
+                            0,                       // Reserved
+                            REG_DWORD,               // Value type
+                            reinterpret_cast<const BYTE*>(&value),
+                            sizeof(value)
+                        );
+
                     }
                     else if (result == ERROR_SUCCESS) {
                         RegCloseKey(hkey);   // key exists, clean up
