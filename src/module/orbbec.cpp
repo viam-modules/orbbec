@@ -923,7 +923,7 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
                 result = RegOpenKeyExA(
                     HKEY_LOCAL_MACHINE,
                     deviceParamsKey.c_str(),
-                    0
+                    0,
                     KEY_READ | KEY_SET_VALUE,
                     &hDeviceKey
                 );
