@@ -906,6 +906,7 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
                     VIAM_SDK_LOG(error) << "could not enumerate";
                     break;
                 }
+                std::cout <<  "name is " << name << "\n";
                 std::string subKeyName(name);
                 if (subKeyName.find("USB#VID_" + intToHex(vid) + "&PID_" + intToHex(pid)) != std::string::npos) {
                     std::cout << "Matched device: " << subKeyName << "\n";
