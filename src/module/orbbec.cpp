@@ -873,8 +873,8 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
             "SYSTEM\\CurrentControlSet\\Control\\DeviceClasses\\{65E8773D-8F56-11D0-A3B9-00A0C9223196}"
         };
 
-        uint16_t vid = dev->getDeviceInfo().vid();
-        uint16_t pid = dev->getDeviceInfo().pid();
+        uint16_t vid = dev->getDeviceInfo()->vid();
+        uint16_t pid = dev->getDeviceInfo()->pid();
 
         std::string baseDeviceId = "##?#USB#VID_" + intToHex(vid) + "&PID_" + intToHex(pid);
         std::vector<std::string> interfaces = { "MI_00", "MI_04" }; // Depth and Color
@@ -890,9 +890,9 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
                 VIAM_SDK_LOG(error) << "could not get subkeys";
                 throw("could not open the subtee value");
             }
-            DWORD existing = 0;
-            char name[512];
-            DDWORD nameSize;
+            // DWORD existing = 0;
+            // char name[512];
+            // DDWORD nameSize;
             // while (true) {
             //     nameSize = sizeof(name);
                 // enumerate all of the keys in the reg folder
