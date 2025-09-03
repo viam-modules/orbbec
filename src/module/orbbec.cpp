@@ -13,7 +13,9 @@
 // limitations under the License.
 
 #include "orbbec.hpp"
+#ifdef _WIN32
 #include <windows.h>
+#endif
 
 #include <math.h>
 #include <chrono>
@@ -906,7 +908,6 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
                     VIAM_SDK_LOG(error) << "Enumeration failed: " << result;
                     break;
                 }
-                std::cout <<  "name is " << name << "\n";
                 std::string subKeyName(name);
                 if (subKeyName.find("USB#VID_" + intToHex(vid) + "&PID_" + intToHex(pid)) == std::string::npos) {
                     // not a match for an orbbec device, go to next key
@@ -936,8 +937,7 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
                 // find the value of the bufferSize if it exists
                 result = RegQueryValueExA(hDeviceKey, valueName.c_str(), nullptr, nullptr, reinterpret_cast<BYTE*>(&data), &dataSize);
                 if (result == ERROR_FILE_NOT_FOUND) {
-                        // value does not exist yet, create it.
-                        VIAM_SDK_LOG(info) << "VALUE DOES NOT YET EXIST " << result;
+                        // value does not exist yet, create it
                         DWORD value = 5;
                         result = RegSetValueExA(
                             hDeviceKey,
