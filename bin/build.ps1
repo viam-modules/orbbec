@@ -1,5 +1,8 @@
 $ErrorActionPreference = "Stop"
 
+# Ensure that things installed with choco are visible to us
+Import-Module $env:ChocolateyInstall\helpers\chocolateyProfile.psm1
+refreshenv
 
 # remove any prior build
 Remove-Item -Recurse -Force build-conan -ErrorAction SilentlyContinue
@@ -30,6 +33,4 @@ conan build . `
       -s:a build_type=Release `
       -s:a "&:build_type=RelWithDebInfo" `
       -s:a compiler.cppstd=17 `
-
-
 
