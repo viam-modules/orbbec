@@ -25,6 +25,7 @@ The following attribute template can be used to configure this model:
 You can use DoCommand to upgrade the firmware of your device to the required version.
 
 Update the firmware to v2.8.20. If running on macOS, you must unplug and replug the device after this returns.
+**WARNING**: Do not unplug the device while the firmware update is in progress.
 
 {
   "update_firmware": ""

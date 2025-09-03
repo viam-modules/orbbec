@@ -53,9 +53,9 @@ const std::string kColorMimeTypeJPEG = "image/jpeg";
 const std::string kDepthSourceName = "depth";
 const std::string kDepthMimeTypeViamDep = "image/vnd.viam.dep";
 const std::string kPcdMimeType = "pointcloud/pcd";
-// If the firmwareUrl is changed to a new version, also change the requiredFirmwareVer const.
+// If the firmwareUrl is changed to a new version, also change the minFirmwareVer const.
 const std::string firmwareUrl = "https://orbbec-debian-repos-aws.s3.amazonaws.com/product/Astra2_Release_2.8.20.zip";
-const std::string requiredFirmwareVer = "2.8.20";
+const std::string minFirmwareVer = "2.8.20";
 constexpr char service_name[] = "viam_orbbec";
 const float mmToMeterMultiple = 0.001;
 const uint64_t maxFrameAgeUs = 1e6;  // time until a frame is considered stale, in microseconds (equal to 1 sec)
@@ -146,11 +146,15 @@ void checkFirmwareVersion(const std::string& serial_number) {
     auto info = device->device->getDeviceInfo();
     std::string version = info->firmwareVersion();
 
-    if (version.find(requiredFirmwareVer) == std::string::npos) {
-        std::ostringstream buffer;
-        buffer << "Unsupported firmware version. Required: " << requiredFirmwareVer << ", Current: " << version
-               << ". Call update_firmware do command to upgrade.";
-        throw std::runtime_error(buffer.str());
+    int major = 0, minor = 0, patch = 0;
+    int requiredMajor = 0, requiredMinor = 0, requiredPatch = 0;
+    // ignore any trailing text in the case of a beta or RC version
+    sscanf(version.c_str(), "%d.%d.%d*s", &major, &minor, &patch);
+    sscanf(minFirmwareVer.c_str(), "%d.%d.%d", &requiredMajor, &requiredMinor, &requiredPatch);
+    if ((major < requiredMajor) || (major == requiredMajor && minor < requiredMinor) ||
+        (major == requiredMajor && minor == requiredMinor && patch < requiredPatch)) {
+        throw std::runtime_error("Unsupported firmware version. Required: >= 2.8.20, Current: " + version +
+                                 ". Call update_firmware command to upgrade.");
     }
 }
 
@@ -928,9 +932,9 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
                 std::unique_ptr<ViamOBDevice>& dev = search->second;
                 std::shared_ptr<ob::DeviceInfo> info = dev->device->getDeviceInfo();
                 std::string version = info->firmwareVersion();
-                if (version.find(requiredFirmwareVer) != std::string::npos) {
+                if (version.find(minFirmwareVer) != std::string::npos) {
                     std::ostringstream buffer;
-                    buffer << "device firmware already on required version " << requiredFirmwareVer;
+                    buffer << "device firmware already on version " << minFirmwareVer;
                     resp.emplace(firmware_key, buffer.str());
                     break;
                 }
