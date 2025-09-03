@@ -875,7 +875,7 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
 
         uint16_t vid = dev->getDeviceInfo()->vid();
         uint16_t pid = dev->getDeviceInfo()->pid();
-        s std::string baseDeviceId = "##?#USB#VID_" + intToHex(vid) + "&PID_" + intToHex(pid);
+        std::string baseDeviceId = "##?#USB#VID_" + intToHex(vid) + "&PID_" + intToHex(pid);
 
         for (const auto& subtree : searchTrees) {
             // Open the device registry key
