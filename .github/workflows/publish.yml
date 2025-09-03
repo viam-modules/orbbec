@@ -3,7 +3,7 @@ name: Build & publish module to registry
 on:
   release:
     types: [published]
-  workflow_trigger:
+  workflow_dispatch:
 
 jobs:
   build:
