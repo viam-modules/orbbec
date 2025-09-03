@@ -14,7 +14,6 @@ add_executable(orbbec-module src/module/main.cpp src/module/orbbec.cpp src/modul
 
 set(CMAKE_OSX_DEPLOYMENT_TARGET "14.5")
 set(OrbbecSDK_DIR  "${ORBBEC_SDK_DIR}/lib")
-include_directories("${ORBBEC_SDK_DIR}/include")
 
 find_package(OrbbecSDK REQUIRED)
 find_package(viam-cpp-sdk REQUIRED)
