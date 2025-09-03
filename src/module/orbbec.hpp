@@ -31,6 +31,11 @@ class Orbbec final : public viam::sdk::Camera, public viam::sdk::Reconfigurable 
     properties get_properties() override;
     std::vector<viam::sdk::GeometryConfig> get_geometries(const viam::sdk::ProtoStruct& extra) override;
 
+    // Getter for firmware version
+    std::string get_firmware_version() const {
+        return firmware_version_;
+    }
+
     static std::vector<std::string> validate(viam::sdk::ResourceConfig cfg);
     static viam::sdk::GeometryConfig geometry;
     static viam::sdk::Model model;
@@ -39,6 +44,7 @@ class Orbbec final : public viam::sdk::Camera, public viam::sdk::Reconfigurable 
     std::shared_ptr<ob::Context> ob_ctx_;
     std::unique_ptr<ObResourceConfig> config_;
     std::mutex config_mu_;
+    std::string firmware_version_;
     static std::unique_ptr<ObResourceConfig> configure(viam::sdk::Dependencies deps, viam::sdk::ResourceConfig cfg);
 };
 

@@ -133,19 +133,7 @@ std::unordered_map<std::string, std::shared_ptr<ob::FrameSet>>& frame_set_by_ser
 // GLOBALS END
 
 // HELPERS BEGIN
-void checkFirmwareVersion(const std::string& serial_number) {
-    const std::lock_guard<std::mutex> lock(devices_by_serial_mu());
-    auto search = devices_by_serial().find(serial_number);
-    if (search == devices_by_serial().end()) {
-        std::ostringstream buffer;
-        buffer << "device with serial number " << serial_number << " not found";
-        throw std::invalid_argument(buffer.str());
-    }
-
-    auto& device = search->second;
-    auto info = device->device->getDeviceInfo();
-    std::string version = info->firmwareVersion();
-
+void checkFirmwareVersion(const std::string version) {
     int major = 0, minor = 0, patch = 0;
     int requiredMajor = 0, requiredMinor = 0, requiredPatch = 0;
     // ignore any trailing text in the case of a beta or RC version
@@ -460,11 +448,13 @@ void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev, std::shared_ptr<ob::C
                 VIAM_SDK_LOG(error) << "Unknown status or error";
                 break;
         }
-        VIAM_SDK_LOG(info) << "Firmware update in progress: " << message;
+        VIAM_SDK_LOG(info) << "Firmware update in progress: " << message << " upgrade " << static_cast<int>(percent) << "% complete";
     };
 
+    bool executeAsync = false;
     try {
-        my_dev->device->updateFirmwareFromData(binData.data(), binData.size(), std::move(firmwareUpdateCallback), false);
+        my_dev->device->updateFirmwareFromData(binData.data(), binData.size(), std::move(firmwareUpdateCallback), executeAsync);
+        VIAM_SDK_LOG(info) << "firmware update successful!";
     } catch (...) {
         // Reset UVC backend type before re-throwing
 #if defined(__linux__)
@@ -654,6 +644,16 @@ Orbbec::Orbbec(vsdk::Dependencies deps, vsdk::ResourceConfig cfg, std::shared_pt
         std::lock_guard<std::mutex> lock(serial_by_resource_mu());
         serial_by_resource()[config_->resource_name] = config_->serial_number;
     }
+
+    // set firmware version  member variable
+    {
+        std::lock_guard<std::mutex> lock(devices_by_serial_mu());
+        auto search = devices_by_serial().find(config_->serial_number);
+        if (search != devices_by_serial().end()) {
+            firmware_version_ = search->second->device->getDeviceInfo()->firmwareVersion();
+        }
+    }
+
     VIAM_SDK_LOG(info) << "Orbbec constructor end " << config_->serial_number;
 }
 
@@ -702,6 +702,15 @@ void Orbbec::reconfigure(const vsdk::Dependencies& deps, const vsdk::ResourceCon
         std::lock_guard<std::mutex> lock(serial_by_resource_mu());
         serial_by_resource()[config_->resource_name] = new_serial_number;
     }
+
+    // set firmware version member variable
+    {
+        std::lock_guard<std::mutex> lock(devices_by_serial_mu());
+        auto search = devices_by_serial().find(config_->serial_number);
+        if (search != devices_by_serial().end()) {
+            firmware_version_ = search->second->device->getDeviceInfo()->firmwareVersion();
+        }
+    }
     VIAM_SDK_LOG(info) << "Orbbec reconfigure end";
 }
 
@@ -714,7 +723,7 @@ vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::Pro
             serial_number = config_->serial_number;
         }
 
-        checkFirmwareVersion(serial_number);
+        checkFirmwareVersion(firmware_version_);
 
         std::shared_ptr<ob::FrameSet> fs = nullptr;
         {
@@ -824,7 +833,7 @@ vsdk::Camera::image_collection Orbbec::get_images() {
             serial_number = config_->serial_number;
         }
 
-        checkFirmwareVersion(serial_number);
+        checkFirmwareVersion(firmware_version_);
 
         std::shared_ptr<ob::FrameSet> fs = nullptr;
         {
@@ -930,9 +939,7 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
                 }
 
                 std::unique_ptr<ViamOBDevice>& dev = search->second;
-                std::shared_ptr<ob::DeviceInfo> info = dev->device->getDeviceInfo();
-                std::string version = info->firmwareVersion();
-                if (version.find(minFirmwareVer) != std::string::npos) {
+                if (firmware_version_.find(minFirmwareVer) != std::string::npos) {
                     std::ostringstream buffer;
                     buffer << "device firmware already on version " << minFirmwareVer;
                     resp.emplace(firmware_key, buffer.str());
@@ -946,6 +953,7 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
                 VIAM_SDK_LOG(info) << "Updating device firmware...";
                 try {
                     updateFirmware(dev, ob_ctx_);
+                    firmware_version_ = minFirmwareVer;
                 } catch (const std::exception& e) {
                     std::ostringstream buffer;
                     buffer << "firmware update failed: " << e.what();
@@ -976,7 +984,7 @@ vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const v
             serial_number = config_->serial_number;
         }
 
-        checkFirmwareVersion(serial_number);
+        checkFirmwareVersion(firmware_version_);
 
         std::shared_ptr<ob::FrameSet> fs = nullptr;
         {
