@@ -1,14 +1,9 @@
 $ErrorActionPreference = "Stop"
-Set-PSDebug -Trace 1
-
-
-Write-Host "IN POWERSHELL"
 
 if (-not (Get-Command choco.exe -ErrorAction SilentlyContinue)) {
     Write-Host "Chocolatey is not installed. Please install Chocolatey from https://chocolatey.org/install"
     exit 1
 }
-
 
 choco install -y cmake wget python311 unzip git
 
