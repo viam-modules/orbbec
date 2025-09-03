@@ -54,6 +54,10 @@ if (-not (Test-Path $conanExe)) {
 conan profile detect
 if (!$?) { Write-Host "Conan is already installed" }
 
+
+# Force C++17
+conan profile update settings.compiler.cppstd=17 default
+
 # Clone the C++ SDK repo
 mkdir tmp_cpp_sdk
 Push-Location tmp_cpp_sdk
