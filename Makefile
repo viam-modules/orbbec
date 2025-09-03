@@ -99,9 +99,6 @@ clean-all: clean
 
 setup:
 ifeq ($(OS),Windows_NT)
-	@echo "Setting up Windows environment..."
-	@echo "ORBBEC_SDK_VERSION: $(ORBBEC_SDK_VERSION)"
-	@echo "ORBBEC_SDK_DIR: $(ORBBEC_SDK_DIR)"
 	cmd /V:ON /C "set ORBBEC_SDK_VERSION=$(ORBBEC_SDK_VERSION) && set ORBBEC_SDK_DIR=$(ORBBEC_SDK_DIR) && bin\setup$(SCRIPT_EXT)"
 	@if errorlevel 1 (echo "Setup failed" && exit /b 1)
 else
