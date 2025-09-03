@@ -5,6 +5,7 @@ ifeq ($(OS),Windows_NT)
     ARCH := $(PROCESSOR_ARCHITECTURE)
     BIN_SUFFIX := .exe
 	SCRIPT_EXT := .bat
+	SHELL := cmd
 else
 	SCRIPT_EXT = .sh
 	ARCH ?= $(shell uname -m)
