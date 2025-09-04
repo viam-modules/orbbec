@@ -110,7 +110,7 @@ else
 endif
 
 lint:
-	./bin/run-clang-format.${SCRIPT_EXT}
+	./bin/run-clang-format${SCRIPT_EXT}
 
 orbbec-test-bin:
 	cd tests && \
