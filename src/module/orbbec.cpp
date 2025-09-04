@@ -312,6 +312,14 @@ void startDevice(std::string serialNumber, std::string resourceName) {
         throw std::invalid_argument(buffer.str());
     }
 
+    // Check if the device is an Astra 2
+    std::shared_ptr<ob::DeviceInfo> deviceInfo = search->second->device->getDeviceInfo();
+    if (!strstr(deviceInfo->name(), "Astra 2")) {
+        std::ostringstream buffer;
+        buffer << service_name << ": device " << serialNumber << " is not an Astra 2 (found: " << deviceInfo->name() << ")";
+        throw std::invalid_argument(buffer.str());
+    }
+
     std::unique_ptr<ViamOBDevice>& my_dev = search->second;
     if (my_dev->started) {
         std::ostringstream buffer;
@@ -396,28 +404,6 @@ void stopDevice(std::string serialNumber, std::string resourceName) {
     {
         std::lock_guard<std::mutex> lock(serial_by_resource_mu());
         serial_by_resource().erase(resourceName);
-    }
-}
-
-void listDevices(const ob::Context& ctx) {
-    try {
-        auto devList = ctx.queryDeviceList();
-        int devCount = devList->getCount();
-        VIAM_SDK_LOG(info) << "devCount: " << devCount << "\n";
-
-        std::shared_ptr<ob::Device> dev = nullptr;
-        std::shared_ptr<ob::DeviceInfo> info = nullptr;
-        for (size_t i = 0; i < devCount; i++) {
-            dev = devList->getDevice(i);
-            info = dev->getDeviceInfo();
-            printDeviceInfo(info);
-            dev.reset();
-        }
-    } catch (ob::Error& e) {
-        std::cerr << "listDevices\n"
-                  << "function:" << e.getFunction() << "\nargs:" << e.getArgs() << "\nname:" << e.getName() << "\nmessage:" << e.what()
-                  << "\ntype:" << e.getExceptionType() << std::endl;
-        throw e;
     }
 }
 
