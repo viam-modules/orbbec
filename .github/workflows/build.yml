@@ -23,7 +23,7 @@ jobs:
           - os: windows-latest
 
     runs-on: ${{ matrix.os }}
-    container: ${{ matrix.container || '' }}
+    container: ${{ matrix.container }}
 
     steps:
       - name: Checkout code

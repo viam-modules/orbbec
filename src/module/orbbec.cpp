@@ -133,6 +133,14 @@ std::unordered_map<std::string, std::shared_ptr<ob::FrameSet>>& frame_set_by_ser
 
 // HELPERS BEGIN
 //
+
+// Convert integer to uppercase 4-digit hex string
+std::string intToHex(uint16_t value) {
+    std::stringstream ss;
+    ss << std::uppercase << std::hex << std::setw(4) << std::setfill('0') << value;
+    return ss.str();
+}
+
 uint64_t getNowUs() {
     return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 }
@@ -516,7 +524,6 @@ void Orbbec::reconfigure(const vsdk::Dependencies& deps, const vsdk::ResourceCon
 
 vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::ProtoStruct& extra) {
     try {
-        auto start = std::chrono::high_resolution_clock::now();
         VIAM_SDK_LOG(debug) << "[get_image] start";
         std::string serial_number;
         {
@@ -826,13 +833,6 @@ std::unique_ptr<orbbec::ObResourceConfig> Orbbec::configure_(vsdk::Dependencies 
     return native_config;
 }
 // RESOURCE END
-
-// Convert integer to uppercase 4-digit hex string
-std::string intToHex(uint16_t value) {
-    std::stringstream ss;
-    ss << std::uppercase << std::hex << std::setw(4) << std::setfill('0') << value;
-    return ss.str();
-}
 
 // ORBBEC SDK DEVICE REGISTRY START
 void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {

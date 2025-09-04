@@ -8,10 +8,10 @@ ifeq ($(OS),Windows_NT)
 	SHELL := cmd
 else
 	SCRIPT_EXT = .sh
+	BIN_SUFFIX :=
 	ARCH ?= $(shell uname -m)
 endif
 
-TAR_BIN_NAME = orbbec-module
 OUTPUT_NAME = orbbec-module$(BIN_SUFFIX)
 BIN := build-conan/build/RelWithDebInfo/$(OUTPUT_NAME)
 TAG_VERSION?=latest
@@ -68,7 +68,7 @@ else ifeq ($(OS),darwin)
 	meta.json \
     first_run.sh \
 	-C $(ORBBEC_SDK_DIR) lib/ \
-    -C ../$(dir $(BIN)) $(TAR_BIN_NAME)
+    -C ../$(dir $(BIN)) $(OUTPUT_NAME)
 else ifeq ($(OS),Windows_NT)
 	cmd /C powershell -Command ("$$json = Get-Content 'meta.json' -Raw | ConvertFrom-Json).PSObject.Properties.Remove('first_run'); $$json | ConvertTo-Json -Depth 2 | Set-Content 'meta.json'"
 	tar -czvf module.tar.gz \

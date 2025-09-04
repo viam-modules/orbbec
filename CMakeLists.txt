@@ -13,13 +13,9 @@ add_executable(orbbec-cli src/cli/main.cpp)
 add_executable(orbbec-module src/module/main.cpp src/module/orbbec.cpp src/module/discovery.cpp)
 
 set(CMAKE_OSX_DEPLOYMENT_TARGET "14.5")
-set(OrbbecSDK_DIR  "${ORBBEC_SDK_DIR}/lib")
 
-# Only for MSVC compilers
-if(MSVC)
-    # Enable standard-conformance mode
-    add_compile_options(/permissive-)
-endif()
+set(OrbbecSDK_DIR  "${ORBBEC_SDK_DIR}/lib")
+include_directories("${ORBBEC_SDK_DIR}/include")
 
 find_package(OrbbecSDK REQUIRED)
 find_package(viam-cpp-sdk REQUIRED)
@@ -32,5 +28,5 @@ PRIVATE Threads::Threads
 
 target_link_libraries(orbbec-module
 PRIVATE ob::OrbbecSDK
-PRIVATE Threads::Threads
-PRIVATE viam-cpp-sdk::viamsdk)
+Threads::Threads
+viam-cpp-sdk::viamsdk)
