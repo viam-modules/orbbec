@@ -425,30 +425,7 @@ void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev, std::shared_ptr<ob::C
     }
 
     auto firmwareUpdateCallback = [](OBFwUpdateState state, const char* message, uint8_t percent) {
-        switch (state) {
-            case STAT_VERIFY_SUCCESS:
-                VIAM_SDK_LOG(debug) << "Image file verification success";
-                break;
-            case STAT_FILE_TRANSFER:
-                VIAM_SDK_LOG(debug) << "File transfer in progress";
-                break;
-            case STAT_DONE:
-                VIAM_SDK_LOG(debug) << "Update completed";
-                break;
-            case STAT_IN_PROGRESS:
-                VIAM_SDK_LOG(debug) << "Upgrade in progress";
-                break;
-            case STAT_START:
-                VIAM_SDK_LOG(debug) << "Starting the upgrade";
-                break;
-            case STAT_VERIFY_IMAGE:
-                VIAM_SDK_LOG(debug) << "Verifying image file";
-                break;
-            default:
-                VIAM_SDK_LOG(error) << "Unknown status or error";
-                break;
-        }
-        VIAM_SDK_LOG(info) << "Firmware update in progress: " << message << " upgrade " << static_cast<int>(percent) << "% complete";
+        std::cout << "Firmware update in progress: " << message << " upgrade " << static_cast<int>(percent) << "% complete\n";
     };
 
     bool executeAsync = false;

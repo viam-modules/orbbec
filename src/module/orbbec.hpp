@@ -30,12 +30,6 @@ class Orbbec final : public viam::sdk::Camera, public viam::sdk::Reconfigurable 
     point_cloud get_point_cloud(std::string mime_type, const viam::sdk::ProtoStruct& extra) override;
     properties get_properties() override;
     std::vector<viam::sdk::GeometryConfig> get_geometries(const viam::sdk::ProtoStruct& extra) override;
-
-    // Getter for firmware version
-    std::string get_firmware_version() const {
-        return firmware_version_;
-    }
-
     static std::vector<std::string> validate(viam::sdk::ResourceConfig cfg);
     static viam::sdk::GeometryConfig geometry;
     static viam::sdk::Model model;
