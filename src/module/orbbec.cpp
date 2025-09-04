@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <ciso646>
 #include "orbbec.hpp"
 #ifdef _WIN32
 #include <windows.h>
