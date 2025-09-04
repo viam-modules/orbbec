@@ -111,7 +111,7 @@ endif
 
 lint:
 ifeq ($(OS),Windows_NT)
-	cmd /C bin\run-clang-format$(SCRIPT_EXT)"
+	@echo "lint unsupported on windows"
 else
 	./bin/run-clang-format${SCRIPT_EXT}
 endif
