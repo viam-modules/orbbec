@@ -27,6 +27,8 @@
 #include <stdexcept>
 #include <vector>
 
+#include <boost/core/span.hpp>
+
 #include <viam/sdk/common/proto_value.hpp>
 #include <viam/sdk/components/camera.hpp>
 #include <viam/sdk/components/component.hpp>
@@ -76,17 +78,23 @@ struct ViamOBDevice {
     std::shared_ptr<ob::Config> config;
 };
 
-struct raw_camera_image {
-    using deleter_type = void (*)(unsigned char*);
-    using uniq = std::unique_ptr<unsigned char[], deleter_type>;
+class raw_camera_image {
+   public:
+    explicit raw_camera_image(std::size_t sz) : bytes(new unsigned char[sz]), size(sz) {}
 
-    static constexpr deleter_type free_deleter = [](unsigned char* ptr) { free(ptr); };
+    boost::span<unsigned char const> span() const noexcept {
+        return boost::span{bytes.get(), size};
+    }
 
-    static constexpr deleter_type array_delete_deleter = [](unsigned char* ptr) { delete[] ptr; };
+    boost::span<unsigned char> span() noexcept {
+        return boost::span{bytes.get(), size};
+    }
 
-    uniq bytes;
-    size_t size;
+   private:
+    std::unique_ptr<unsigned char[]> bytes;
+    std::size_t size;
 };
+
 // STRUCTS END
 
 // GLOBALS BEGIN
@@ -141,24 +149,24 @@ uint64_t timeSinceFrameUs(uint64_t nowUs, uint64_t imageTimeUs) {
 }
 
 std::vector<unsigned char> RGBPointsToPCD(std::shared_ptr<ob::Frame> frame, float scale) {
-    int numPoints = frame->dataSize() / sizeof(OBColorPoint);
+    assert(frame->is<ob::PointsFrame>());
+    assert(frame->getFormat() == OBFormat::OB_FORMAT_RGB_POINT);
 
-    OBColorPoint* points = (OBColorPoint*)frame->data();
+    auto pointSpan = boost::span{reinterpret_cast<OBColorPoint*>(frame->data()), frame->dataSize() / sizeof(OBColorPoint)};
+
     std::vector<PointXYZRGB> pcdPoints;
 
-    for (int i = 0; i < numPoints; i++) {
-        OBColorPoint& p = points[i];
-        unsigned int r = (unsigned int)p.r;
-        unsigned int g = (unsigned int)p.g;
-        unsigned int b = (unsigned int)p.b;
+    std::transform(pointSpan.begin(), pointSpan.end(), std::back_inserter(pcdPoints), [scale](const OBColorPoint& p) {
+        auto r = static_cast<unsigned int>(p.r);
+        auto g = static_cast<unsigned int>(p.g);
+        auto b = static_cast<unsigned int>(p.b);
+
         unsigned int rgb = (r << 16) | (g << 8) | b;
-        PointXYZRGB pt;
-        pt.x = (p.x * scale);
-        pt.y = (p.y * scale);
-        pt.z = (p.z * scale);
-        pt.rgb = rgb;
-        pcdPoints.push_back(pt);
-    }
+        return PointXYZRGB{p.x * scale,  //
+                           p.y * scale,  //
+                           p.z * scale,  //
+                           rgb};
+    });
 
     std::stringstream header;
     header << "VERSION .7\n"
@@ -174,32 +182,15 @@ std::vector<unsigned char> RGBPointsToPCD(std::shared_ptr<ob::Frame> frame, floa
     std::string headerStr = header.str();
     std::vector<unsigned char> pcdBytes;
     pcdBytes.insert(pcdBytes.end(), headerStr.begin(), headerStr.end());
-    for (auto& p : pcdPoints) {
-        unsigned char* x = (unsigned char*)&p.x;
-        unsigned char* y = (unsigned char*)&p.y;
-        unsigned char* z = (unsigned char*)&p.z;
-        unsigned char* rgb = (unsigned char*)&p.rgb;
 
-        pcdBytes.push_back(x[0]);
-        pcdBytes.push_back(x[1]);
-        pcdBytes.push_back(x[2]);
-        pcdBytes.push_back(x[3]);
+    // Assert that PointXYZRGB is a POD type, and that it has no padding, thus can be copied as bytes.
+    // Since vector is contiguous, we can just copy the whole thing
+    static_assert(std::is_pod_v<PointXYZRGB>);
+    static_assert(sizeof(PointXYZRGB) == (3 * sizeof(float)) + sizeof(unsigned int), "PointXYZRGB has unexpected padding");
 
-        pcdBytes.push_back(y[0]);
-        pcdBytes.push_back(y[1]);
-        pcdBytes.push_back(y[2]);
-        pcdBytes.push_back(y[3]);
-
-        pcdBytes.push_back(z[0]);
-        pcdBytes.push_back(z[1]);
-        pcdBytes.push_back(z[2]);
-        pcdBytes.push_back(z[3]);
-
-        pcdBytes.push_back(rgb[0]);
-        pcdBytes.push_back(rgb[1]);
-        pcdBytes.push_back(rgb[2]);
-        pcdBytes.push_back(rgb[3]);
-    }
+    auto byteSpan = boost::as_bytes(boost::span{pcdPoints});
+    pcdBytes.insert(
+        pcdBytes.end(), reinterpret_cast<unsigned char const*>(byteSpan.begin()), reinterpret_cast<unsigned char const*>(byteSpan.end()));
 
     return pcdBytes;
 }
@@ -435,18 +426,18 @@ void stopDevice(std::string serialNumber, std::string resourceName) {
 
 raw_camera_image encodeDepthRAW(const unsigned char* data, const uint64_t width, const uint64_t height, const bool littleEndian) {
     viam::sdk::Camera::depth_map m = xt::xarray<uint16_t>::from_shape({height, width});
-    std::copy(reinterpret_cast<const uint16_t*>(data), reinterpret_cast<const uint16_t*>(data) + height * width, m.begin());
 
-    for (size_t i = 0; i < m.size(); i++) {
-        m[i] = m[i] * mmToMeterMultiple;
-    }
+    auto depthPixels = boost::span{reinterpret_cast<uint16_t const*>(data), height * width};
+
+    std::transform(depthPixels.begin(), depthPixels.end(), m.begin(), [](uint16_t mi) { return mi * mmToMeterMultiple; });
 
     std::vector<unsigned char> encodedData = viam::sdk::Camera::encode_depth_map(m);
 
-    unsigned char* rawBuf = new unsigned char[encodedData.size()];
-    std::memcpy(rawBuf, encodedData.data(), encodedData.size());
+    raw_camera_image rawBuf(encodedData.size());
 
-    return raw_camera_image{raw_camera_image::uniq(rawBuf, raw_camera_image::array_delete_deleter), encodedData.size()};
+    std::copy(encodedData.begin(), encodedData.end(), rawBuf.span().begin());
+
+    return rawBuf;
 }
 
 // HELPERS END
@@ -711,7 +702,7 @@ vsdk::Camera::image_collection Orbbec::get_images() {
         vsdk::Camera::raw_image depth_image;
         depth_image.source_name = kDepthSourceName;
         depth_image.mime_type = kDepthMimeTypeViamDep;
-        depth_image.bytes.assign(rci.bytes.get(), rci.bytes.get() + rci.size);
+        depth_image.bytes.assign(rci.span().begin(), rci.span().end());
 
         vsdk::Camera::image_collection response;
         response.images.emplace_back(std::move(color_image));
