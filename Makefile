@@ -41,7 +41,7 @@ else
 endif
 
 
-.PHONY: build setup appimage
+.PHONY: build lint setup appimage
 
 ifeq ($(OS),linux)
 module.tar.gz: $(APPIMAGE) meta.json
