@@ -54,6 +54,7 @@ else
 fi
 
 # NOTE: If you change this version, also change it in the `conanfile.py` requirements
+# and in the Dockerfile
 git checkout releases/v0.16.0
 
 # Build the C++ SDK repo
