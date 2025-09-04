@@ -366,7 +366,6 @@ void startDevice(std::string serialNumber) {
         throw std::invalid_argument(buffer.str());
     }
 
-
     // Check if the device is an Astra 2
     std::shared_ptr<ob::DeviceInfo> deviceInfo = search->second->device->getDeviceInfo();
     if (!strstr(deviceInfo->name(), "Astra 2")) {
