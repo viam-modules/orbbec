@@ -13,7 +13,7 @@ if (-not (Test-Path "$env:ChocolateyInstall\bin\choco.exe")) {
 Import-Module "$env:ChocolateyInstall\helpers\chocolateyProfile.psm1"
 refreshenv
 
-$sourcePath = Join-Path -Path $PSScriptRoot -ChildPath "src"
+$sourcePath = Join-Path -Path $PSScriptRoot -ChildPath "..\src"
 $files = Get-ChildItem -Path $sourcePath -Recurse -Include *.cpp, *.hpp
 
 foreach ($file in $files) {
