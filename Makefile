@@ -75,14 +75,36 @@ orbbec-test-bin:
 # conan call because every line of a Makefile runs in a subshell
 
 conan-pkg:
+ifeq ($(OS),Windows_NT)
+	IF EXIST ".\venv\Scripts\activate.bat" (
+		call .\venv\Scripts\activate.bat
+	)
+	conan create . ^
+		-o:a "viam-cpp-sdk/*:shared=False" ^
+		-s:a build_type=Release ^
+		-s:a compiler.cppstd=17 ^
+		--build=missing
+else
 	test -f ./venv/bin/activate && . ./venv/bin/activate; \
 	conan create . \
 	-o:a "viam-cpp-sdk/*:shared=False" \
 	-s:a build_type=Release \
 	-s:a compiler.cppstd=17 \
 	--build=missing
+endif
 
 module.tar.gz: conan-pkg meta.json
+ifeq ($(OS),Windows_NT)
+	IF EXIST ".\venv\Scripts\activate.bat" (
+    call .\venv\Scripts\activate.bat
+	)
+	conan install --requires=viam-orbbec/0.0.1 ^
+		-o:a "viam-cpp-sdk/*:shared=False" ^
+		-s:a build_type=Release ^
+		-s:a compiler.cppstd=17 ^
+		--deployer-package "&" ^
+		--envs-generation false
+else
 	test -f ./venv/bin/activate && . ./venv/bin/activate; \
 	conan install --requires=viam-orbbec/0.0.1 \
 	-o:a "viam-cpp-sdk/*:shared=False" \
@@ -90,7 +112,7 @@ module.tar.gz: conan-pkg meta.json
 	-s:a compiler.cppstd=17 \
 	--deployer-package "&" \
 	--envs-generation false
-
+endif
 image-base:
 	docker build -t $(BASE_NAME):$(BASE_TAG) \
 		--platform=linux/arm64 \
