@@ -13,8 +13,7 @@ IF %ERRORLEVEL%==0 (
         echo Installing clang-format...
 
         REM Check for Chocolatey
-        where choco >nul 2>&1
-        IF %ERRORLEVEL%==0 (
+        IF DEFINED ChocolateyInstall (
             echo Installing LLVM via Chocolatey...
             choco install -y llvm
         ) ELSE (
