@@ -96,7 +96,7 @@ endif
 module.tar.gz: conan-pkg meta.json
 ifeq ($(OS),Windows_NT)
 	IF EXIST ".\venv\Scripts\activate.bat" (
-    call .\venv\Scripts\activate.bat
+	call .\venv\Scripts\activate.bat
 	)
 	conan install --requires=viam-orbbec/0.0.1 ^
 		-o:a "viam-cpp-sdk/*:shared=False" ^
