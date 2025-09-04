@@ -4,6 +4,10 @@ OS ?= $(shell uname -s | tr '[:upper:]' '[:lower:]')
 ifeq ($(OS),Windows_NT)
     ARCH := $(PROCESSOR_ARCHITECTURE)
     BIN_SUFFIX := .exe
+  # Scripts for windows are written in powershell and
+  #	we invoke a wrapper batch script with cmd
+  # syntax, which calls powershell for us and explicitly sets the
+  # exit status so we terminate make on error.
 	SCRIPT_EXT := .bat
 	SHELL := cmd
 else
@@ -82,7 +86,7 @@ build: $(BIN)
 
 $(BIN): conanfile.py src/* bin/*
 ifeq ($(OS),Windows_NT)
-	cmd /V:ON /C "set ORBBEC_SDK_DIR=$(ORBBEC_SDK_DIR) && bin\build$(SCRIPT_EXT)"
+	cmd /C "set ORBBEC_SDK_DIR=$(ORBBEC_SDK_DIR) && bin\build$(SCRIPT_EXT)"
 else
 	export ORBBEC_SDK_DIR=$(ORBBEC_SDK_DIR); \
 	bin/build$(SCRIPT_EXT)
@@ -100,7 +104,7 @@ clean-all: clean
 
 setup:
 ifeq ($(OS),Windows_NT)
-	cmd /V:ON /C "set ORBBEC_SDK_VERSION=$(ORBBEC_SDK_VERSION) && set ORBBEC_SDK_DIR=$(ORBBEC_SDK_DIR) && bin\setup$(SCRIPT_EXT)"
+	cmd /C "set ORBBEC_SDK_VERSION=$(ORBBEC_SDK_VERSION) && set ORBBEC_SDK_DIR=$(ORBBEC_SDK_DIR) && bin\setup$(SCRIPT_EXT)"
 else
 	export ORBBEC_SDK_VERSION=$(ORBBEC_SDK_VERSION); \
 	export ORBBEC_SDK_DIR=$(ORBBEC_SDK_DIR); \
@@ -111,9 +115,9 @@ endif
 
 lint:
 ifeq ($(OS),Windows_NT)
-	@echo "lint unsupported on windows"
+	@echo lint unsupported on windows
 else
-	./bin/run-clang-format${SCRIPT_EXT}
+	./bin/run-clang-format.sh
 endif
 
 orbbec-test-bin:
