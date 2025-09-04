@@ -444,7 +444,7 @@ void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev, std::shared_ptr<ob::C
                 std::cout << "Verifying image file\n";
                 break;
             default:
-                std::cout << "Unknown status or error\n";
+                std::cerr << "Unknown status or error\n";
                 break;
         }
         std::cout << "Firmware update in progress: " << message << " upgrade " << static_cast<int>(percent) << "% complete\n";
