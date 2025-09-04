@@ -313,33 +313,8 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
     return nullptr;
 }
 
-void startDevice(std::string serialNumber, std::string resourceName) {
-    VIAM_SDK_LOG(info) << service_name << ": starting device " << serialNumber;
-    std::lock_guard<std::mutex> lock(devices_by_serial_mu());
-
-    auto search = devices_by_serial().find(serialNumber);
-    if (search == devices_by_serial().end()) {
-        std::ostringstream buffer;
-        buffer << service_name << ": unable to start undetected device" << serialNumber;
-        throw std::invalid_argument(buffer.str());
-    }
-
-    // Check if the device is an Astra 2
-    std::shared_ptr<ob::DeviceInfo> deviceInfo = search->second->device->getDeviceInfo();
-    if (!strstr(deviceInfo->name(), "Astra 2")) {
-        std::ostringstream buffer;
-        buffer << service_name << ": device " << serialNumber << " is not an Astra 2 (found: " << deviceInfo->name() << ")";
-        throw std::invalid_argument(buffer.str());
-    }
-
-    std::unique_ptr<ViamOBDevice>& my_dev = search->second;
-    if (my_dev->started) {
-        std::ostringstream buffer;
-        buffer << service_name << ": unable to start already started device" << serialNumber;
-        throw std::invalid_argument(buffer.str());
-    }
-
-    auto frameCallback = [serialNumber](std::shared_ptr<ob::FrameSet> frameSet) {
+auto frameCallback(const std::string& serialNumber) {
+    return [serialNumber](std::shared_ptr<ob::FrameSet> frameSet) {
         if (frameSet->getCount() != 2) {
             std::cerr << "got non 2 frame count: " << frameSet->getCount() << "\n";
             return;
@@ -390,9 +365,60 @@ void startDevice(std::string serialNumber, std::string resourceName) {
         }
         frame_set_by_serial()[serialNumber] = frameSet;
     };
+}
 
-    my_dev->pipe->start(my_dev->config, std::move(frameCallback));
+void startDevice(std::string serialNumber) {
+    VIAM_SDK_LOG(info) << service_name << ": starting device " << serialNumber;
+    std::lock_guard<std::mutex> lock(devices_by_serial_mu());
+
+    auto search = devices_by_serial().find(serialNumber);
+    if (search == devices_by_serial().end()) {
+        std::ostringstream buffer;
+        buffer << service_name << ": unable to start undetected device" << serialNumber;
+        throw std::invalid_argument(buffer.str());
+    }
+
+    // Check if the device is an Astra 2
+    std::shared_ptr<ob::DeviceInfo> deviceInfo = search->second->device->getDeviceInfo();
+    if (!strstr(deviceInfo->name(), "Astra 2")) {
+        std::ostringstream buffer;
+        buffer << service_name << ": device " << serialNumber << " is not an Astra 2 (found: " << deviceInfo->name() << ")";
+        throw std::invalid_argument(buffer.str());
+    }
+
+    std::unique_ptr<ViamOBDevice>& my_dev = search->second;
+    if (my_dev->started) {
+        std::ostringstream buffer;
+        buffer << service_name << ": unable to start already started device" << serialNumber;
+        throw std::invalid_argument(buffer.str());
+    }
+
+    my_dev->pipe->start(my_dev->config, frameCallback(serialNumber));
     my_dev->started = true;
+
+    // Ensure we start getting frames within 500ms, otherwise something is
+    // wrong with the pipeline and we should restart.
+    auto start_time = std::chrono::steady_clock::now();
+    bool got_frame = false;
+    while (std::chrono::steady_clock::now() - start_time < std::chrono::milliseconds(500)) {
+        {
+            std::lock_guard<std::mutex> lock(frame_set_by_serial_mu());
+            if (frame_set_by_serial().count(serialNumber) > 0) {
+                got_frame = true;
+                break;
+            }
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+
+    if (!got_frame) {
+        VIAM_SDK_LOG(error) << "did not get frame within 500ms of starting device, resetting";
+        my_dev->pipe->stop();
+        my_dev->started = false;
+        my_dev->pipe->start(my_dev->config, frameCallback(serialNumber));
+        my_dev->started = true;
+    }
+
     VIAM_SDK_LOG(info) << service_name << ": device started " << serialNumber;
 }
 
@@ -460,7 +486,7 @@ std::vector<std::string> Orbbec::validate(vsdk::ResourceConfig cfg) {
 Orbbec::Orbbec(vsdk::Dependencies deps, vsdk::ResourceConfig cfg)
     : Camera(cfg.name()), config_(configure(std::move(deps), std::move(cfg))) {
     VIAM_SDK_LOG(info) << "Orbbec constructor start " << config_->serial_number;
-    startDevice(config_->serial_number, config_->resource_name);
+    startDevice(config_->serial_number);
     {
         std::lock_guard<std::mutex> lock(serial_by_resource_mu());
         serial_by_resource()[config_->resource_name] = config_->serial_number;
@@ -508,10 +534,16 @@ void Orbbec::reconfigure(const vsdk::Dependencies& deps, const vsdk::ResourceCon
         new_serial_number = config_->serial_number;
         new_resource_name = config_->resource_name;
     }
-    startDevice(new_serial_number, new_resource_name);
+
+    {
+        std::lock_guard<std::mutex> lock(frame_set_by_serial_mu());
+        frame_set_by_serial().erase(prev_serial_number);
+    }
+
+    startDevice(new_serial_number);
     {
         std::lock_guard<std::mutex> lock(serial_by_resource_mu());
-        serial_by_resource()[config_->resource_name] = new_serial_number;
+        serial_by_resource()[new_resource_name] = new_serial_number;
     }
     VIAM_SDK_LOG(info) << "Orbbec reconfigure end";
 }
@@ -667,6 +699,7 @@ vsdk::Camera::image_collection Orbbec::get_images() {
         if (diff > maxFrameAgeUs) {
             std::ostringstream buffer;
             buffer << "no recent depth frame: check USB connection, diff: " << diff << "us";
+            throw std::invalid_argument(buffer.str());
         }
 
         unsigned char* colorData = (unsigned char*)color->getData();
@@ -977,7 +1010,7 @@ void deviceChangedCallback(const std::shared_ptr<ob::DeviceList> removedList, co
                 std::lock_guard<std::mutex> lock(serial_by_resource_mu());
                 for (auto& [resource_name, serial_number] : serial_by_resource()) {
                     if (serial_number == info->getSerialNumber()) {
-                        startDevice(serial_number, resource_name);
+                        startDevice(serial_number);
                         serial_by_resource()[resource_name] = serial_number;
                     }
                 }

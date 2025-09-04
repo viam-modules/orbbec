@@ -19,33 +19,13 @@ endif
 OUTPUT_NAME = orbbec-module$(BIN_SUFFIX)
 BIN := build-conan/build/RelWithDebInfo/$(OUTPUT_NAME)
 TAG_VERSION?=latest
-APPIMAGE := packaging/appimages/deploy/$(OUTPUT_NAME)-$(TAG_VERSION)-$(ARCH).AppImage
 
-ifeq ($(OS),darwin)
-  ORBBEC_SDK_VERSION=v2.4.3
-  ORBBEC_SDK_COMMIT=045a0e76
-  ORBBEC_SDK_TIMESTAMP=202505192200
-  ORBBEC_SDK_DIR = OrbbecSDK_$(ORBBEC_SDK_VERSION)_$(ORBBEC_SDK_TIMESTAMP)_$(ORBBEC_SDK_COMMIT)_macOS_beta
-else ifeq ($(OS),linux)
-   ORBBEC_SDK_VERSION=v2.4.8
-   ORBBEC_SDK_COMMIT=ec8e3469
-   ORBBEC_SDK_DIR = OrbbecSDK_$(ORBBEC_SDK_VERSION)_$(ORBBEC_SDK_TIMESTAMP)_$(ORBBEC_SDK_COMMIT)_linux_$(ARCH)
-  ifeq ($(ARCH),x86_64)
-    ORBBEC_SDK_TIMESTAMP = 202507031325
-   else ifeq ($(ARCH), aarch64)
-	ORBBEC_SDK_TIMESTAMP = 202507031330
-   endif
-else ifeq ($(OS),Windows_NT)
-  ORBBEC_SDK_VERSION=v2.4.8
-  ORBBEC_SDK_COMMIT=ec8e346
-  ORBBEC_SDK_TIMESTAMP=202507032159
-  ORBBEC_SDK_DIR=OrbbecSDK_$(ORBBEC_SDK_VERSION)_$(ORBBEC_SDK_TIMESTAMP)_$(ORBBEC_SDK_COMMIT)_win_x64
-else
-  $(error Unsupported OS: $(OS))
-endif
+# Docker image
+HUB_USER := viam-modules/orbbec
+BASE_NAME := viam-cpp-base-orin
+BASE_TAG := 0.0.1
 
-
-.PHONY: build lint setup appimage
+.PHONY: build lint setup conan-pkg
 
 ifeq ($(OS),linux)
 module.tar.gz: $(APPIMAGE) meta.json
@@ -81,6 +61,8 @@ else ifeq ($(OS),Windows_NT)
 	-C bin OrbbecSDK.dll extensions \
     -C ../../$(dir $(BIN)) $(OUTPUT_NAME)
 endif
+
+.PHONY: build lint setup conan-pkg
 
 build: $(BIN)
 
@@ -125,10 +107,34 @@ orbbec-test-bin:
 	go test -c -o orbbec-test-bin ./ && \
 	mv orbbec-test-bin ../
 
-$(APPIMAGE): $(BIN)
-	export TAG_NAME=$(TAG_VERSION); \
-	cd packaging/appimages && \
-	mkdir -p deploy && \
-	rm -f deploy/$(OUTPUT_NAME)* && \
-	appimage-builder --recipe $(OUTPUT_NAME)-$(ARCH).yml
-	cp ./packaging/appimages/$(OUTPUT_NAME)-$(TAG_VERSION)-$(ARCH).AppImage ./packaging/appimages/deploy/
+# Both the commands below need to source/activate the venv in the same line as the
+# conan call because every line of a Makefile runs in a subshell
+
+conan-pkg:
+	test -f ./venv/bin/activate && . ./venv/bin/activate; \
+	conan create . \
+	-o:a "viam-cpp-sdk/*:shared=False" \
+	-s:a build_type=Release \
+	-s:a compiler.cppstd=17 \
+	--build=missing
+
+module.tar.gz: conan-pkg meta.json
+	test -f ./venv/bin/activate && . ./venv/bin/activate; \
+	conan install --requires=viam-orbbec/0.0.1 \
+	-o:a "viam-cpp-sdk/*:shared=False" \
+	-s:a build_type=Release \
+	-s:a compiler.cppstd=17 \
+	--deployer-package "&" \
+	--envs-generation false
+
+image-base:
+	docker build -t $(BASE_NAME):$(BASE_TAG) \
+		--platform=linux/arm64 \
+		--memory=16g \
+		-f etc/Dockerfile.ubuntu.jammy ./
+
+# Pushes base docker image to github packages.
+# Requires docker login to ghcr.io
+push-base:
+	docker tag $(BASE_NAME):$(BASE_TAG) ghcr.io/$(HUB_USER)/$(BASE_NAME):$(BASE_TAG) && \
+	docker push ghcr.io/$(HUB_USER)/$(BASE_NAME):$(BASE_TAG)
