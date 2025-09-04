@@ -27,43 +27,6 @@ BASE_TAG := 0.0.1
 
 .PHONY: build lint setup conan-pkg
 
-ifeq ($(OS),linux)
-module.tar.gz: $(APPIMAGE) meta.json
-else
-module.tar.gz: $(BIN) meta.json
-endif
-ifeq ($(OS),linux)
-	mv $(APPIMAGE) $(OUTPUT_NAME)
-	tar -czvf module.tar.gz \
-		$(OUTPUT_NAME) \
-		meta.json \
-		./first_run.sh \
-		./install_udev_rules.sh \
-		./99-obsensor-libusb.rules
-else ifeq ($(OS),darwin)
- # update the rpath https://en.wikipedia.org/wiki/Rpath to look for the orbbec dynamic library
- # in the ./lib folder in the folder produced by the module.tar.gz on the computer that runs the module
- # rather than the build directory of the build machine
-	if otool -l $(BIN) | grep -A2 LC_RPATH | grep -q "path @executable_path/lib"; then \
-		install_name_tool -delete_rpath $(ORBBEC_SDK_DIR)/lib $(BIN); \
-	fi
-	install_name_tool -add_rpath @executable_path/lib $(BIN);
-	tar -czvf module.tar.gz \
-	meta.json \
-    first_run.sh \
-	-C $(ORBBEC_SDK_DIR) lib/ \
-    -C ../$(dir $(BIN)) $(OUTPUT_NAME)
-else ifeq ($(OS),Windows_NT)
-	cmd /C powershell -Command ("$$json = Get-Content 'meta.json' -Raw | ConvertFrom-Json).PSObject.Properties.Remove('first_run'); $$json | ConvertTo-Json -Depth 2 | Set-Content 'meta.json'"
-	tar -czvf module.tar.gz \
-	meta.json \
-	-C .\$(ORBBEC_SDK_DIR) lib \
-	-C bin OrbbecSDK.dll extensions \
-    -C ../../$(dir $(BIN)) $(OUTPUT_NAME)
-endif
-
-.PHONY: build lint setup conan-pkg
-
 build: $(BIN)
 
 $(BIN): conanfile.py src/* bin/*
@@ -79,6 +42,7 @@ clean:
 
 clean-all: clean
 	rm -rf build-conan
+	rm -rf tmp_cpp_sdk
 	rm -rf tmp_cpp_sdk
 	rm -rf venv
 	rm -f orbbec-test-bin

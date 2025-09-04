@@ -11,23 +11,6 @@ choco install -y cmake wget python311 unzip git
 Import-Module $env:ChocolateyInstall\helpers\chocolateyProfile.psm1
 refreshenv
 
-# Remove previous SDK files if they exist
-if (Test-Path "$env:ORBBEC_SDK_DIR.zip") {
-    Remove-Item -Force -ErrorAction SilentlyContinue "$env:ORBBEC_SDK_DIR.zip"
-}
-
-if (Test-Path "$env:ORBBEC_SDK_DIR") {
-    Remove-Item -Force -Recurse -ErrorAction SilentlyContinue "$env:ORBBEC_SDK_DIR"
-}
-
-# Download the SDK zip
-$downloadUrl = "https://github.com/orbbec/OrbbecSDK_v2/releases/download/$env:ORBBEC_SDK_VERSION/$env:ORBBEC_SDK_DIR.zip"
-Write-Host "Downloading Orbbec SDK from $downloadUrl"
-Invoke-WebRequest -Uri $downloadUrl -OutFile "$env:ORBBEC_SDK_DIR.zip"
-
-Write-Host "Extracting Windows SDK zip to folder $env:ORBBEC_SDK_DIR"
-Expand-Archive -Path "$env:ORBBEC_SDK_DIR.zip" -DestinationPath "$env:ORBBEC_SDK_DIR" -Force
-
 # Path to virtual environment activate script
 $venvActivate = ".\venv\Scripts\Activate.ps1"
 
@@ -61,6 +44,7 @@ git clone https://github.com/viamrobotics/viam-cpp-sdk.git
 Push-Location viam-cpp-sdk
 
 # NOTE: If you change this version, also change it in the `conanfile.py` requirements
+# and in dockerfile
 git checkout releases/v0.16.0
 
 # Build the C++ SDK repo.
