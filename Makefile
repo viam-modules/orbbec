@@ -2,6 +2,11 @@ OUTPUT_NAME = orbbec-module
 BIN := build-conan/build/RelWithDebInfo/orbbec-module
 TAG_VERSION?=latest
 
+# Docker image
+HUB_USER := viam-modules/orbbec
+BASE_NAME := viam-cpp-base-orin
+BASE_TAG := 0.0.1
+
 .PHONY: build lint setup conan-pkg
 
 build: $(BIN)
@@ -49,3 +54,15 @@ module.tar.gz: conan-pkg meta.json
 	-s:a compiler.cppstd=17 \
 	--deployer-package "&" \
 	--envs-generation false
+
+image-base:
+	docker build -t $(BASE_NAME):$(BASE_TAG) \
+		--platform=linux/arm64 \
+		--memory=16g \
+		-f etc/Dockerfile.ubuntu.jammy ./
+
+# Pushes base docker image to github packages.
+# Requires docker login to ghcr.io
+push-base:
+	docker tag $(BASE_NAME):$(BASE_TAG) ghcr.io/$(HUB_USER)/$(BASE_NAME):$(BASE_TAG) && \
+	docker push ghcr.io/$(HUB_USER)/$(BASE_NAME):$(BASE_TAG)
