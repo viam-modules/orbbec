@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include "orbbec.hpp"
-#include <ciso646>
 #ifdef _WIN32
 #include <windows.h>
 #endif
@@ -442,7 +441,7 @@ raw_camera_image encodeDepthRAW(const unsigned char* data, const uint64_t width,
 std::vector<std::string> Orbbec::validate(vsdk::ResourceConfig cfg) {
     auto attrs = cfg.attributes();
 
-    if (not attrs.count("serial_number")) {
+    if (!attrs.count("serial_number")) {
         throw std::invalid_argument("serial_number is a required argument");
     }
 
