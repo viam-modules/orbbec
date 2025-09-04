@@ -110,7 +110,11 @@ else
 endif
 
 lint:
-	bin/run-clang-format${SCRIPT_EXT}
+ifeq ($(OS),Windows_NT)
+	cmd /C bin\run-clang-format$(SCRIPT_EXT)"
+else
+	./bin/run-clang-format${SCRIPT_EXT}
+endif
 
 orbbec-test-bin:
 	cd tests && \
