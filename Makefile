@@ -2,7 +2,6 @@
 OS ?= $(shell uname -s | tr '[:upper:]' '[:lower:]')
 
 ifeq ($(OS),Windows_NT)
-	cmd /C powershell -Command ("$$json = Get-Content 'meta.json' -Raw | ConvertFrom-Json).PSObject.Properties.Remove('first_run'); $$json | ConvertTo-Json -Depth 2 | Set-Content 'meta.json'"
     ARCH := $(PROCESSOR_ARCHITECTURE)
     BIN_SUFFIX := .exe
   # Scripts for windows are written in powershell and
@@ -37,6 +36,9 @@ else
 	export ORBBEC_SDK_DIR=$(ORBBEC_SDK_DIR); \
 	bin/build$(SCRIPT_EXT)
 endif
+
+update_meta:
+    cmd /C powershell -Command "$$json = Get-Content 'meta.json' -Raw | ConvertFrom-Json; $$json.PSObject.Properties.Remove('first_run') | Out-Null; $$json | ConvertTo-Json -Depth 2 | Set-Content 'meta.json'"
 
 clean:
 	rm -rf packaging/appimages/deploy module.tar.gz
@@ -83,7 +85,7 @@ else
 	--build=missing
 endif
 
-module.tar.gz: conan-pkg meta.json
+module.tar.gz: update-meta conan-pkg meta.json
 ifeq ($(OS),Windows_NT)
 	cmd /C "IF EXIST .\venv\Scripts\activate.bat call .\venv\Scripts\activate.bat && conan install --requires=viam-orbbec/0.0.1 -o:a "viam-cpp-sdk/*:shared=False" -s:a build_type=Release -s:a compiler.cppstd=17 --deployer-package "^&" --envs-generation false"
 else
