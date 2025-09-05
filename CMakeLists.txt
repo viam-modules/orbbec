@@ -90,6 +90,7 @@ else
         LIBRARY
         ${_framework_dest_arg}
     )
+endif
 
 # The lib/extensions directory contains some shared libraries which are
 # mandatory for our use case but not picked up by the runtime dependency set
