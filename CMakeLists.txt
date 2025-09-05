@@ -72,10 +72,7 @@ if (WIN32)
         RUNTIME
     )
     install(FILES "${OrbbecSDK_DIR}/orbbecsdk.dll" DESTINATION bin)
-    install(
-        FILES "${OrbbecSDK_DIR}/extensions"
-        DESTINATION bin
-        FILES_MATCHING PATTERN "*.dll")
+    install(DIRECTORY "${OrbbecSDK_DIR}/extensions" DESTINATION bin)
 
 else()
     install(
