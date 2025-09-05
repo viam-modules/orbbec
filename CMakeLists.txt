@@ -58,6 +58,12 @@ if (LINUX)
 	    ".*libm\\.so.*"
 	    ".*libpthread\\.so.*"
     )
+elseif (WIN32)
+    set(_post_exclude_regex
+        "api-ms-win-.*\\.dll"
+        "ext-ms-win-.*\\.dll"
+        "ms-win-.*\\.dll"
+    )
 endif()
 
 if (APPLE)
