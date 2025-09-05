@@ -8,6 +8,7 @@ ifeq ($(OS),Windows_NT)
   # syntax, which calls powershell for us and explicitly sets the
   # exit status so we terminate make on error.
 	SCRIPT_EXT := .bat
+	SHELL := cmd
 	SUBSHELL := cmd /C
 	PATHSEP := \\
 else
