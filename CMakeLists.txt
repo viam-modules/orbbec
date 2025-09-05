@@ -95,12 +95,17 @@ else()
     DIRECTORY ${OrbbecSDK_DIR}/extensions
     DESTINATION lib
 )
+    install(
+        PROGRAMS
+            first_run.sh
+            install_udev_rules.sh
+        DESTINATION ${CMAKE_INSTALL_PREFIX}
+    )
 endif()
 
 # The lib/extensions directory contains some shared libraries which are
 # mandatory for our use case but not picked up by the runtime dependency set
 # because they are loaded at runtime.
-
 install(
     FILES
         meta.json
@@ -108,9 +113,3 @@ install(
     DESTINATION ${CMAKE_INSTALL_PREFIX}
 )
 
-install(
-    PROGRAMS
-        first_run.sh
-        install_udev_rules.sh
-    DESTINATION ${CMAKE_INSTALL_PREFIX}
-)
