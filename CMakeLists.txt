@@ -58,27 +58,38 @@ if (LINUX)
 	    ".*libm\\.so.*"
 	    ".*libpthread\\.so.*"
     )
-elseif (WIN32)
-    set(_post_exclude_regex
-        "api-ms-win-.*\\.dll"
-        "ext-ms-.*\\.dll"
-        "AzureAttest.*\\.dll"
-    )
-endif()
 
 if (APPLE)
     # For reasons unclear to me the install command below doesn't work without this
     set(_framework_dest_arg "FRAMEWORK" "DESTINATION" "lib")
 endif()
 
-install(
-    TARGETS orbbec-module
-    RUNTIME_DEPENDENCIES
-		POST_EXCLUDE_REGEXES ${_post_exclude_regex}
-    RUNTIME
-    LIBRARY
-    ${_framework_dest_arg}
-)
+
+if (WIN32)
+    # Install the target without scanning system DLLs
+    install(TARGETS orbbec-module
+        RUNTIME
+    )
+
+    # Manually install the SDK DLLs
+    install(DIRECTORY "${OrbbecSDK_DIR}/bin"
+        DESTINATION bin
+        FILES_MATCHING PATTERN "*.dll"
+    )
+
+    install(DIRECTORY "${viam_cpp_sdk_DIR}/bin"
+        DESTINATION bin
+        FILES_MATCHING PATTERN "*.dll"
+    )
+else
+    install(
+        TARGETS orbbec-module
+        RUNTIME_DEPENDENCIES
+            POST_EXCLUDE_REGEXES ${_post_exclude_regex}
+        RUNTIMEthe
+        LIBRARY
+        ${_framework_dest_arg}
+    )
 
 # The lib/extensions directory contains some shared libraries which are
 # mandatory for our use case but not picked up by the runtime dependency set
