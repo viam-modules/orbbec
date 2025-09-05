@@ -37,7 +37,7 @@ else
 	bin/build$(SCRIPT_EXT)
 endif
 
-update_meta:
+update-meta:
 	cmd /C powershell -Command "$$json = Get-Content 'meta.json' -Raw | ConvertFrom-Json; $$json.PSObject.Properties.Remove('first_run') | Out-Null; $$json | ConvertTo-Json -Depth 2 | Set-Content 'meta.json'"
 
 clean:
