@@ -71,8 +71,7 @@ if (WIN32)
     install(TARGETS orbbec-module
         RUNTIME
     )
-    set(ORBBEC_DLL "${OrbbecSDK_DIR}/bin/orbbecsdk.dll")
-    install(FILES ${ORBBEC_DLL} DESTINATION bin)
+    install(FILES "${OrbbecSDK_DIR}/orbbecsdk.dll" DESTINATION bin)
 
 else()
     install(

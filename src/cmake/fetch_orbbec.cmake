@@ -47,6 +47,11 @@ if(LINUX)
       ${CMAKE_CURRENT_SOURCE_DIR}/99-obsensor-libusb.rules
     ONLY_IF_DIFFERENT
   )
+elseif(WIN32)
+  file(COPY
+  ${CMAKE_CURRENT_BINARY_DIR}/_deps/orbbec-sdk-release-src/bin/orbbecsdk.dll
+  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/_deps/orbbec-sdk-release-src/lib
+  )
 endif()
 
 set(OrbbecSDK_DIR "${CMAKE_CURRENT_BINARY_DIR}/_deps/orbbec-sdk-release-src/lib" CACHE PATH "Path to the Orbbec SDK" FORCE)
