@@ -48,6 +48,7 @@ if(LINUX)
     ONLY_IF_DIFFERENT
   )
 elseif(WIN32)
+  # Copy dlls to the orbbecsdk lib folder
   file(COPY
   ${CMAKE_CURRENT_BINARY_DIR}/_deps/orbbec-sdk-release-src/bin/orbbecsdk.dll
   DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/_deps/orbbec-sdk-release-src/lib

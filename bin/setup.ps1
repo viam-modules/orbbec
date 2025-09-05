@@ -55,8 +55,9 @@ git checkout releases/v0.16.0
 # opt for the static compiler runtime so we don't have a dependency on
 # the VC redistributable.
 #
-# TODO: Note `-tf ""`, which disables the self test. I have not been
-# able to get this working on windows.
+#  `-tf ""`, which disables the self test, this does not
+# work on windows
+
 # boost backtrace contains a unix only library dlfcn.h
 conan create . `
       --build=missing `

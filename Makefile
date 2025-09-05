@@ -2,7 +2,6 @@
 OS ?= $(shell uname -s | tr '[:upper:]' '[:lower:]')
 
 ifeq ($(OS),Windows_NT)
-    ARCH := $(PROCESSOR_ARCHITECTURE)
     BIN_SUFFIX := .exe
   # Scripts for windows are written in powershell and
   #	we invoke a wrapper batch script with cmd
@@ -16,7 +15,6 @@ else
 	BIN_SUFFIX :=
 	SUBSHELL :=
 	PATHSEP := /
-	ARCH ?= $(shell uname -m)
 endif
 
 OUTPUT_NAME = orbbec-module$(BIN_SUFFIX)
