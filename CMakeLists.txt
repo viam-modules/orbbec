@@ -71,13 +71,9 @@ if (WIN32)
     install(TARGETS orbbec-module
         RUNTIME
     )
-     # Copy the OrbbecSDK DLL alongside the executable
-     get_target_property(ORBBEC_DLL_PATH ob::OrbbecSDK IMPORTED_LOCATION)
-     if(ORBBEC_DLL_PATH)
-         install(FILES ${ORBBEC_DLL_PATH} DESTINATION bin)
-     else()
-         message(FATAL_ERROR "Could not find OrbbecSDK DLL path")
-     endif()
+    set(ORBBEC_DLL "${OrbbecSDK_DIR}/bin/orbbecsdk.dll")
+    install(FILES ${ORBBEC_DLL} DESTINATION bin)
+
 else()
     install(
         TARGETS orbbec-module
