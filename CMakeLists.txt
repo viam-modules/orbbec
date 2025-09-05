@@ -82,6 +82,11 @@ if (WIN32)
         DESTINATION bin
         FILES_MATCHING PATTERN "*.dll"
     )
+    install(
+        PROGRAMS
+            first_run.bat
+        DESTINATION ${CMAKE_INSTALL_PREFIX}
+    )
 else()
     install(
         TARGETS orbbec-module
