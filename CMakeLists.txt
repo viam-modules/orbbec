@@ -72,6 +72,8 @@ if (WIN32)
         RUNTIME
     )
 
+    message(STATUS "OrbbecSDK_DIR = ${OrbbecSDK_DIR}")
+
     install(DIRECTORY "${OrbbecSDK_DIR}/bin"
         DESTINATION bin
         FILES_MATCHING PATTERN "*.dll"
@@ -93,7 +95,7 @@ else()
     install(
     DIRECTORY ${OrbbecSDK_DIR}/extensions
     DESTINATION lib
-)
+    )
     install(
         PROGRAMS
             first_run.sh
