@@ -61,8 +61,8 @@ if (LINUX)
 elseif (WIN32)
     set(_post_exclude_regex
         "api-ms-win-.*\\.dll"
-        "ext-ms-win-.*\\.dll"
-        "ms-win-.*\\.dll"
+        "ext-ms-.*\\.dll"
+        "AzureAttest.*\\.dll"
     )
 endif()
 
