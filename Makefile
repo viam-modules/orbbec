@@ -77,7 +77,7 @@ orbbec-test-bin:
 conan-pkg:
 ifeq ($(OS),Windows_NT)
 	cmd /C "IF EXIST .\venv\Scripts\activate.bat call .\venv\Scripts\activate.bat && ^
-    conan create . -o:a \"viam-cpp-sdk/*:shared=False\" -s:a build_type=Release -s:a compiler.cppstd=17 --build=missing"
+	conan create . -o:a "viam-cpp-sdk/*:shared=False" -s:a build_type=Release -s:a compiler.cppstd=17 --build=missing"
 else
 	test -f ./venv/bin/activate && . ./venv/bin/activate; \
 	conan create . \
@@ -100,6 +100,7 @@ else
 	--deployer-package "&" \
 	--envs-generation false
 endif
+
 image-base:
 	docker build -t $(BASE_NAME):$(BASE_TAG) \
 		--platform=linux/arm64 \
