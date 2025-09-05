@@ -50,12 +50,8 @@ clean-all: clean
 
 setup:
 ifeq ($(OS),Windows_NT)
-	cmd /C "set ORBBEC_SDK_VERSION=$(ORBBEC_SDK_VERSION) && set ORBBEC_SDK_DIR=$(ORBBEC_SDK_DIR) && bin\setup$(SCRIPT_EXT)"
+	cmd /C "bin\setup$(SCRIPT_EXT)"
 else
-	export ORBBEC_SDK_VERSION=$(ORBBEC_SDK_VERSION); \
-	export ORBBEC_SDK_DIR=$(ORBBEC_SDK_DIR); \
-	export OS=$(OS); \
-	export ARCH=${ARCH}; \
 	bin/setup$(SCRIPT_EXT)
 endif
 
@@ -76,8 +72,7 @@ orbbec-test-bin:
 
 conan-pkg:
 ifeq ($(OS),Windows_NT)
-	cmd /C "IF EXIST .\venv\Scripts\activate.bat call .\venv\Scripts\activate.bat && ^
-	conan create . -o:a "viam-cpp-sdk/*:shared=False" -s:a build_type=Release -s:a compiler.cppstd=17 --build=missing"
+	cmd /C "IF EXIST .\venv\Scripts\activate.bat call .\venv\Scripts\activate.bat && conan create . -o:a "viam-cpp-sdk/*:shared=False" -s:a build_type=Release -s:a compiler.cppstd=17 --build=missing"
 else
 	test -f ./venv/bin/activate && . ./venv/bin/activate; \
 	conan create . \
@@ -89,8 +84,7 @@ endif
 
 module.tar.gz: conan-pkg meta.json
 ifeq ($(OS),Windows_NT)
-	cmd /C "IF EXIST .\venv\Scripts\activate.bat call .\venv\Scripts\activate.bat && ^
-	conan install --requires=viam-orbbec/0.0.1 -o:a "viam-cpp-sdk/*:shared=False" -s:a build_type=Release -s:a compiler.cppstd=17 --deployer-package "&" --envs-generation false"
+	cmd /C "IF EXIST .\venv\Scripts\activate.bat call .\venv\Scripts\activate.bat && conan install --requires=viam-orbbec/0.0.1 -o:a "viam-cpp-sdk/*:shared=False" -s:a build_type=Release -s:a compiler.cppstd=17 --deployer-package "&" --envs-generation false"
 else
 	test -f ./venv/bin/activate && . ./venv/bin/activate; \
 	conan install --requires=viam-orbbec/0.0.1 \
