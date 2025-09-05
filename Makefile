@@ -38,7 +38,7 @@ else
 endif
 
 update_meta:
-    cmd /C powershell -Command "$$json = Get-Content 'meta.json' -Raw | ConvertFrom-Json; $$json.PSObject.Properties.Remove('first_run') | Out-Null; $$json | ConvertTo-Json -Depth 2 | Set-Content 'meta.json'"
+	cmd /C powershell -Command "$$json = Get-Content 'meta.json' -Raw | ConvertFrom-Json; $$json.PSObject.Properties.Remove('first_run') | Out-Null; $$json | ConvertTo-Json -Depth 2 | Set-Content 'meta.json'"
 
 clean:
 	rm -rf packaging/appimages/deploy module.tar.gz
