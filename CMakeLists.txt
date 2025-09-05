@@ -58,6 +58,7 @@ if (LINUX)
 	    ".*libm\\.so.*"
 	    ".*libpthread\\.so.*"
     )
+endif()
 
 if (APPLE)
     # For reasons unclear to me the install command below doesn't work without this
