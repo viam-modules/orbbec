@@ -84,6 +84,7 @@ endif
 
 module.tar.gz: conan-pkg meta.json
 ifeq ($(OS),Windows_NT)
+	cmd /C powershell -Command ("$$json = Get-Content 'meta.json' -Raw | ConvertFrom-Json).PSObject.Properties.Remove('first_run'); $$json | ConvertTo-Json -Depth 2 | Set-Content 'meta.json'"
 	cmd /C "IF EXIST .\venv\Scripts\activate.bat call .\venv\Scripts\activate.bat && conan install --requires=viam-orbbec/0.0.1 -o:a "viam-cpp-sdk/*:shared=False" -s:a build_type=Release -s:a compiler.cppstd=17 --deployer-package "^&" --envs-generation false"
 else
 	test -f ./venv/bin/activate && . ./venv/bin/activate; \

@@ -72,7 +72,6 @@ if (WIN32)
         RUNTIME
     )
 
-    # Manually install the SDK DLLs
     install(DIRECTORY "${OrbbecSDK_DIR}/bin"
         DESTINATION bin
         FILES_MATCHING PATTERN "*.dll"
@@ -81,11 +80,6 @@ if (WIN32)
     install(DIRECTORY "${viam_cpp_sdk_DIR}/bin"
         DESTINATION bin
         FILES_MATCHING PATTERN "*.dll"
-    )
-    install(
-        PROGRAMS
-            first_run.bat
-        DESTINATION ${CMAKE_INSTALL_PREFIX}
     )
 else()
     install(
