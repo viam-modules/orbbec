@@ -3,6 +3,7 @@ name: Build & publish module to registry
 on:
   release:
     types: [published]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -21,8 +22,7 @@ jobs:
           - platform: linux/arm64
             os: buildjet-8vcpu-ubuntu-2204-arm
             container:
-              image: ghcr.io/viamrobotics/rdk-devenv:arm64
-              options: --platform linux/arm64
+              image: ghcr.io/viam-modules/orbbec/viam-cpp-base-orin:0.0.1
             artifact-name: module-linux-arm64
 
     runs-on: ${{ matrix.os }}
@@ -48,6 +48,8 @@ jobs:
 
   publish:
     needs: build
+    # If the workflow was manually triggered it will be a dry run that does not push to the registry.
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/viamrobotics/rdk-devenv:amd64
