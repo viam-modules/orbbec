@@ -91,15 +91,15 @@ else()
         LIBRARY
         ${_framework_dest_arg}
     )
+    install(
+    DIRECTORY ${OrbbecSDK_DIR}/extensions
+    DESTINATION lib
+)
 endif()
 
 # The lib/extensions directory contains some shared libraries which are
 # mandatory for our use case but not picked up by the runtime dependency set
 # because they are loaded at runtime.
-install(
-    DIRECTORY ${OrbbecSDK_DIR}/extensions
-    DESTINATION lib
-)
 
 install(
     FILES
