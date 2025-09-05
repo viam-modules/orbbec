@@ -14,7 +14,9 @@
 
 #include "orbbec.hpp"
 
+#include <curl/curl.h>
 #include <math.h>
+#include <zip.h>
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
@@ -36,6 +38,7 @@
 #include <viam/sdk/resource/reconfigurable.hpp>
 #include <viam/sdk/rpc/server.hpp>
 
+#include <boost/callable_traits/args.hpp>
 #include <libobsensor/ObSensor.hpp>
 
 namespace orbbec {
@@ -44,13 +47,15 @@ namespace vsdk = ::viam::sdk;
 
 vsdk::Model Orbbec::model("viam", "orbbec", "astra2");
 
+// CONSTANTS BEGIN
 const std::string kColorSourceName = "color";
 const std::string kColorMimeTypeJPEG = "image/jpeg";
 const std::string kDepthSourceName = "depth";
 const std::string kDepthMimeTypeViamDep = "image/vnd.viam.dep";
 const std::string kPcdMimeType = "pointcloud/pcd";
-
-// CONSTANTS BEGIN
+// If the firmwareUrl is changed to a new version, also change the minFirmwareVer const.
+const std::string firmwareUrl = "https://orbbec-debian-repos-aws.s3.amazonaws.com/product/Astra2_Release_2.8.20.zip";
+const std::string minFirmwareVer = "2.8.20";
 constexpr char service_name[] = "viam_orbbec";
 const float mmToMeterMultiple = 0.001;
 const uint64_t maxFrameAgeUs = 1e6;  // time until a frame is considered stale, in microseconds (equal to 1 sec)
@@ -128,7 +133,19 @@ std::unordered_map<std::string, std::shared_ptr<ob::FrameSet>>& frame_set_by_ser
 // GLOBALS END
 
 // HELPERS BEGIN
-//
+void checkFirmwareVersion(const std::string version) {
+    int major = 0, minor = 0, patch = 0;
+    int requiredMajor = 0, requiredMinor = 0, requiredPatch = 0;
+    // ignore any trailing text in the case of a beta or RC version
+    sscanf(version.c_str(), "%d.%d.%d*s", &major, &minor, &patch);
+    sscanf(minFirmwareVer.c_str(), "%d.%d.%d", &requiredMajor, &requiredMinor, &requiredPatch);
+    if ((major < requiredMajor) || (major == requiredMajor && minor < requiredMinor) ||
+        (major == requiredMajor && minor == requiredMinor && patch < requiredPatch)) {
+        throw std::runtime_error("Unsupported firmware version. Required: >= 2.8.20, Current: " + version +
+                                 ". Call update_firmware command to upgrade.");
+    }
+}
+
 uint64_t getNowUs() {
     return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 }
@@ -301,6 +318,156 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
     return nullptr;
 }
 
+size_t writeFileCallback(void* contents, size_t size, size_t nmemb, void* userp) {
+    auto* buffer = static_cast<std::vector<char>*>(userp);
+    size_t totalSize = size * nmemb;
+    buffer->insert(buffer->end(), static_cast<char*>(contents), static_cast<char*>(contents) + totalSize);
+    return totalSize;
+}
+
+template <auto cleanup_fp>
+struct Cleanup {
+    using pointer_type = std::tuple_element_t<0, boost::callable_traits::args_t<decltype(cleanup_fp)>>;
+    using value_type = std::remove_pointer_t<pointer_type>;
+
+    void operator()(pointer_type p) {
+        if (p != nullptr) {
+            cleanup_fp(p);
+        }
+    }
+};
+
+template <auto cleanup_fp>
+using CleanupPtr = std::unique_ptr<typename Cleanup<cleanup_fp>::value_type, Cleanup<cleanup_fp>>;
+
+void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev, std::shared_ptr<ob::Context> ctx) {
+// On linux, orbbec reccomends to set libuvc backend for firmware update
+#if defined(__linux__)
+    ctx->setUvcBackendType(OB_UVC_BACKEND_TYPE_LIBUVC);
+#endif
+
+    CleanupPtr<curl_easy_cleanup> curl(curl_easy_init());
+    if (!curl) {
+        throw std::invalid_argument("curl easy init failed");
+    }
+
+    // Download the firmware and write it to a buffer
+    std::vector<char> zipBuffer;
+    curl_easy_setopt(curl.get(), CURLOPT_URL, firmwareUrl.c_str());
+    curl_easy_setopt(curl.get(), CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, writeFileCallback);
+    curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, &zipBuffer);
+    CURLcode res = curl_easy_perform(curl.get());
+    if (res != CURLE_OK) {
+        std::ostringstream buffer;
+        buffer << "curl early perform failed: " << curl_easy_strerror(res);
+        throw std::invalid_argument(buffer.str());
+    }
+
+    std::vector<uint8_t> binData;
+    zip_error_t ziperror;
+    zip_error_init(&ziperror);
+
+    zip_source_t* src = zip_source_buffer_create(zipBuffer.data(), zipBuffer.size(), 0, &ziperror);
+    if (!src) {
+        std::ostringstream buffer;
+        buffer << "failed to create zip buffer: " << zip_error_strerror(&ziperror);
+        throw std::runtime_error(buffer.str());
+    }
+
+    // Ensure src cleanup if zip_open fails
+    CleanupPtr<zip_source_free> srcCleanup(src);
+
+    // If this succeeds, zip takes ownership of src, so src will be freed when zip_close is called.
+    zip_t* zip = zip_open_from_source(src, 0, &ziperror);
+    if (!zip) {
+        std::ostringstream buffer;
+        buffer << "failed to open zip from source: " << zip_error_strerror(&ziperror);
+        throw std::runtime_error(buffer.str());
+    }
+
+    srcCleanup.release();
+    CleanupPtr<zip_close> zipCleanup(zip);
+
+    if (zip_get_num_entries(zip, 0) != 1) {
+        throw std::runtime_error("unexpected number of files in firmware zip");
+    }
+
+    const char* fileName = zip_get_name(zip, 0, 0);
+    if (!fileName) {
+        throw std::runtime_error("couldn't get bin file name");
+    }
+
+    CleanupPtr<zip_fclose> binFile(zip_fopen(zip, fileName, 0));
+    if (!binFile) {
+        throw std::runtime_error("failed to open the firmware bin file");
+    }
+
+    zip_stat_t stats;
+    zip_stat_init(&stats);
+    if (zip_stat(zip, fileName, 0, &stats) != 0) {
+        throw std::invalid_argument("failed to stat file");
+    }
+
+    binData.resize(stats.size);
+    zip_int64_t bytesRead = zip_fread(binFile.get(), binData.data(), stats.size);
+    if (bytesRead == -1) {
+        zip_error_t* err = zip_file_get_error(binFile.get());
+        std::ostringstream buffer;
+        buffer << "failed to read bin: " << zip_error_strerror(err);
+        throw std::runtime_error(buffer.str());
+    }
+
+    if (bytesRead != stats.size) {
+        std::ostringstream buffer;
+        buffer << "failed to fully read binary file, file size: " << stats.size << "bytes read: " << bytesRead;
+        throw std::runtime_error(buffer.str());
+    }
+
+    auto firmwareUpdateCallback = [](OBFwUpdateState state, const char* message, uint8_t percent) {
+        switch (state) {
+            case STAT_VERIFY_SUCCESS:
+                std::cout << "Image file verification success\n";
+            case STAT_FILE_TRANSFER:
+                std::cout << "File transfer in progress\n";
+                break;
+            case STAT_DONE:
+                std::cout << "Update completed\n";
+                break;
+            case STAT_IN_PROGRESS:
+                std::cout << "Upgrade in progress\n";
+                break;
+            case STAT_START:
+                std::cout << "Starting the upgrade\n";
+                break;
+            case STAT_VERIFY_IMAGE:
+                std::cout << "Verifying image file\n";
+                break;
+            default:
+                std::cerr << "Unknown status or error\n";
+                break;
+        }
+        std::cout << "Firmware update in progress: " << message << " upgrade " << static_cast<int>(percent) << "% complete\n";
+    };
+
+    bool executeAsync = false;
+    try {
+        my_dev->device->updateFirmwareFromData(binData.data(), binData.size(), std::move(firmwareUpdateCallback), executeAsync);
+        VIAM_SDK_LOG(info) << "firmware update successful!";
+    } catch (...) {
+        // Reset UVC backend type before re-throwing
+#if defined(__linux__)
+        ctx->setUvcBackendType(OB_UVC_BACKEND_TYPE_AUTO);
+#endif
+        throw;
+    }
+
+    // Reset UVC backend type on success
+#if defined(__linux__)
+    ctx->setUvcBackendType(OB_UVC_BACKEND_TYPE_AUTO);
+#endif
+}
+
 auto frameCallback(const std::string& serialNumber) {
     return [serialNumber](std::shared_ptr<ob::FrameSet> frameSet) {
         if (frameSet->getCount() != 2) {
@@ -358,7 +525,6 @@ auto frameCallback(const std::string& serialNumber) {
 void startDevice(std::string serialNumber) {
     VIAM_SDK_LOG(info) << service_name << ": starting device " << serialNumber;
     std::lock_guard<std::mutex> lock(devices_by_serial_mu());
-
     auto search = devices_by_serial().find(serialNumber);
     if (search == devices_by_serial().end()) {
         std::ostringstream buffer;
@@ -380,7 +546,6 @@ void startDevice(std::string serialNumber) {
         buffer << service_name << ": unable to start already started device" << serialNumber;
         throw std::invalid_argument(buffer.str());
     }
-
     my_dev->pipe->start(my_dev->config, frameCallback(serialNumber));
     my_dev->started = true;
 
@@ -433,6 +598,28 @@ void stopDevice(std::string serialNumber, std::string resourceName) {
     }
 }
 
+void listDevices(const ob::Context& ctx) {
+    try {
+        auto devList = ctx.queryDeviceList();
+        int devCount = devList->getCount();
+        VIAM_SDK_LOG(info) << "devCount: " << devCount << "\n";
+
+        std::shared_ptr<ob::Device> dev = nullptr;
+        std::shared_ptr<ob::DeviceInfo> info = nullptr;
+        for (size_t i = 0; i < devCount; i++) {
+            dev = devList->getDevice(i);
+            info = dev->getDeviceInfo();
+            printDeviceInfo(info);
+            dev.reset();
+        }
+    } catch (ob::Error& e) {
+        std::cerr << "listDevices\n"
+                  << "function:" << e.getFunction() << "\nargs:" << e.getArgs() << "\nname:" << e.getName() << "\nmessage:" << e.what()
+                  << "\ntype:" << e.getExceptionType() << std::endl;
+        throw e;
+    }
+}
+
 raw_camera_image encodeDepthRAW(const unsigned char* data, const uint64_t width, const uint64_t height, const bool littleEndian) {
     viam::sdk::Camera::depth_map m = xt::xarray<uint16_t>::from_shape({height, width});
     std::copy(reinterpret_cast<const uint16_t*>(data), reinterpret_cast<const uint16_t*>(data) + height * width, m.begin());
@@ -471,14 +658,24 @@ std::vector<std::string> Orbbec::validate(vsdk::ResourceConfig cfg) {
     return {};
 }
 
-Orbbec::Orbbec(vsdk::Dependencies deps, vsdk::ResourceConfig cfg)
-    : Camera(cfg.name()), config_(configure(std::move(deps), std::move(cfg))) {
+Orbbec::Orbbec(vsdk::Dependencies deps, vsdk::ResourceConfig cfg, std::shared_ptr<ob::Context> ctx)
+    : Camera(cfg.name()), config_(configure(std::move(deps), std::move(cfg))), ob_ctx_(std::move(ctx)) {
     VIAM_SDK_LOG(info) << "Orbbec constructor start " << config_->serial_number;
     startDevice(config_->serial_number);
     {
         std::lock_guard<std::mutex> lock(serial_by_resource_mu());
         serial_by_resource()[config_->resource_name] = config_->serial_number;
     }
+
+    // set firmware version  member variable
+    {
+        std::lock_guard<std::mutex> lock(devices_by_serial_mu());
+        auto search = devices_by_serial().find(config_->serial_number);
+        if (search != devices_by_serial().end()) {
+            firmware_version_ = search->second->device->getDeviceInfo()->firmwareVersion();
+        }
+    }
+
     VIAM_SDK_LOG(info) << "Orbbec constructor end " << config_->serial_number;
 }
 
@@ -533,6 +730,15 @@ void Orbbec::reconfigure(const vsdk::Dependencies& deps, const vsdk::ResourceCon
         std::lock_guard<std::mutex> lock(serial_by_resource_mu());
         serial_by_resource()[new_resource_name] = new_serial_number;
     }
+
+    // set firmware version member variable
+    {
+        std::lock_guard<std::mutex> lock(devices_by_serial_mu());
+        auto search = devices_by_serial().find(config_->serial_number);
+        if (search != devices_by_serial().end()) {
+            firmware_version_ = search->second->device->getDeviceInfo()->firmwareVersion();
+        }
+    }
     VIAM_SDK_LOG(info) << "Orbbec reconfigure end";
 }
 
@@ -544,6 +750,9 @@ vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::Pro
             const std::lock_guard<std::mutex> lock(config_mu_);
             serial_number = config_->serial_number;
         }
+
+        checkFirmwareVersion(firmware_version_);
+
         std::shared_ptr<ob::FrameSet> fs = nullptr;
         {
             std::lock_guard<std::mutex> lock(frame_set_by_serial_mu());
@@ -619,7 +828,7 @@ vsdk::Camera::properties Orbbec::get_properties() {
             std::unique_ptr<ViamOBDevice>& my_dev = search->second;
             if (!my_dev->started) {
                 std::ostringstream buffer;
-                buffer << service_name << ": device with serial number " << serial_number << " is not longer started";
+                buffer << service_name << ": device with serial number " << serial_number << " is not started";
                 throw std::invalid_argument(buffer.str());
             }
             props = my_dev->pipe->getCameraParam().rgbIntrinsic;
@@ -651,6 +860,9 @@ vsdk::Camera::image_collection Orbbec::get_images() {
             const std::lock_guard<std::mutex> lock(config_mu_);
             serial_number = config_->serial_number;
         }
+
+        checkFirmwareVersion(firmware_version_);
+
         std::shared_ptr<ob::FrameSet> fs = nullptr;
         {
             std::lock_guard<std::mutex> lock(frame_set_by_serial_mu());
@@ -738,8 +950,58 @@ vsdk::Camera::image_collection Orbbec::get_images() {
 }
 
 vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
-    VIAM_SDK_LOG(error) << "do_command not implemented";
-    return vsdk::ProtoStruct{};
+    viam::sdk::ProtoStruct resp = viam::sdk::ProtoStruct{};
+    constexpr char firmware_key[] = "update_firmware";
+    for (const auto& kv : command) {
+        if (kv.first == firmware_key) {
+            std::string serial_number;
+            {
+                const std::lock_guard<std::mutex> lock(config_mu_);
+                serial_number = config_->serial_number;
+            }
+            {
+                // note: under lock for the entire firmware update to ensure device can't be destructed.
+                const std::lock_guard<std::mutex> lock(devices_by_serial_mu());
+                auto search = devices_by_serial().find(serial_number);
+                if (search == devices_by_serial().end()) {
+                    throw std::invalid_argument("device is not connected");
+                }
+
+                std::unique_ptr<ViamOBDevice>& dev = search->second;
+                if (firmware_version_.find(minFirmwareVer) != std::string::npos) {
+                    std::ostringstream buffer;
+                    buffer << "device firmware already on version " << minFirmwareVer;
+                    resp.emplace(firmware_key, buffer.str());
+                    break;
+                }
+                if (dev->started) {
+                    dev->pipe->stop();
+                    dev->started = false;
+                }
+
+                VIAM_SDK_LOG(info) << "Updating device firmware...";
+                try {
+                    updateFirmware(dev, ob_ctx_);
+                    firmware_version_ = minFirmwareVer;
+                } catch (const std::exception& e) {
+                    std::ostringstream buffer;
+                    buffer << "firmware update failed: " << e.what();
+                    VIAM_SDK_LOG(error) << buffer.str();
+                    resp.emplace(firmware_key, buffer.str());
+                    dev->pipe->start(dev->config, frameCallback(serial_number));
+                    dev->started = true;
+                }
+// macOS has a bug where the device changed callback is not called on reboot, so user must manually reboot the device
+#if defined(__linux__)
+                dev->device->reboot();
+                resp.emplace(firmware_key, std::string("firmware successfully updated"));
+#else
+                resp.emplace(firmware_key, std::string("firmware successfully updated, unplug and replug the device"));
+#endif
+            }
+        }
+    }
+    return resp;
 }
 
 vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const vsdk::ProtoStruct& extra) {
@@ -750,6 +1012,9 @@ vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const v
             const std::lock_guard<std::mutex> lock(config_mu_);
             serial_number = config_->serial_number;
         }
+
+        checkFirmwareVersion(firmware_version_);
+
         std::shared_ptr<ob::FrameSet> fs = nullptr;
         {
             std::lock_guard<std::mutex> lock(frame_set_by_serial_mu());
