@@ -71,18 +71,6 @@ if (WIN32)
     install(TARGETS orbbec-module
         RUNTIME
     )
-
-    message(STATUS "OrbbecSDK_DIR = ${OrbbecSDK_DIR}")
-
-    install(DIRECTORY "${OrbbecSDK_DIR}/bin"
-        DESTINATION bin
-        FILES_MATCHING PATTERN "*.dll"
-    )
-
-    install(DIRECTORY "${viam_cpp_sdk_DIR}/bin"
-        DESTINATION bin
-        FILES_MATCHING PATTERN "*.dll"
-    )
 else()
     install(
         TARGETS orbbec-module
@@ -91,10 +79,6 @@ else()
         RUNTIME
         LIBRARY
         ${_framework_dest_arg}
-    )
-    install(
-    DIRECTORY ${OrbbecSDK_DIR}/extensions
-    DESTINATION lib
     )
     install(
         PROGRAMS
@@ -107,6 +91,10 @@ endif()
 # The lib/extensions directory contains some shared libraries which are
 # mandatory for our use case but not picked up by the runtime dependency set
 # because they are loaded at runtime.
+install(
+    DIRECTORY ${OrbbecSDK_DIR}/extensions
+    DESTINATION lib
+    )
 install(
     FILES
         meta.json
