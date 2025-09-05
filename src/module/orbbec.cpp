@@ -13,11 +13,15 @@
 // limitations under the License.
 
 #include "orbbec.hpp"
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 #include <math.h>
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
+#include <iomanip>
 
 #include <iostream>
 #include <memory>
@@ -129,6 +133,14 @@ std::unordered_map<std::string, std::shared_ptr<ob::FrameSet>>& frame_set_by_ser
 
 // HELPERS BEGIN
 //
+
+// Convert integer to uppercase 4-digit hex string
+std::string intToHex(uint16_t value) {
+    std::stringstream ss;
+    ss << std::uppercase << std::hex << std::setw(4) << std::setfill('0') << value;
+    return ss.str();
+}
+
 uint64_t getNowUs() {
     return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 }
@@ -455,7 +467,7 @@ raw_camera_image encodeDepthRAW(const unsigned char* data, const uint64_t width,
 std::vector<std::string> Orbbec::validate(vsdk::ResourceConfig cfg) {
     auto attrs = cfg.attributes();
 
-    if (not attrs.count("serial_number")) {
+    if (!attrs.count("serial_number")) {
         throw std::invalid_argument("serial_number is a required argument");
     }
 
@@ -856,6 +868,100 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
 
     pointCloudFilter->setCreatePointFormat(OB_FORMAT_RGB_POINT);
 
+#ifdef _WIN32
+    // On windows, we must add a metadata value to the windows device registry for the device to work correctly.
+    try {
+        const char* command = "powershell -Command \"Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force\"";
+        int result = std::system(command);
+        if (result != 0) {
+            // command failed, try the backup
+            command = "powershell -Command \"Set-ExecutionPolicy -ExecutionPolicy Unrestricted -Scope CurrentUser -Force\"";
+            int result = std::system(command);
+            if (result != 0) {
+                VIAM_SDK_LOG(error) << "Could not set execution policy";
+            }
+        }
+
+        // Base registry paths
+        std::vector<std::string> searchTrees = {
+            // KSCATEGORY_CAPTURE class,used for video capture devices
+            "SYSTEM\\CurrentControlSet\\Control\\DeviceClasses\\{e5323777-f976-4f5b-9b55-b94699c46e44}",
+            // KSCATEGORY_RENDER class, used for rendering devices
+            "SYSTEM\\CurrentControlSet\\Control\\DeviceClasses\\{65E8773D-8F56-11D0-A3B9-00A0C9223196}"};
+
+        uint16_t vid = dev->getDeviceInfo()->vid();
+        uint16_t pid = dev->getDeviceInfo()->pid();
+        std::string baseDeviceId = "##?#USB#VID_" + intToHex(vid) + "&PID_" + intToHex(pid);
+
+        for (const auto& subtree : searchTrees) {
+            // Open the device registry key
+            HKEY hkey;
+            if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, subtree.c_str(), 0, KEY_ENUMERATE_SUB_KEYS, &hkey) != ERROR_SUCCESS) {
+                VIAM_SDK_LOG(error) << "Could not open device registry key: " << subtree;
+                continue;
+            }
+
+            char name[512];
+            DWORD nameSize;
+            DWORD index = 0;
+            while (true) {
+                // reset before each call
+                nameSize = sizeof(name);
+
+                // enumerate all of the keys in the devices folder we previously opened
+                LONG result = RegEnumKeyExA(hkey, index, name, &nameSize, NULL, NULL, NULL, NULL);
+                if (result == ERROR_NO_MORE_ITEMS) {
+                    break;  // normal end of enumeration
+                } else if (result != ERROR_SUCCESS) {
+                    VIAM_SDK_LOG(error) << "device registry key enumeration failed: " << result;
+                    break;
+                }
+                std::string subKeyName(name);
+                // find the enteries for our orbbec device.
+                if (subKeyName.find("USB#VID_" + intToHex(vid) + "&PID_" + intToHex(pid)) == std::string::npos) {
+                    // not a match for an orbbec device, go to next key
+                    ++index;
+                    continue;
+                }
+
+                std::string deviceParamsKey = subtree + "\\" + subKeyName + "\\#GLOBAL\\Device Parameters";
+                std::string valueName = "MetadataBufferSizeInKB0";
+                HKEY hDeviceKey;
+                // open the orbbec device parameters key
+                result = RegOpenKeyExA(HKEY_LOCAL_MACHINE, deviceParamsKey.c_str(), 0, KEY_READ | KEY_SET_VALUE, &hDeviceKey);
+                if (result != ERROR_SUCCESS) {
+                    VIAM_SDK_LOG(error) << "Couldn't open windows registry device parameters key: " << deviceParamsKey;
+                    ++index;
+                    continue;
+                }
+                // check if the metadata value already exists
+                DWORD data;
+                DWORD dataSize = sizeof(data);
+                result = RegQueryValueExA(hDeviceKey, valueName.c_str(), nullptr, nullptr, reinterpret_cast<BYTE*>(&data), &dataSize);
+                if (result == ERROR_FILE_NOT_FOUND) {
+                    // value does not exist yet, create it.
+                    DWORD value = 5;
+                    result =
+                        RegSetValueExA(hDeviceKey, valueName.c_str(), 0, REG_DWORD, reinterpret_cast<const BYTE*>(&value), sizeof(value));
+                    if (result != ERROR_SUCCESS) {
+                        VIAM_SDK_LOG(error) << "Couldn't set metadata registry value for key " << deviceParamsKey;
+                    } else {
+                        VIAM_SDK_LOG(info) << "Created value " << valueName << " = " << value << " for key " << deviceParamsKey;
+                    }
+                } else if (result == ERROR_SUCCESS) {
+                    VIAM_SDK_LOG(info) << "Value already exists on key " << deviceParamsKey << ", skipping.";
+                } else {
+                    VIAM_SDK_LOG(error) << "Error reading metadata value for key " << deviceParamsKey << ": " << result;
+                }
+                RegCloseKey(hDeviceKey);
+                ++index;
+            }
+            RegCloseKey(hkey);
+        }
+    } catch (const std::exception& e) {
+        throw std::runtime_error("failed to update windows device registry keys: " + std::string(e.what()));
+    }
+#endif
     {
         std::lock_guard<std::mutex> lock(devices_by_serial_mu());
         std::unique_ptr<ViamOBDevice> my_dev = std::make_unique<ViamOBDevice>();

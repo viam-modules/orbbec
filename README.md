@@ -7,6 +7,7 @@ This module provides access to the color and depth sensors and creates pointclou
 - **Darwin ARM64**
 - **Linux x64**: Ubuntu 24.04
 - **Linux ARM64**: NVIDIA Jetson AGX Orin, NVIDIA Jetson Orin NX, NVIDIA Jetson Orin Nano, NVIDIA Jetson AGX Xavier, NVIDIA Jetson Xavier NX
+- **Windows AMD64**: Windows 11
 
 ## Model viam:orbbec:astra2
 
