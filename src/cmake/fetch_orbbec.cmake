@@ -52,6 +52,10 @@ elseif(WIN32)
   ${CMAKE_CURRENT_BINARY_DIR}/_deps/orbbec-sdk-release-src/bin/orbbecsdk.dll
   DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/_deps/orbbec-sdk-release-src/lib
   )
+  file(COPY
+  ${CMAKE_CURRENT_BINARY_DIR}/_deps/orbbec-sdk-release-src/bin/extensions
+  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/_deps/orbbec-sdk-release-src/lib
+  )
 endif()
 
 set(OrbbecSDK_DIR "${CMAKE_CURRENT_BINARY_DIR}/_deps/orbbec-sdk-release-src/lib" CACHE PATH "Path to the Orbbec SDK" FORCE)
