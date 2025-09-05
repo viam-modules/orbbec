@@ -1,4 +1,23 @@
-OUTPUT_NAME = orbbec-module
+# Detect OS
+OS ?= $(shell uname -s | tr '[:upper:]' '[:lower:]')
+
+ifeq ($(OS),Windows_NT)
+    BIN_SUFFIX := .exe
+  # Scripts for windows are written in powershell and
+  #	we invoke a wrapper batch script with cmd
+  # syntax, which calls powershell for us and explicitly sets the
+  # exit status so we terminate make on error.
+	SCRIPT_EXT := .bat
+	SUBSHELL := cmd /C
+	PATHSEP := \\
+else
+	SCRIPT_EXT = .sh
+	BIN_SUFFIX :=
+	SUBSHELL :=
+	PATHSEP := /
+endif
+
+OUTPUT_NAME = orbbec-module$(BIN_SUFFIX)
 BIN := build-conan/build/RelWithDebInfo/orbbec-module
 TAG_VERSION?=latest
 
@@ -11,8 +30,9 @@ BASE_TAG := 0.0.1
 
 build: $(BIN)
 
-$(BIN): lint conanfile.py src/* bin/*
-	bin/build.sh
+$(BIN): conanfile.py src/* bin/*
+	$(SUBSHELL) bin$(PATHSEP)build$(SCRIPT_EXT)
+
 
 clean:
 	rm -rf packaging/appimages/deploy module.tar.gz
@@ -25,10 +45,14 @@ clean-all: clean
 	rm -f $(OUTPUT_NAME)
 
 setup:
-	bin/setup.sh
+	$(SUBSHELL) bin$(PATHSEP)setup$(SCRIPT_EXT)
 
 lint:
+ifeq ($(OS),Windows_NT)
+	@echo lint unsupported on windows
+else
 	./bin/run-clang-format.sh
+endif
 
 orbbec-test-bin:
 	cd tests && \
@@ -37,16 +61,24 @@ orbbec-test-bin:
 
 # Both the commands below need to source/activate the venv in the same line as the
 # conan call because every line of a Makefile runs in a subshell
-
 conan-pkg:
+ifeq ($(OS),Windows_NT)
+# no first run on windows, remove it from meta.json
+	cmd /C powershell -Command "$$json = Get-Content 'meta.json' -Raw | ConvertFrom-Json; $$json.PSObject.Properties.Remove('first_run') | Out-Null; $$json | ConvertTo-Json -Depth 2 | Set-Content 'meta.json'"
+	cmd /C "IF EXIST .\venv\Scripts\activate.bat call .\venv\Scripts\activate.bat && conan create . -o:a "viam-cpp-sdk/*:shared=False" -s:a build_type=Release -s:a compiler.cppstd=17 --build=missing"
+else
 	test -f ./venv/bin/activate && . ./venv/bin/activate; \
 	conan create . \
 	-o:a "viam-cpp-sdk/*:shared=False" \
 	-s:a build_type=Release \
 	-s:a compiler.cppstd=17 \
 	--build=missing
+endif
 
 module.tar.gz: conan-pkg meta.json
+ifeq ($(OS),Windows_NT)
+	cmd /C "IF EXIST .\venv\Scripts\activate.bat call .\venv\Scripts\activate.bat && conan install --requires=viam-orbbec/0.0.1 -o:a "viam-cpp-sdk/*:shared=False" -s:a build_type=Release -s:a compiler.cppstd=17 --deployer-package "^&" --envs-generation false"
+else
 	test -f ./venv/bin/activate && . ./venv/bin/activate; \
 	conan install --requires=viam-orbbec/0.0.1 \
 	-o:a "viam-cpp-sdk/*:shared=False" \
@@ -54,6 +86,7 @@ module.tar.gz: conan-pkg meta.json
 	-s:a compiler.cppstd=17 \
 	--deployer-package "&" \
 	--envs-generation false
+endif
 
 image-base:
 	docker build -t $(BASE_NAME):$(BASE_TAG) \
