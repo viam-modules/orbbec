@@ -81,16 +81,16 @@ if (WIN32)
         DESTINATION bin
         FILES_MATCHING PATTERN "*.dll"
     )
-else
+else()
     install(
         TARGETS orbbec-module
         RUNTIME_DEPENDENCIES
             POST_EXCLUDE_REGEXES ${_post_exclude_regex}
-        RUNTIMEthe
+        RUNTIME
         LIBRARY
         ${_framework_dest_arg}
     )
-endif
+endif()
 
 # The lib/extensions directory contains some shared libraries which are
 # mandatory for our use case but not picked up by the runtime dependency set
