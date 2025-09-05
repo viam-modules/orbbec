@@ -37,8 +37,6 @@ else
 	bin/build$(SCRIPT_EXT)
 endif
 
-update-meta:
-	cmd /C powershell -Command "$$json = Get-Content 'meta.json' -Raw | ConvertFrom-Json; $$json.PSObject.Properties.Remove('first_run') | Out-Null; $$json | ConvertTo-Json -Depth 2 | Set-Content 'meta.json'"
 
 clean:
 	rm -rf packaging/appimages/deploy module.tar.gz
@@ -72,9 +70,9 @@ orbbec-test-bin:
 
 # Both the commands below need to source/activate the venv in the same line as the
 # conan call because every line of a Makefile runs in a subshell
-
 conan-pkg:
 ifeq ($(OS),Windows_NT)
+	cmd /C powershell -Command "$$json = Get-Content 'meta.json' -Raw | ConvertFrom-Json; $$json.PSObject.Properties.Remove('first_run') | Out-Null; $$json | ConvertTo-Json -Depth 2 | Set-Content 'meta.json'"
 	cmd /C "IF EXIST .\venv\Scripts\activate.bat call .\venv\Scripts\activate.bat && conan create . -o:a "viam-cpp-sdk/*:shared=False" -s:a build_type=Release -s:a compiler.cppstd=17 --build=missing"
 else
 	test -f ./venv/bin/activate && . ./venv/bin/activate; \
@@ -85,7 +83,7 @@ else
 	--build=missing
 endif
 
-module.tar.gz: update-meta conan-pkg meta.json
+module.tar.gz: conan-pkg meta.json
 ifeq ($(OS),Windows_NT)
 	cmd /C "IF EXIST .\venv\Scripts\activate.bat call .\venv\Scripts\activate.bat && conan install --requires=viam-orbbec/0.0.1 -o:a "viam-cpp-sdk/*:shared=False" -s:a build_type=Release -s:a compiler.cppstd=17 --deployer-package "^&" --envs-generation false"
 else
