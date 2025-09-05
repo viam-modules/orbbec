@@ -10,12 +10,12 @@ project(viam-orbbec
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src/cmake")
 
-# Here we set the rpath to accomodate one and only one supported deployment
-# case, a directory containing
+# Here we set the rpath to accomodate the deployment case, a directory containing
 # ├── bin
 # │   └── orbbec-module
 # ├── lib
 #     └── <runtime dependencies>
+# On Windows the directory structure is flat
 if (APPLE)
     list(PREPEND CMAKE_INSTALL_RPATH "@loader_path/../lib")
 else()

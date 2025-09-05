@@ -9,15 +9,18 @@ ifeq ($(OS),Windows_NT)
   # syntax, which calls powershell for us and explicitly sets the
   # exit status so we terminate make on error.
 	SCRIPT_EXT := .bat
-	SHELL := cmd
+	SUBSHELL := cmd /C
+	PATHSEP := \\
 else
 	SCRIPT_EXT = .sh
 	BIN_SUFFIX :=
+	SUBSHELL :=
+	PATHSEP := /
 	ARCH ?= $(shell uname -m)
 endif
 
 OUTPUT_NAME = orbbec-module$(BIN_SUFFIX)
-BIN := build-conan/build/RelWithDebInfo/$(OUTPUT_NAME)
+BIN := build-conan/build/RelWithDebInfo/orbbec-module
 TAG_VERSION?=latest
 
 # Docker image
@@ -30,12 +33,7 @@ BASE_TAG := 0.0.1
 build: $(BIN)
 
 $(BIN): conanfile.py src/* bin/*
-ifeq ($(OS),Windows_NT)
-	cmd /C "set ORBBEC_SDK_DIR=$(ORBBEC_SDK_DIR) && bin\build$(SCRIPT_EXT)"
-else
-	export ORBBEC_SDK_DIR=$(ORBBEC_SDK_DIR); \
-	bin/build$(SCRIPT_EXT)
-endif
+	$(SUBSHELL) bin$(PATHSEP)build$(SCRIPT_EXT)
 
 
 clean:
@@ -44,17 +42,12 @@ clean:
 clean-all: clean
 	rm -rf build-conan
 	rm -rf tmp_cpp_sdk
-	rm -rf tmp_cpp_sdk
 	rm -rf venv
 	rm -f orbbec-test-bin
 	rm -f $(OUTPUT_NAME)
 
 setup:
-ifeq ($(OS),Windows_NT)
-	cmd /C "bin\setup$(SCRIPT_EXT)"
-else
-	bin/setup$(SCRIPT_EXT)
-endif
+	$(SUBSHELL) bin$(PATHSEP)setup$(SCRIPT_EXT)
 
 lint:
 ifeq ($(OS),Windows_NT)
@@ -72,6 +65,7 @@ orbbec-test-bin:
 # conan call because every line of a Makefile runs in a subshell
 conan-pkg:
 ifeq ($(OS),Windows_NT)
+# no first run on windows, remove it from meta.json
 	cmd /C powershell -Command "$$json = Get-Content 'meta.json' -Raw | ConvertFrom-Json; $$json.PSObject.Properties.Remove('first_run') | Out-Null; $$json | ConvertTo-Json -Depth 2 | Set-Content 'meta.json'"
 	cmd /C "IF EXIST .\venv\Scripts\activate.bat call .\venv\Scripts\activate.bat && conan create . -o:a "viam-cpp-sdk/*:shared=False" -s:a build_type=Release -s:a compiler.cppstd=17 --build=missing"
 else
