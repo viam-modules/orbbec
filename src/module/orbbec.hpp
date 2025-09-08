@@ -21,7 +21,7 @@ void printDeviceInfo(const std::shared_ptr<ob::DeviceInfo> info);
 
 class Orbbec final : public viam::sdk::Camera, public viam::sdk::Reconfigurable {
    public:
-    Orbbec(viam::sdk::Dependencies deps, viam::sdk::ResourceConfig cfg);
+    Orbbec(viam::sdk::Dependencies deps, viam::sdk::ResourceConfig cfg, std::shared_ptr<ob::Context> ctx);
     ~Orbbec();
     void reconfigure(const viam::sdk::Dependencies& deps, const viam::sdk::ResourceConfig& cfg) override;
     viam::sdk::ProtoStruct do_command(const viam::sdk::ProtoStruct& command) override;
@@ -30,14 +30,15 @@ class Orbbec final : public viam::sdk::Camera, public viam::sdk::Reconfigurable 
     point_cloud get_point_cloud(std::string mime_type, const viam::sdk::ProtoStruct& extra) override;
     properties get_properties() override;
     std::vector<viam::sdk::GeometryConfig> get_geometries(const viam::sdk::ProtoStruct& extra) override;
-
     static std::vector<std::string> validate(viam::sdk::ResourceConfig cfg);
     static viam::sdk::GeometryConfig geometry;
     static viam::sdk::Model model;
 
    private:
+    std::shared_ptr<ob::Context> ob_ctx_;
     std::unique_ptr<ObResourceConfig> config_;
     std::mutex config_mu_;
+    std::string firmware_version_;
     static std::unique_ptr<ObResourceConfig> configure(viam::sdk::Dependencies deps, viam::sdk::ResourceConfig cfg);
 };
 
