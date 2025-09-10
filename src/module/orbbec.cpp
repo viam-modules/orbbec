@@ -150,7 +150,6 @@ void checkFirmwareVersion(const std::string version) {
     }
 }
 
-
 // Convert integer to uppercase 4-digit hex string
 std::string uint16ToHex(uint16_t value) {
     std::stringstream ss;
