@@ -55,9 +55,6 @@ git checkout releases/v0.16.0
 # opt for the static compiler runtime so we don't have a dependency on
 # the VC redistributable.
 #
-#  `-tf ""`, which disables the self test, this does not
-# work on windows
-
 # boost backtrace contains a unix only library dlfcn.h
 conan create . `
       --build=missing `
@@ -65,8 +62,7 @@ conan create . `
       -o:a "boost/*:with_stacktrace_backtrace=False" `
       -o:a "boost/*:without_stacktrace=True" `
       -s:a build_type=Release `
-      -s:a compiler.cppstd=17 `
-      -tf `"`"
+      -s:a compiler.cppstd=17
 
 Pop-Location  # viam-cpp-sdk
 Pop-Location  # tmp_cpp_sdk

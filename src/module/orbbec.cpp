@@ -135,7 +135,7 @@ std::unordered_map<std::string, std::shared_ptr<ob::FrameSet>>& frame_set_by_ser
 //
 
 // Convert integer to uppercase 4-digit hex string
-std::string intToHex(uint16_t value) {
+std::string uint16ToHex(uint16_t value) {
     std::stringstream ss;
     ss << std::uppercase << std::hex << std::setw(4) << std::setfill('0') << value;
     return ss.str();
@@ -870,6 +870,8 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
 
 #ifdef _WIN32
     // On windows, we must add a metadata value to the windows device registry for the device to work correctly.
+    // Adapted from the orbbec SDK setup script:
+    // https://github.com/orbbec/OrbbecSDK_v2/blob/main/scripts/env_setup/obsensor_metadata_win10.ps1
     try {
         const char* command = "powershell -Command \"Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force\"";
         int result = std::system(command);
@@ -891,7 +893,7 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
 
         uint16_t vid = dev->getDeviceInfo()->vid();
         uint16_t pid = dev->getDeviceInfo()->pid();
-        std::string baseDeviceId = "##?#USB#VID_" + intToHex(vid) + "&PID_" + intToHex(pid);
+        std::string baseDeviceId = "##?#USB#VID_" + uint16ToHex(vid) + "&PID_" + uint16ToHex(pid);
 
         for (const auto& subtree : searchTrees) {
             // Open the device registry key
@@ -918,7 +920,7 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
                 }
                 std::string subKeyName(name);
                 // find the enteries for our orbbec device.
-                if (subKeyName.find("USB#VID_" + intToHex(vid) + "&PID_" + intToHex(pid)) == std::string::npos) {
+                if (subKeyName.find("USB#VID_" + uint16ToHex(vid) + "&PID_" + uint16ToHex(pid)) == std::string::npos) {
                     // not a match for an orbbec device, go to next key
                     ++index;
                     continue;
