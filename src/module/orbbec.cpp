@@ -946,9 +946,10 @@ vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::Pro
             throw std::invalid_argument("no color frame");
         }
 
-        if(supported_color_formats.count(ob::TypeHelper::convertOBFormatTypeToString(color->getFormat())) == 0) {
+        if (supported_color_formats.count(ob::TypeHelper::convertOBFormatTypeToString(color->getFormat())) == 0) {
             std::ostringstream buffer;
-            buffer << "unsupported color format: " << ob::TypeHelper::convertOBFormatTypeToString(color->getFormat()) << ", supported formats: ";
+            buffer << "unsupported color format: " << ob::TypeHelper::convertOBFormatTypeToString(color->getFormat())
+                   << ", supported formats: ";
             for (const auto& fmt : supported_color_formats) {
                 buffer << fmt << " ";
             }
@@ -1108,7 +1109,8 @@ vsdk::Camera::image_collection Orbbec::get_images() {
         }
         if (supported_color_formats.count(ob::TypeHelper::convertOBFormatTypeToString(color->getFormat())) == 0) {
             std::ostringstream buffer;
-            buffer << "[get_images] unsupported color format: " << ob::TypeHelper::convertOBFormatTypeToString(color->getFormat()) << ", supported: ";
+            buffer << "[get_images] unsupported color format: " << ob::TypeHelper::convertOBFormatTypeToString(color->getFormat())
+                   << ", supported: ";
             for (const auto& format : supported_color_formats) {
                 buffer << format << " ";
             }
