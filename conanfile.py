@@ -28,7 +28,7 @@ class orbbec(ConanFile):
     def requirements(self):
         # NOTE: If you update the `viam-cpp-sdk` dependency here, it
         # should also be updated in `bin/setup.{sh,ps1}`.
-        self.requires("viam-cpp-sdk/0.16.0")
+        self.requires("viam-cpp-sdk/0.19.0")
         self.requires("openssl/3.3.2")
         self.requires("libcurl/8.9.1")
         self.requires("libzip/1.11.1")

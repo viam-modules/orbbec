@@ -852,7 +852,7 @@ vsdk::Camera::properties Orbbec::get_properties() {
     }
 }
 
-vsdk::Camera::image_collection Orbbec::get_images() {
+vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filter_source_names, const vsdk::ProtoStruct& extra) {
     try {
         VIAM_SDK_LOG(debug) << "[get_images] start";
         std::string serial_number;
@@ -873,71 +873,107 @@ vsdk::Camera::image_collection Orbbec::get_images() {
             fs = search->second;
         }
 
-        std::shared_ptr<ob::Frame> color = fs->getFrame(OB_FRAME_COLOR);
-        if (color == nullptr) {
-            throw std::invalid_argument("no color frame");
+        bool should_process_color = false;
+        bool should_process_depth = false;
+
+        if (filter_source_names.empty()) {
+            should_process_color = true;
+            should_process_depth = true;
+        } else {
+            for (const auto& name : filter_source_names) {
+                if (name == kColorSourceName) {
+                    should_process_color = true;
+                }
+                if (name == kDepthSourceName) {
+                    should_process_depth = true;
+                }
+            }
         }
-
-        uint64_t nowUs = getNowUs();
-        uint64_t diff = timeSinceFrameUs(nowUs, color->getSystemTimeStampUs());
-        if (diff > maxFrameAgeUs) {
-            std::ostringstream buffer;
-            buffer << "no recent color frame: check USB connection, diff: " << diff << "us";
-            throw std::invalid_argument(buffer.str());
-        }
-
-        if (color->getFormat() != OB_FORMAT_MJPG) {
-            throw std::invalid_argument("color frame was not in jpeg format");
-        }
-
-        std::shared_ptr<ob::Frame> depth = fs->getFrame(OB_FRAME_DEPTH);
-        if (depth == nullptr) {
-            throw std::invalid_argument("no depth frame");
-        }
-
-        diff = timeSinceFrameUs(nowUs, depth->getSystemTimeStampUs());
-        if (diff > maxFrameAgeUs) {
-            std::ostringstream buffer;
-            buffer << "no recent depth frame: check USB connection, diff: " << diff << "us";
-            throw std::invalid_argument(buffer.str());
-        }
-
-        unsigned char* colorData = (unsigned char*)color->getData();
-        if (colorData == nullptr) {
-            throw std::runtime_error("[get_image] color data is null");
-        }
-        uint32_t colorDataSize = color->dataSize();
-
-        vsdk::Camera::raw_image color_image;
-        color_image.source_name = kColorSourceName;
-        color_image.mime_type = kColorMimeTypeJPEG;
-        color_image.bytes.assign(colorData, colorData + colorDataSize);
-
-        unsigned char* depthData = (unsigned char*)depth->getData();
-        if (depthData == nullptr) {
-            throw std::runtime_error("[get_images] depth data is null");
-        }
-        auto depthVid = depth->as<ob::VideoFrame>();
-        raw_camera_image rci = encodeDepthRAW(depthData, depthVid->getWidth(), depthVid->getHeight(), false);
-
-        vsdk::Camera::raw_image depth_image;
-        depth_image.source_name = kDepthSourceName;
-        depth_image.mime_type = kDepthMimeTypeViamDep;
-        depth_image.bytes.assign(rci.bytes.get(), rci.bytes.get() + rci.size);
 
         vsdk::Camera::image_collection response;
-        response.images.emplace_back(std::move(color_image));
-        response.images.emplace_back(std::move(depth_image));
+        std::shared_ptr<ob::Frame> color = nullptr;
+        std::shared_ptr<ob::Frame> depth = nullptr;
+        uint64_t nowUs = getNowUs();
 
-        uint64_t colorTS = color->getSystemTimeStampUs();
-        uint64_t depthTS = depth->getSystemTimeStampUs();
-        if (colorTS != depthTS) {
-            VIAM_SDK_LOG(info) << "color and depth timestamps differ, defaulting to "
-                                  "older of the two"
-                               << "color timestamp was " << colorTS << " depth timestamp was " << depthTS;
+        if (should_process_color) {
+            color = fs->getFrame(OB_FRAME_COLOR);
+            if (color == nullptr) {
+                throw std::invalid_argument("no color frame");
+            }
+
+            uint64_t diff = timeSinceFrameUs(nowUs, color->getSystemTimeStampUs());
+            if (diff > maxFrameAgeUs) {
+                std::ostringstream buffer;
+                buffer << "no recent color frame: check USB connection, diff: " << diff << "us";
+                throw std::invalid_argument(buffer.str());
+            }
+
+            if (color->getFormat() != OB_FORMAT_MJPG) {
+                throw std::invalid_argument("color frame was not in jpeg format");
+            }
+
+            unsigned char* colorData = (unsigned char*)color->getData();
+            if (colorData == nullptr) {
+                throw std::runtime_error("[get_image] color data is null");
+            }
+            uint32_t colorDataSize = color->dataSize();
+
+            vsdk::Camera::raw_image color_image;
+            color_image.source_name = kColorSourceName;
+            color_image.mime_type = kColorMimeTypeJPEG;
+            color_image.bytes.assign(colorData, colorData + colorDataSize);
+            response.images.emplace_back(std::move(color_image));
         }
-        // use the older of the two timestamps
-        uint64_t timestamp = (colorTS > depthTS) ? depthTS : colorTS;
+
+        if (should_process_depth) {
+            depth = fs->getFrame(OB_FRAME_DEPTH);
+            if (depth == nullptr) {
+                throw std::invalid_argument("no depth frame");
+            }
+
+            uint64_t diff = timeSinceFrameUs(nowUs, depth->getSystemTimeStampUs());
+            if (diff > maxFrameAgeUs) {
+                std::ostringstream buffer;
+                buffer << "no recent depth frame: check USB connection, diff: " << diff << "us";
+                throw std::invalid_argument(buffer.str());
+            }
+
+            unsigned char* depthData = (unsigned char*)depth->getData();
+            if (depthData == nullptr) {
+                throw std::runtime_error("[get_images] depth data is null");
+            }
+            auto depthVid = depth->as<ob::VideoFrame>();
+            raw_camera_image rci = encodeDepthRAW(depthData, depthVid->getWidth(), depthVid->getHeight(), false);
+
+            vsdk::Camera::raw_image depth_image;
+            depth_image.source_name = kDepthSourceName;
+            depth_image.mime_type = kDepthMimeTypeViamDep;
+            depth_image.bytes.assign(rci.bytes.get(), rci.bytes.get() + rci.size);
+            response.images.emplace_back(std::move(depth_image));
+        }
+
+        if (response.images.empty()) {
+            VIAM_SDK_LOG(warn) << "[get_images] no camera sources matched the filter";
+            return response;
+        }
+
+        uint64_t colorTS = color ? color->getSystemTimeStampUs() : 0;
+        uint64_t depthTS = depth ? depth->getSystemTimeStampUs() : 0;
+        uint64_t timestamp = 0;
+
+        if (colorTS > 0 && depthTS > 0) {
+            if (colorTS != depthTS) {
+                VIAM_SDK_LOG(info) << "color and depth timestamps differ, defaulting to "
+                                      "older of the two"
+                                   << "color timestamp was " << colorTS << " depth timestamp was " << depthTS;
+            }
+            // use the older of the two timestamps
+            timestamp = (colorTS > depthTS) ? depthTS : colorTS;
+        } else if (colorTS > 0) {
+            timestamp = colorTS;
+        } else {
+            timestamp = depthTS;
+        }
 
         std::chrono::microseconds latestTimestamp(timestamp);
         response.metadata.captured_at = vsdk::time_pt{std::chrono::duration_cast<std::chrono::nanoseconds>(latestTimestamp)};

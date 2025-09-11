@@ -48,7 +48,7 @@ RUN python3 -m pip install conan
 RUN conan profile detect
 
 RUN git clone https://github.com/viamrobotics/viam-cpp-sdk.git \
-    --branch releases/v0.16.0 --depth=1 && \
+    --branch releases/v0.19.0 --depth=1 && \
     cd viam-cpp-sdk && \
     conan create . \
     --build=missing \
