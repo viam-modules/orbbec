@@ -13,14 +13,15 @@
 // limitations under the License.
 
 #include "orbbec.hpp"
+#include "encoding.hpp"
 
 #include <curl/curl.h>
 #include <math.h>
 #include <zip.h>
+
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
-
 #include <iostream>
 #include <memory>
 #include <mutex>
@@ -47,7 +48,7 @@ namespace orbbec {
 namespace vsdk = ::viam::sdk;
 
 vsdk::Model Orbbec::model("viam", "orbbec", "astra2");
-std::unordered_set<std::string> const Orbbec::supported_color_formats{"RGB", "BGR", "MJPG"};
+std::unordered_set<std::string> const Orbbec::supported_color_formats{"RGB", "MJPG"};
 std::unordered_set<std::string> const Orbbec::supported_depth_formats{"Y16"};
 std::string const Orbbec::default_color_format = "MJPG";
 std::string const Orbbec::default_depth_format = "Y16";
@@ -57,7 +58,7 @@ Resolution const Orbbec::default_depth_resolution{1600, 1200};
 // CONSTANTS BEGIN
 const std::string kColorSourceName = "color";
 const std::string kColorMimeTypeJPEG = "image/jpeg";
-const std::string kColorMimeTypeRGB = "image/rgb";
+const std::string kColorMimeTypePNG = "image/png";
 const std::string kDepthSourceName = "depth";
 const std::string kDepthMimeTypeViamDep = "image/vnd.viam.dep";
 const std::string kPcdMimeType = "pointcloud/pcd";
@@ -320,7 +321,7 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
             if (ob::TypeHelper::convertOBFormatTypeToString(colorVsp->getFormat()) != deviceFormat->color_format.value()) {
                 continue;
             }
-        } else if(ob::TypeHelper::convertOBFormatTypeToString(colorVsp->getFormat()) != Orbbec::default_color_format) {
+        } else if (ob::TypeHelper::convertOBFormatTypeToString(colorVsp->getFormat()) != Orbbec::default_color_format) {
             continue;
         }
 
@@ -329,8 +330,8 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
                 colorVsp->getHeight() != deviceRes->color_resolution->height) {
                 continue;
             }
-        } else if(colorVsp->getWidth() != Orbbec::default_color_resolution.width ||
-                  colorVsp->getHeight() != Orbbec::default_color_resolution.height) {
+        } else if (colorVsp->getWidth() != Orbbec::default_color_resolution.width ||
+                   colorVsp->getHeight() != Orbbec::default_color_resolution.height) {
             continue;
         }
 
@@ -348,7 +349,7 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
                 if (ob::TypeHelper::convertOBFormatTypeToString(depthVsp->getFormat()) != deviceFormat->depth_format.value()) {
                     continue;
                 }
-            } else if(ob::TypeHelper::convertOBFormatTypeToString(depthVsp->getFormat()) != Orbbec::default_depth_format) {
+            } else if (ob::TypeHelper::convertOBFormatTypeToString(depthVsp->getFormat()) != Orbbec::default_depth_format) {
                 continue;
             }
 
@@ -357,8 +358,8 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
                     depthVsp->getHeight() != deviceRes->depth_resolution->height) {
                     continue;
                 }
-            } else if(depthVsp->getWidth() != Orbbec::default_depth_resolution.width ||
-                      depthVsp->getHeight() != Orbbec::default_depth_resolution.height) {
+            } else if (depthVsp->getWidth() != Orbbec::default_depth_resolution.width ||
+                       depthVsp->getHeight() != Orbbec::default_depth_resolution.height) {
                 continue;
             }
 
@@ -391,8 +392,10 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
         }
     }
 
-    VIAM_SDK_LOG(error) << "[createHwD2CAlignConfig] Could not find matching stream profiles for hardware depth-to-color alignment that also match the given resolution and format specification (" << (deviceRes.has_value() ? deviceRes->to_string() : "none")
-                       << ", " << (deviceFormat.has_value() ? deviceFormat->to_string() : "none") << ")\n";
+    VIAM_SDK_LOG(error) << "[createHwD2CAlignConfig] Could not find matching stream profiles for hardware depth-to-color alignment that "
+                           "also match the given resolution and format specification ("
+                        << (deviceRes.has_value() ? deviceRes->to_string() : "none") << ", "
+                        << (deviceFormat.has_value() ? deviceFormat->to_string() : "none") << ")\n";
     return nullptr;
 }
 
@@ -642,8 +645,8 @@ void startDevice(std::string serialNumber) {
                 std::ostringstream buffer;
                 buffer << service_name << ": device with serial number " << serialNumber
                        << " does not support hardware depth-to-color alignment with the requested parameters: resolution "
-                       << (resolution_opt.has_value() ? resolution_opt->to_string() : "none")
-                       << ", " << (format_opt.has_value() ? format_opt->to_string() : "none") << "\n";
+                       << (resolution_opt.has_value() ? resolution_opt->to_string() : "none") << ", "
+                       << (format_opt.has_value() ? format_opt->to_string() : "none") << "\n";
                 VIAM_SDK_LOG(error) << buffer.str();
                 throw std::runtime_error(buffer.str());
             }
@@ -732,22 +735,6 @@ void listDevices(const ob::Context& ctx) {
     }
 }
 
-raw_camera_image encodeDepthRAW(const unsigned char* data, const uint64_t width, const uint64_t height, const bool littleEndian) {
-    viam::sdk::Camera::depth_map m = xt::xarray<uint16_t>::from_shape({height, width});
-    std::copy(reinterpret_cast<const uint16_t*>(data), reinterpret_cast<const uint16_t*>(data) + height * width, m.begin());
-
-    for (size_t i = 0; i < m.size(); i++) {
-        m[i] = m[i] * mmToMeterMultiple;
-    }
-
-    std::vector<unsigned char> encodedData = viam::sdk::Camera::encode_depth_map(m);
-
-    unsigned char* rawBuf = new unsigned char[encodedData.size()];
-    std::memcpy(rawBuf, encodedData.data(), encodedData.size());
-
-    return raw_camera_image{raw_camera_image::uniq(rawBuf, raw_camera_image::array_delete_deleter), encodedData.size()};
-}
-
 // HELPERS END
 
 // RESOURCE BEGIN
@@ -779,8 +766,14 @@ std::vector<std::string> Orbbec::validate(vsdk::ResourceConfig cfg) {
                 if (!color_format) {
                     throw std::invalid_argument("color format must be a string");
                 }
-                if (*color_format != "MJPG" && *color_format != "RGB") {
-                    throw std::invalid_argument("color format must be either MJPG or RGB");
+                if (Orbbec::supported_color_formats.count(*color_format) == 0) {
+                    std::ostringstream buffer;
+                    buffer << "color format must be one of: ";
+                    for (const auto& fmt : Orbbec::supported_color_formats) {
+                        buffer << fmt << " ";
+                    }
+                    VIAM_SDK_LOG(error) << buffer.str();
+                    throw std::invalid_argument(buffer.str());
                 }
             }
 
@@ -789,8 +782,14 @@ std::vector<std::string> Orbbec::validate(vsdk::ResourceConfig cfg) {
                 if (!depth_format) {
                     throw std::invalid_argument("depth format must be a string");
                 }
-                if (*depth_format != "Y16") {
-                    throw std::invalid_argument("depth format must be Y16");
+                if (Orbbec::supported_depth_formats.count(*depth_format) == 0) {
+                    std::ostringstream buffer;
+                    buffer << "depth format must be one of: ";
+                    for (const auto& fmt : Orbbec::supported_depth_formats) {
+                        buffer << fmt << " ";
+                    }
+                    VIAM_SDK_LOG(error) << buffer.str();
+                    throw std::invalid_argument(buffer.str());
                 }
             }
         }
@@ -958,6 +957,16 @@ vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::Pro
             throw std::invalid_argument("no color frame");
         }
 
+        if(supported_color_formats.count(ob::TypeHelper::convertOBFormatTypeToString(color->getFormat())) == 0) {
+            std::ostringstream buffer;
+            buffer << "unsupported color format: " << ob::TypeHelper::convertOBFormatTypeToString(color->getFormat()) << ", supported formats: ";
+            for (const auto& fmt : supported_color_formats) {
+                buffer << fmt << " ";
+            }
+            VIAM_SDK_LOG(error) << buffer.str();
+            throw std::invalid_argument(buffer.str());
+        }
+
         std::optional<DeviceFormat> res_format_opt;
         {
             std::lock_guard<std::mutex> lock(config_by_serial_mu());
@@ -967,20 +976,23 @@ vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::Pro
             res_format_opt = config_by_serial().at(serial_number).device_format;
         }
 
-        if(res_format_opt.has_value()) {
-            if (res_format_opt->color_format.has_value() && ob::TypeHelper::convertOBFormatTypeToString(color->getFormat()) != res_format_opt->color_format.value()) {
+        if (res_format_opt.has_value()) {
+            if (res_format_opt->color_format.has_value() &&
+                ob::TypeHelper::convertOBFormatTypeToString(color->getFormat()) != res_format_opt->color_format.value()) {
                 std::ostringstream buffer;
-                buffer << "color frame format " << ob::TypeHelper::convertOBFormatTypeToString(color->getFormat()) << " does not match configured color format " << res_format_opt->color_format.value();
+                buffer << "color frame format " << ob::TypeHelper::convertOBFormatTypeToString(color->getFormat())
+                       << " does not match configured color format " << res_format_opt->color_format.value();
                 VIAM_SDK_LOG(error) << buffer.str();
                 throw std::invalid_argument(buffer.str());
             }
         } else if (ob::TypeHelper::convertOBFormatTypeToString(color->getFormat()) != Orbbec::default_color_format) {
             std::ostringstream buffer;
-            buffer << "color frame format " << ob::TypeHelper::convertOBFormatTypeToString(color->getFormat()) << " does not match default color format " << Orbbec::default_color_format;
+            buffer << "color frame format " << ob::TypeHelper::convertOBFormatTypeToString(color->getFormat())
+                   << " does not match default color format " << Orbbec::default_color_format;
             VIAM_SDK_LOG(error) << buffer.str();
             throw std::invalid_argument(buffer.str());
         }
-        
+
         // If the image's timestamp is older than a second throw error, this
         // indicates we no longer have a working camera.
         uint64_t nowUs = getNowUs();
@@ -991,16 +1003,34 @@ vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::Pro
             throw std::invalid_argument(buffer.str());
         }
 
-        unsigned char* colorData = (unsigned char*)color->getData();
+        vsdk::Camera::raw_image response;
+        response.source_name = kColorSourceName;
+
+        std::uint8_t* colorData = (std::uint8_t*)color->getData();
         if (colorData == nullptr) {
             throw std::runtime_error("[get_image] color data is null");
         }
         uint32_t colorDataSize = color->dataSize();
 
-        vsdk::Camera::raw_image response;
-        response.source_name = kColorSourceName;
-        response.mime_type = kColorMimeTypeRGB;
-        response.bytes.assign(colorData, colorData + colorDataSize);
+        if (color->getFormat() == OB_FORMAT_MJPG) {
+            response.mime_type = kColorMimeTypeJPEG;
+            response.bytes.assign(colorData, colorData + colorDataSize);
+        } else if (color->getFormat() == OB_FORMAT_RGBA) {
+            response.mime_type = kColorMimeTypePNG;
+            auto width = color->getStreamProfile()->as<ob::VideoStreamProfile>()->getWidth();
+            auto height = color->getStreamProfile()->as<ob::VideoStreamProfile>()->getHeight();
+            response.bytes = encoding::encode_to_png(colorData, width, height, encoding::ImageFormat::RGBA);
+        } else if (color->getFormat() == OB_FORMAT_RGB) {
+            response.mime_type = kColorMimeTypePNG;
+            auto width = color->getStreamProfile()->as<ob::VideoStreamProfile>()->getWidth();
+            auto height = color->getStreamProfile()->as<ob::VideoStreamProfile>()->getHeight();
+            response.bytes = encoding::encode_to_png(colorData, width, height, encoding::ImageFormat::RGB);
+        } else {
+            std::ostringstream buffer;
+            buffer << "[get_image] unsupported color format: " << ob::TypeHelper::convertOBFormatTypeToString(color->getFormat());
+            VIAM_SDK_LOG(error) << buffer.str();
+            throw std::invalid_argument(buffer.str());
+        }
         VIAM_SDK_LOG(debug) << "[get_image] end";
         return response;
     } catch (const std::exception& e) {
@@ -1087,6 +1117,16 @@ vsdk::Camera::image_collection Orbbec::get_images() {
         if (color == nullptr) {
             throw std::invalid_argument("no color frame");
         }
+        if (supported_color_formats.count(ob::TypeHelper::convertOBFormatTypeToString(color->getFormat())) == 0) {
+            std::ostringstream buffer;
+            buffer << "[get_images] unsupported color format: " << ob::TypeHelper::convertOBFormatTypeToString(color->getFormat()) << ", supported: ";
+            for (const auto& format : supported_color_formats) {
+                buffer << format << " ";
+            }
+
+            VIAM_SDK_LOG(error) << buffer.str();
+            throw std::invalid_argument(buffer.str());
+        }
 
         uint64_t nowUs = getNowUs();
         uint64_t diff = timeSinceFrameUs(nowUs, color->getSystemTimeStampUs());
@@ -1155,21 +1195,37 @@ vsdk::Camera::image_collection Orbbec::get_images() {
         uint32_t colorDataSize = color->dataSize();
 
         vsdk::Camera::raw_image color_image;
-        color_image.source_name = kColorSourceName;
-        color_image.mime_type = kColorMimeTypeJPEG;
-        color_image.bytes.assign(colorData, colorData + colorDataSize);
+
+        if (color->getFormat() == OB_FORMAT_MJPG) {
+            color_image.mime_type = kColorMimeTypeJPEG;
+            color_image.bytes.assign(colorData, colorData + colorDataSize);
+        } else if (color->getFormat() == OB_FORMAT_RGBA) {
+            color_image.mime_type = kColorMimeTypePNG;
+            auto width = color->getStreamProfile()->as<ob::VideoStreamProfile>()->getWidth();
+            auto height = color->getStreamProfile()->as<ob::VideoStreamProfile>()->getHeight();
+            color_image.bytes = encoding::encode_to_png(colorData, width, height, encoding::ImageFormat::RGBA);
+        } else if (color->getFormat() == OB_FORMAT_RGB) {
+            color_image.mime_type = kColorMimeTypePNG;
+            auto width = color->getStreamProfile()->as<ob::VideoStreamProfile>()->getWidth();
+            auto height = color->getStreamProfile()->as<ob::VideoStreamProfile>()->getHeight();
+            color_image.bytes = encoding::encode_to_png(colorData, width, height, encoding::ImageFormat::RGB);
+        } else {
+            std::ostringstream buffer;
+            buffer << "[get_images] unsupported color format: " << ob::TypeHelper::convertOBFormatTypeToString(color->getFormat());
+            VIAM_SDK_LOG(error) << buffer.str();
+            throw std::invalid_argument(buffer.str());
+        }
 
         unsigned char* depthData = (unsigned char*)depth->getData();
         if (depthData == nullptr) {
             throw std::runtime_error("[get_images] depth data is null");
         }
         auto depthVid = depth->as<ob::VideoFrame>();
-        raw_camera_image rci = encodeDepthRAW(depthData, depthVid->getWidth(), depthVid->getHeight(), false);
-
         vsdk::Camera::raw_image depth_image;
+
         depth_image.source_name = kDepthSourceName;
         depth_image.mime_type = kDepthMimeTypeViamDep;
-        depth_image.bytes.assign(rci.bytes.get(), rci.bytes.get() + rci.size);
+        depth_image.bytes = encoding::encode_to_depth_raw(depthData, depthVid->getWidth(), depthVid->getHeight());
 
         vsdk::Camera::image_collection response;
         response.images.emplace_back(std::move(color_image));

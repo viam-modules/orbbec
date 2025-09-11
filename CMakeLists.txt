@@ -23,7 +23,7 @@ else()
 endif()
 
 add_executable(orbbec-cli src/cli/main.cpp)
-add_executable(orbbec-module src/module/main.cpp src/module/orbbec.cpp src/module/discovery.cpp)
+add_executable(orbbec-module src/module/main.cpp src/module/orbbec.cpp src/module/discovery.cpp src/module/encoding.cpp)
 
 target_compile_features(orbbec-cli PRIVATE cxx_std_17)
 target_compile_features(orbbec-module PRIVATE cxx_std_17)
@@ -39,6 +39,7 @@ find_package(viam-cpp-sdk REQUIRED)
 find_package(Threads REQUIRED)
 find_package(CURL REQUIRED)
 find_package(libzip REQUIRED)
+find_package(PNG REQUIRED)
 
 target_link_libraries(orbbec-cli
     PRIVATE ob::OrbbecSDK
@@ -51,6 +52,7 @@ target_link_libraries(orbbec-module
     PRIVATE viam-cpp-sdk::viamsdk
     PRIVATE CURL::libcurl
     PRIVATE libzip::zip
+    PRIVATE PNG::PNG
 )
 
 if (LINUX)
