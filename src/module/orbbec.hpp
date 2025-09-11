@@ -6,36 +6,85 @@
 #include <libobsensor/ObSensor.hpp>
 
 #include <optional>
+#include <unordered_set>
 
 namespace orbbec {
 
 struct Resolution {
     int width{};
     int height{};
+
+    std::string to_string() const {
+        std::ostringstream os;
+        os << "Resolution(" << width << "x" << height << ")";
+        return os.str();
+    }
 };
 
 struct DeviceResolution {
-    Resolution color_resolution{};
-    Resolution depth_resolution{};
+    std::optional<Resolution> color_resolution{};
+    std::optional<Resolution> depth_resolution{};
+
+    std::string to_string() const {
+        std::ostringstream os;
+        os << "DeviceResolution(";
+        if (color_resolution.has_value())
+            os << "color_resolution=" << color_resolution->width << "x" << color_resolution->height;
+        else
+            os << "color_resolution=nullopt";
+        if (depth_resolution.has_value())
+            os << ", depth_resolution=" << depth_resolution->width << "x" << depth_resolution->height;
+        else
+            os << ", depth_resolution=nullopt";
+        os << ")";
+        return os.str();
+    }
 };
+
+struct DeviceFormat {
+    std::optional<std::string> color_format{};
+    std::optional<std::string> depth_format{};
+
+    std::string to_string() const {
+        std::ostringstream os;
+        os << "DeviceFormat(";
+        if (color_format.has_value())
+            os << "color_format=" << *color_format;
+        else
+            os << "color_format=nullopt";
+        if (depth_format.has_value())
+            os << ", depth_format=" << *depth_format;
+        else
+            os << ", depth_format=nullopt";
+        os << ")";
+        return os.str();
+    }
+};
+
 // The native config struct for orbbec resources.
 struct ObResourceConfig {
     std::string resource_name;
     std::string serial_number;
     std::optional<DeviceResolution> device_resolution;
+    std::optional<DeviceFormat> device_format;
 
     explicit ObResourceConfig(std::string const& serial_number,
                               std::string const& resource_name,
-                              std::optional<DeviceResolution> device_resolution = std::nullopt)
-        : serial_number(serial_number), resource_name(resource_name), device_resolution(device_resolution) {}
+                              std::optional<DeviceResolution> device_resolution,
+                              std::optional<DeviceFormat> device_format)
+        : serial_number(serial_number), resource_name(resource_name), device_resolution(device_resolution), device_format(device_format) {}
     std::string to_string() const {
         std::ostringstream os;
         os << "ObResourceConfig(resource_name=" << resource_name << ", serial_number=" << serial_number;
         if (device_resolution.has_value()) {
-            os << ", color_resolution=" << device_resolution->color_resolution.width << "x" << device_resolution->color_resolution.height;
-            os << ", depth_resolution=" << device_resolution->depth_resolution.width << "x" << device_resolution->depth_resolution.height;
+            os << ", device_resolution=" << device_resolution->to_string();
         } else {
             os << ", device_resolution=nullopt";
+        }
+        if (device_format.has_value()) {
+            os << ", device_format=" << device_format->to_string();
+        } else {
+            os << ", device_format=nullopt";
         }
         os << ")";
         return os.str();
@@ -59,6 +108,12 @@ class Orbbec final : public viam::sdk::Camera, public viam::sdk::Reconfigurable 
     static std::vector<std::string> validate(viam::sdk::ResourceConfig cfg);
     static viam::sdk::GeometryConfig geometry;
     static viam::sdk::Model model;
+    static const std::unordered_set<std::string> supported_color_formats;
+    static const std::unordered_set<std::string> supported_depth_formats;
+    static const std::string default_color_format;
+    static const std::string default_depth_format;
+    static const Resolution default_color_resolution;
+    static const Resolution default_depth_resolution;
 
    private:
     std::shared_ptr<ob::Context> ob_ctx_;
