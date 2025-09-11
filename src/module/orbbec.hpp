@@ -5,15 +5,41 @@
 
 #include <libobsensor/ObSensor.hpp>
 
+#include <optional>
+
 namespace orbbec {
 
+struct Resolution {
+    int width{};
+    int height{};
+};
+
+struct DeviceResolution {
+    Resolution color_resolution{};
+    Resolution depth_resolution{};
+};
 // The native config struct for orbbec resources.
 struct ObResourceConfig {
     std::string resource_name;
     std::string serial_number;
+    std::optional<DeviceResolution> device_resolution;
 
-    explicit ObResourceConfig(std::string const& serial_number, std::string const& resource_name)
-        : serial_number(serial_number), resource_name(resource_name) {}
+    explicit ObResourceConfig(std::string const& serial_number,
+                              std::string const& resource_name,
+                              std::optional<DeviceResolution> device_resolution = std::nullopt)
+        : serial_number(serial_number), resource_name(resource_name), device_resolution(device_resolution) {}
+    std::string to_string() const {
+        std::ostringstream os;
+        os << "ObResourceConfig(resource_name=" << resource_name << ", serial_number=" << serial_number;
+        if (device_resolution.has_value()) {
+            os << ", color_resolution=" << device_resolution->color_resolution.width << "x" << device_resolution->color_resolution.height;
+            os << ", depth_resolution=" << device_resolution->depth_resolution.width << "x" << device_resolution->depth_resolution.height;
+        } else {
+            os << ", device_resolution=nullopt";
+        }
+        os << ")";
+        return os.str();
+    }
 };
 
 void startOrbbecSDK(ob::Context& ctx);

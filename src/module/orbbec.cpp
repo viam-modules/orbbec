@@ -130,6 +130,16 @@ std::unordered_map<std::string, std::shared_ptr<ob::FrameSet>>& frame_set_by_ser
     static std::unordered_map<std::string, std::shared_ptr<ob::FrameSet>> frame_sets;
     return frame_sets;
 }
+
+std::mutex& config_by_serial_mu() {
+    static std::mutex mu;
+    return mu;
+}
+
+std::unordered_map<std::string, ObResourceConfig>& config_by_serial() {
+    static std::unordered_map<std::string, ObResourceConfig> config;
+    return config;
+}
 // GLOBALS END
 
 // HELPERS BEGIN
@@ -266,8 +276,8 @@ bool checkIfSupportHWD2CAlign(std::shared_ptr<ob::Pipeline> pipe,
         auto vsp = sp->as<ob::VideoStreamProfile>();
         if (vsp->getWidth() == depthVsp->getWidth() && vsp->getHeight() == depthVsp->getHeight() &&
             vsp->getFormat() == depthVsp->getFormat() && vsp->getFps() == depthVsp->getFps()) {
-            VIAM_SDK_LOG(info) << "using width: " << vsp->getWidth() << " height: " << vsp->getHeight() << " format: " << vsp->getFormat()
-                               << " fps: " << vsp->getFps() << "\n";
+            VIAM_SDK_LOG(info) << "[checkIfSupportHWD2CAlign] using width: " << vsp->getWidth() << " height: " << vsp->getHeight()
+                               << " format: " << vsp->getFormat() << " fps: " << vsp->getFps() << "\n";
             // Found a matching depth stream profile, it means the given stream
             // profiles support hardware depth-to-color alignment
             return true;
@@ -277,9 +287,15 @@ bool checkIfSupportHWD2CAlign(std::shared_ptr<ob::Pipeline> pipe,
 }
 
 // create a config for hardware depth-to-color alignment
-std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline> pipe) {
+std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline> pipe,
+                                                   std::optional<DeviceResolution> deviceRes = std::nullopt) {
     auto colorStreamProfiles = pipe->getStreamProfileList(OB_SENSOR_COLOR);
     auto depthStreamProfiles = pipe->getStreamProfileList(OB_SENSOR_DEPTH);
+    if (deviceRes.has_value()) {
+        VIAM_SDK_LOG(info) << "[createHwD2CAlignConfig] resolution specified: color " << deviceRes->color_resolution.width << "x"
+                           << deviceRes->color_resolution.height << " depth " << deviceRes->depth_resolution.width << "x"
+                           << deviceRes->depth_resolution.height << "\n";
+    }
 
     // Iterate through all color and depth stream profiles to find a match for
     // hardware depth-to-color alignment
@@ -288,6 +304,17 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
     for (uint32_t i = 0; i < colorSpCount; i++) {
         auto colorProfile = colorStreamProfiles->getProfile(i);
         auto colorVsp = colorProfile->as<ob::VideoStreamProfile>();
+
+        // PREFERENCE: Prioritize MJPEG format for JPEG compatibility
+        if (colorVsp->getFormat() != OB_FORMAT_MJPEG) {
+            continue;  // Skip non-MJPEG formats first
+        }
+
+        if (deviceRes.has_value()) {
+            if (colorVsp->getWidth() != deviceRes->color_resolution.width || colorVsp->getHeight() != deviceRes->color_resolution.height) {
+                continue;
+            }
+        }
         for (uint32_t j = 0; j < depthSpCount; j++) {
             auto depthProfile = depthStreamProfiles->getProfile(j);
             auto depthVsp = depthProfile->as<ob::VideoStreamProfile>();
@@ -298,9 +325,20 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
                 continue;
             }
 
+            if (deviceRes.has_value()) {
+                if (depthVsp->getWidth() != deviceRes->depth_resolution.width ||
+                    depthVsp->getHeight() != deviceRes->depth_resolution.height) {
+                    continue;
+                }
+            }
+
             // Check if the given stream profiles support hardware depth-to-color
             // alignment
             if (checkIfSupportHWD2CAlign(pipe, colorProfile, depthProfile)) {
+                VIAM_SDK_LOG(info) << "[createHwD2CAlignConfig] Using hardware depth-to-color alignment with color stream "
+                                   << colorVsp->getWidth() << "x" << colorVsp->getHeight() << "@" << colorVsp->getFps()
+                                   << " and depth stream " << depthVsp->getWidth() << "x" << depthVsp->getHeight() << "@"
+                                   << depthVsp->getFps() << "\n";
                 // If support, create a config for hardware depth-to-color alignment
                 auto hwD2CAlignConfig = std::make_shared<ob::Config>();
                 hwD2CAlignConfig->enableStream(colorProfile);       // enable color stream
@@ -312,6 +350,11 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
                                                                                                                   // types of
                                                                                                                   // frames
                 return hwD2CAlignConfig;
+            } else {
+                VIAM_SDK_LOG(error) << "[createHwD2CAlignConfig] color stream " << colorVsp->getWidth() << "x" << colorVsp->getHeight()
+                                    << "@" << colorVsp->getFps() << " and depth stream " << depthVsp->getWidth() << "x"
+                                    << depthVsp->getHeight() << "@" << depthVsp->getFps()
+                                    << " do NOT support hardware depth-to-color alignment\n";
             }
         }
     }
@@ -546,6 +589,33 @@ void startDevice(std::string serialNumber) {
         buffer << service_name << ": unable to start already started device" << serialNumber;
         throw std::invalid_argument(buffer.str());
     }
+    VIAM_SDK_LOG(info) << "[startDevice] Configuring device resolution";
+    {
+        std::lock_guard<std::mutex> lock(config_by_serial_mu());
+        if (config_by_serial().count(serialNumber) == 0) {
+            std::ostringstream buffer;
+            buffer << service_name << ": device with serial number " << serialNumber << " is not in config_by_serial, skipping start";
+            throw std::runtime_error(buffer.str());
+        }
+        auto resolution_opt = config_by_serial().at(serialNumber).device_resolution;
+        VIAM_SDK_LOG(info) << "[startDevice] Resolution from config: ";
+        if (resolution_opt.has_value()) {
+            // Create the pipeline
+            auto config = createHwD2CAlignConfig(search->second->pipe, resolution_opt);
+            if (config == nullptr) {
+                std::ostringstream buffer;
+                buffer << service_name << ": device with serial number " << serialNumber
+                       << " does not support hardware depth-to-color alignment with the requested resolution (color: "
+                       << resolution_opt->color_resolution.width << "x" << resolution_opt->color_resolution.height
+                       << ", depth: " << resolution_opt->depth_resolution.width << "x" << resolution_opt->depth_resolution.height << ")";
+                throw std::runtime_error(buffer.str());
+            }
+            my_dev->config = config;
+        } else {
+            VIAM_SDK_LOG(info) << "  not specified, using default";
+        }
+    }
+
     my_dev->pipe->start(my_dev->config, frameCallback(serialNumber));
     my_dev->started = true;
 
@@ -586,7 +656,12 @@ void stopDevice(std::string serialNumber, std::string resourceName) {
 
     std::unique_ptr<ViamOBDevice>& my_dev = search->second;
     if (!my_dev->started) {
-        VIAM_SDK_LOG(error) << service_name << ": unable to stop device that is not currently running " << serialNumber;
+        VIAM_SDK_LOG(warn) << service_name << ": device " << serialNumber << " was not running, cleaning up resource mapping";
+        // Clean up the resource mapping even if device wasn't running
+        {
+            std::lock_guard<std::mutex> lock(serial_by_resource_mu());
+            serial_by_resource().erase(resourceName);
+        }
         return;
     }
 
@@ -655,12 +730,56 @@ std::vector<std::string> Orbbec::validate(vsdk::ResourceConfig cfg) {
     if (serial.empty()) {
         throw std::invalid_argument("serial_number must be a non-empty string");
     }
+
+    if (attrs.count("resolution")) {
+        auto resolution = attrs["resolution"].get<viam::sdk::ProtoStruct>();
+        if (resolution) {
+            if (resolution->count("color") == 0) {
+                throw std::invalid_argument("resolution must contain color key");
+            }
+            auto color_resolution = resolution->at("color").get<viam::sdk::ProtoStruct>();
+            if (color_resolution->count("width") == 0 || color_resolution->count("height") == 0) {
+                throw std::invalid_argument("color must contain width and height keys");
+            }
+            auto width = color_resolution->at("width").get<double>();
+            auto height = color_resolution->at("height").get<double>();
+            if (!width || !height) {
+                throw std::invalid_argument("color width and height must be integers");
+            }
+            if (*width <= 0 || *height <= 0) {
+                throw std::invalid_argument("color width and height must be positive integers");
+            }
+            Resolution color_resolution_val = Resolution{static_cast<uint32_t>(*width), static_cast<uint32_t>(*height)};
+
+            if (resolution->count("depth") == 0) {
+                throw std::invalid_argument("resolution must contain depth key");
+            }
+            auto depth_resolution = resolution->at("depth").get<viam::sdk::ProtoStruct>();
+            if (depth_resolution->count("width") == 0 || depth_resolution->count("height") == 0) {
+                throw std::invalid_argument("depth must contain width and height keys");
+            }
+            width = depth_resolution->at("width").get<double>();
+            height = depth_resolution->at("height").get<double>();
+            if (!width || !height) {
+                throw std::invalid_argument("depth width and height must be integers");
+            }
+            if (*width <= 0 || *height <= 0) {
+                throw std::invalid_argument("depth width and height must be positive integers");
+            }
+        }
+    }
+
     return {};
 }
 
 Orbbec::Orbbec(vsdk::Dependencies deps, vsdk::ResourceConfig cfg, std::shared_ptr<ob::Context> ctx)
     : Camera(cfg.name()), config_(configure(std::move(deps), std::move(cfg))), ob_ctx_(std::move(ctx)) {
     VIAM_SDK_LOG(info) << "Orbbec constructor start " << config_->serial_number;
+    {
+        std::lock_guard<std::mutex> lock(config_by_serial_mu());
+        config_by_serial().insert_or_assign(config_->serial_number, *config_);
+        VIAM_SDK_LOG(info) << "initial config_by_serial_: " << config_by_serial().at(config_->serial_number).to_string();
+    }
     startDevice(config_->serial_number);
     {
         std::lock_guard<std::mutex> lock(serial_by_resource_mu());
@@ -701,7 +820,7 @@ Orbbec::~Orbbec() {
 }
 
 void Orbbec::reconfigure(const vsdk::Dependencies& deps, const vsdk::ResourceConfig& cfg) {
-    VIAM_SDK_LOG(info) << "Orbbec reconfigure start";
+    VIAM_SDK_LOG(info) << "[reconfigure] Orbbec reconfigure start";
     std::string prev_serial_number;
     std::string prev_resource_name;
     {
@@ -718,6 +837,13 @@ void Orbbec::reconfigure(const vsdk::Dependencies& deps, const vsdk::ResourceCon
         config_ = configure(deps, cfg);
         new_serial_number = config_->serial_number;
         new_resource_name = config_->resource_name;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(config_by_serial_mu());
+        config_by_serial().erase(prev_serial_number);
+        config_by_serial().insert_or_assign(new_serial_number, *config_);
+        VIAM_SDK_LOG(info) << "[reconfigure] updated config_by_serial_: " << config_by_serial().at(new_serial_number).to_string();
     }
 
     {
@@ -739,7 +865,7 @@ void Orbbec::reconfigure(const vsdk::Dependencies& deps, const vsdk::ResourceCon
             firmware_version_ = search->second->device->getDeviceInfo()->firmwareVersion();
         }
     }
-    VIAM_SDK_LOG(info) << "Orbbec reconfigure end";
+    VIAM_SDK_LOG(info) << "[reconfigure] Orbbec reconfigure end";
 }
 
 vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::ProtoStruct& extra) {
@@ -1098,7 +1224,23 @@ std::unique_ptr<orbbec::ObResourceConfig> Orbbec::configure(vsdk::Dependencies d
     std::string serial_number_from_config;
     const std::string* serial_val = attrs["serial_number"].get<std::string>();
     serial_number_from_config = *serial_val;
-    auto native_config = std::make_unique<orbbec::ObResourceConfig>(serial_number_from_config, configuration.name());
+    std::optional<DeviceResolution> dev_res = std::nullopt;
+
+    if (attrs.count("resolution")) {
+        VIAM_SDK_LOG(info) << "[configure] resolution specified in config";
+
+        auto resolution = attrs["resolution"].get<viam::sdk::ProtoStruct>();
+
+        auto color_height = resolution->at("color").get<viam::sdk::ProtoStruct>()->at("height").get_unchecked<double>();
+        auto color_width = resolution->at("color").get<viam::sdk::ProtoStruct>()->at("width").get_unchecked<double>();
+        auto depth_height = resolution->at("depth").get<viam::sdk::ProtoStruct>()->at("height").get_unchecked<double>();
+        auto depth_width = resolution->at("depth").get<viam::sdk::ProtoStruct>()->at("width").get_unchecked<double>();
+        dev_res = DeviceResolution{Resolution{static_cast<uint32_t>(color_width), static_cast<uint32_t>(color_height)},
+                                   Resolution{static_cast<uint32_t>(depth_width), static_cast<uint32_t>(depth_height)}};
+    }
+
+    auto native_config = std::make_unique<orbbec::ObResourceConfig>(serial_number_from_config, configuration.name(), dev_res);
+    VIAM_SDK_LOG(info) << "[configure] configured: " << native_config->to_string();
     return native_config;
 }
 // RESOURCE END
