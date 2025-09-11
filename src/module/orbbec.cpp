@@ -74,7 +74,7 @@ const uint64_t maxFrameAgeUs = 1e6;  // time until a frame is considered stale, 
 // STRUCTS BEGIN
 struct PointXYZRGB {
     float x, y, z;
-    unsigned int rgb;
+    std::uint32_t rgb;
 };
 
 struct ViamOBDevice {
@@ -90,17 +90,6 @@ struct ViamOBDevice {
     std::shared_ptr<ob::Config> config;
 };
 
-struct raw_camera_image {
-    using deleter_type = void (*)(unsigned char*);
-    using uniq = std::unique_ptr<unsigned char[], deleter_type>;
-
-    static constexpr deleter_type free_deleter = [](unsigned char* ptr) { free(ptr); };
-
-    static constexpr deleter_type array_delete_deleter = [](unsigned char* ptr) { delete[] ptr; };
-
-    uniq bytes;
-    size_t size;
-};
 // STRUCTS END
 
 // GLOBALS BEGIN
@@ -176,7 +165,7 @@ uint64_t timeSinceFrameUs(uint64_t nowUs, uint64_t imageTimeUs) {
     return 0;
 }
 
-std::vector<unsigned char> RGBPointsToPCD(std::shared_ptr<ob::Frame> frame, float scale) {
+std::vector<std::uint8_t> RGBPointsToPCD(std::shared_ptr<ob::Frame> frame, float scale) {
     int numPoints = frame->dataSize() / sizeof(OBColorPoint);
 
     OBColorPoint* points = (OBColorPoint*)frame->data();
@@ -184,10 +173,10 @@ std::vector<unsigned char> RGBPointsToPCD(std::shared_ptr<ob::Frame> frame, floa
 
     for (int i = 0; i < numPoints; i++) {
         OBColorPoint& p = points[i];
-        unsigned int r = (unsigned int)p.r;
-        unsigned int g = (unsigned int)p.g;
-        unsigned int b = (unsigned int)p.b;
-        unsigned int rgb = (r << 16) | (g << 8) | b;
+        std::uint32_t r = (std::uint32_t)p.r;
+        std::uint32_t g = (std::uint32_t)p.g;
+        std::uint32_t b = (std::uint32_t)p.b;
+        std::uint32_t rgb = (r << 16) | (g << 8) | b;
         PointXYZRGB pt;
         pt.x = (p.x * scale);
         pt.y = (p.y * scale);
@@ -208,13 +197,13 @@ std::vector<unsigned char> RGBPointsToPCD(std::shared_ptr<ob::Frame> frame, floa
            << "POINTS " << pcdPoints.size() << "\n"
            << "DATA binary\n";
     std::string headerStr = header.str();
-    std::vector<unsigned char> pcdBytes;
+    std::vector<std::uint8_t> pcdBytes;
     pcdBytes.insert(pcdBytes.end(), headerStr.begin(), headerStr.end());
     for (auto& p : pcdPoints) {
-        unsigned char* x = (unsigned char*)&p.x;
-        unsigned char* y = (unsigned char*)&p.y;
-        unsigned char* z = (unsigned char*)&p.z;
-        unsigned char* rgb = (unsigned char*)&p.rgb;
+        std::uint8_t* x = (std::uint8_t*)&p.x;
+        std::uint8_t* y = (std::uint8_t*)&p.y;
+        std::uint8_t* z = (std::uint8_t*)&p.z;
+        std::uint8_t* rgb = (std::uint8_t*)&p.rgb;
 
         pcdBytes.push_back(x[0]);
         pcdBytes.push_back(x[1]);
@@ -1188,11 +1177,11 @@ vsdk::Camera::image_collection Orbbec::get_images() {
             }
         }
 
-        unsigned char* colorData = (unsigned char*)color->getData();
+        std::uint8_t* colorData = (std::uint8_t*)color->getData();
         if (colorData == nullptr) {
             throw std::runtime_error("[get_image] color data is null");
         }
-        uint32_t colorDataSize = color->dataSize();
+        std::uint32_t colorDataSize = color->dataSize();
 
         vsdk::Camera::raw_image color_image;
 
@@ -1216,7 +1205,7 @@ vsdk::Camera::image_collection Orbbec::get_images() {
             throw std::invalid_argument(buffer.str());
         }
 
-        unsigned char* depthData = (unsigned char*)depth->getData();
+        std::uint8_t* depthData = (std::uint8_t*)depth->getData();
         if (depthData == nullptr) {
             throw std::runtime_error("[get_images] depth data is null");
         }
@@ -1352,16 +1341,16 @@ vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const v
             throw std::invalid_argument(buffer.str());
         }
 
-        unsigned char* colorData = (unsigned char*)color->getData();
+        std::uint8_t* colorData = (std::uint8_t*)color->getData();
         if (colorData == nullptr) {
             throw std::runtime_error("[get_image] color data is null");
         }
-        uint32_t colorDataSize = color->dataSize();
+        std::uint32_t colorDataSize = color->dataSize();
 
         std::shared_ptr<ob::DepthFrame> depthFrame = depth->as<ob::DepthFrame>();
         float scale = depthFrame->getValueScale();
 
-        unsigned char* depthData = (unsigned char*)depth->getData();
+        std::uint8_t* depthData = (std::uint8_t*)depth->getData();
         if (depthData == nullptr) {
             throw std::runtime_error("[get_point_cloud] depth data is null");
         }
@@ -1378,7 +1367,7 @@ vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const v
             throw std::invalid_argument("device is not started");
         }
 
-        std::vector<unsigned char> data =
+        std::vector<std::uint8_t> data =
             RGBPointsToPCD(my_dev->pointCloudFilter->process(my_dev->align->process(fs)), scale * mmToMeterMultiple);
 
         VIAM_SDK_LOG(debug) << "[get_point_cloud] end";

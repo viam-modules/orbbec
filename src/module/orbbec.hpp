@@ -11,8 +11,8 @@
 namespace orbbec {
 
 struct Resolution {
-    int width{};
-    int height{};
+    uint32_t width{};
+    uint32_t height{};
 
     std::string to_string() const {
         std::ostringstream os;
