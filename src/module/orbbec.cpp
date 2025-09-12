@@ -871,7 +871,7 @@ Orbbec::~Orbbec() {
         const std::lock_guard<std::mutex> lock(config_by_serial_mu());
         if (config_by_serial().count(serial_number_) == 0) {
             VIAM_SDK_LOG(error) << "Orbbec destructor: device with serial number " << serial_number_
-                               << " is not in config_by_serial, skipping erase";
+                                << " is not in config_by_serial, skipping erase";
         } else {
             prev_serial_number = config_by_serial().at(serial_number_).serial_number;
             prev_resource_name = config_by_serial().at(serial_number_).resource_name;
