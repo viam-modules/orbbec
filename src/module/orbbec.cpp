@@ -54,6 +54,13 @@ std::string const Orbbec::default_color_format = "MJPG";
 std::string const Orbbec::default_depth_format = "Y16";
 Resolution const Orbbec::default_color_resolution{1280, 720};
 Resolution const Orbbec::default_depth_resolution{1600, 1200};
+std::unordered_map<Resolution, std::unordered_set<Resolution>> const Orbbec::color_to_depth_supported_resolutions{
+    {{1920, 1080}, {{1600, 1200}, {800, 600}, {400, 300}}},
+    {{1440, 1080}, {{1600, 1200}, {800, 600}, {400, 300}}},
+    {{1280, 720}, {{1600, 1200}, {800, 600}, {400, 300}}},
+    {{800, 600}, {{800, 600}, {400, 300}}},
+    {{640, 480}, {{800, 600}, {400, 300}}},
+    {{640, 360}, {{800, 600}, {400, 300}}}};
 
 // CONSTANTS BEGIN
 const std::string kColorSourceName = "color";
@@ -747,39 +754,35 @@ std::vector<std::string> Orbbec::validate(vsdk::ResourceConfig cfg) {
     if (attrs.count("format")) {
         auto format = attrs["format"].get<viam::sdk::ProtoStruct>();
         if (format) {
-            if (!format->count("color") && !format->count("depth")) {
-                throw std::invalid_argument("format must contain at least color or depth keys");
+            if (!format->count("color") || !format->count("depth")) {
+                throw std::invalid_argument("format must contain color and depth keys");
             }
-            if (format->count("color")) {
-                auto color_format = format->at("color").get<std::string>();
-                if (!color_format) {
-                    throw std::invalid_argument("color format must be a string");
+            auto color_format = format->at("color").get<std::string>();
+            if (!color_format) {
+                throw std::invalid_argument("color format must be a string");
+            }
+            if (Orbbec::supported_color_formats.count(*color_format) == 0) {
+                std::ostringstream buffer;
+                buffer << "color format must be one of: ";
+                for (const auto& fmt : Orbbec::supported_color_formats) {
+                    buffer << fmt << " ";
                 }
-                if (Orbbec::supported_color_formats.count(*color_format) == 0) {
-                    std::ostringstream buffer;
-                    buffer << "color format must be one of: ";
-                    for (const auto& fmt : Orbbec::supported_color_formats) {
-                        buffer << fmt << " ";
-                    }
-                    VIAM_SDK_LOG(error) << buffer.str();
-                    throw std::invalid_argument(buffer.str());
-                }
+                VIAM_SDK_LOG(error) << buffer.str();
+                throw std::invalid_argument(buffer.str());
             }
 
-            if (format->count("depth")) {
-                auto depth_format = format->at("depth").get<std::string>();
-                if (!depth_format) {
-                    throw std::invalid_argument("depth format must be a string");
+            auto depth_format = format->at("depth").get<std::string>();
+            if (!depth_format) {
+                throw std::invalid_argument("depth format must be a string");
+            }
+            if (Orbbec::supported_depth_formats.count(*depth_format) == 0) {
+                std::ostringstream buffer;
+                buffer << "depth format must be one of: ";
+                for (const auto& fmt : Orbbec::supported_depth_formats) {
+                    buffer << fmt << " ";
                 }
-                if (Orbbec::supported_depth_formats.count(*depth_format) == 0) {
-                    std::ostringstream buffer;
-                    buffer << "depth format must be one of: ";
-                    for (const auto& fmt : Orbbec::supported_depth_formats) {
-                        buffer << fmt << " ";
-                    }
-                    VIAM_SDK_LOG(error) << buffer.str();
-                    throw std::invalid_argument(buffer.str());
-                }
+                VIAM_SDK_LOG(error) << buffer.str();
+                throw std::invalid_argument(buffer.str());
             }
         }
     }
@@ -787,37 +790,58 @@ std::vector<std::string> Orbbec::validate(vsdk::ResourceConfig cfg) {
     if (attrs.count("resolution")) {
         auto resolution = attrs["resolution"].get<viam::sdk::ProtoStruct>();
         if (resolution) {
-            if (!resolution->count("color") && !resolution->count("depth")) {
-                throw std::invalid_argument("resolution must contain at least color or depth keys");
+            if (!resolution->count("color") || !resolution->count("depth")) {
+                throw std::invalid_argument("resolution must contain color and depth keys");
             }
-            if (resolution->count("color")) {
-                auto color_resolution = resolution->at("color").get<viam::sdk::ProtoStruct>();
-                if (color_resolution->count("width") == 0 || color_resolution->count("height") == 0) {
-                    throw std::invalid_argument("color must contain width and height keys");
-                }
-                auto width = color_resolution->at("width").get<double>();
-                auto height = color_resolution->at("height").get<double>();
-                if (!width || !height) {
-                    throw std::invalid_argument("color width and height must be doubles");
-                }
-                if (*width <= 0 || *height <= 0) {
-                    throw std::invalid_argument("color width and height must be positive");
-                }
+            auto color_resolution = resolution->at("color").get<viam::sdk::ProtoStruct>();
+            if (color_resolution->count("width") == 0 || color_resolution->count("height") == 0) {
+                throw std::invalid_argument("color must contain width and height keys");
+            }
+            auto color_width = color_resolution->at("width").get<double>();
+            auto color_height = color_resolution->at("height").get<double>();
+            if (!color_width || !color_height) {
+                throw std::invalid_argument("color width and height must be doubles");
+            }
+            if (*color_width <= 0 || *color_height <= 0) {
+                throw std::invalid_argument("color width and height must be positive");
+            }
+            auto color_width_uint32 = static_cast<std::uint32_t>(*color_width);
+            auto color_height_uint32 = static_cast<std::uint32_t>(*color_height);
+
+            auto depth_resolution = resolution->at("depth").get<viam::sdk::ProtoStruct>();
+            if (depth_resolution->count("width") == 0 || depth_resolution->count("height") == 0) {
+                throw std::invalid_argument("depth must contain width and height keys");
+            }
+            auto depth_width = depth_resolution->at("width").get<double>();
+            auto depth_height = depth_resolution->at("height").get<double>();
+            if (!depth_width || !depth_height) {
+                throw std::invalid_argument("depth width and height must be double");
+            }
+            if (*depth_width <= 0 || *depth_height <= 0) {
+                throw std::invalid_argument("depth width and height must be positive");
             }
 
-            if (resolution->count("depth")) {
-                auto depth_resolution = resolution->at("depth").get<viam::sdk::ProtoStruct>();
-                if (depth_resolution->count("width") == 0 || depth_resolution->count("height") == 0) {
-                    throw std::invalid_argument("depth must contain width and height keys");
+            auto depth_width_uint32 = static_cast<std::uint32_t>(*depth_width);
+            auto depth_height_uint32 = static_cast<std::uint32_t>(*depth_height);
+            if (color_to_depth_supported_resolutions.count({color_width_uint32, color_height_uint32}) == 0) {
+                std::ostringstream buffer;
+                buffer << "color resolution must be one of: ";
+                for (const auto& res : color_to_depth_supported_resolutions) {
+                    buffer << "{" << res.first.to_string() << "} ";
                 }
-                auto width = depth_resolution->at("width").get<double>();
-                auto height = depth_resolution->at("height").get<double>();
-                if (!width || !height) {
-                    throw std::invalid_argument("depth width and height must be double");
+                VIAM_SDK_LOG(error) << buffer.str();
+                throw std::invalid_argument(buffer.str());
+            }
+            if (color_to_depth_supported_resolutions.at({color_width_uint32, color_height_uint32})
+                    .count({depth_width_uint32, depth_height_uint32}) == 0) {
+                std::ostringstream buffer;
+                buffer << "color/depth resolution combination not supported, for color resolution " << "{" << color_width_uint32 << ", "
+                       << color_height_uint32 << "}, depth resolution must be one of: ";
+                for (const auto& res : color_to_depth_supported_resolutions.at({color_width_uint32, color_height_uint32})) {
+                    buffer << "{" << res.to_string() << "} ";
                 }
-                if (*width <= 0 || *height <= 0) {
-                    throw std::invalid_argument("depth width and height must be positive");
-                }
+                VIAM_SDK_LOG(error) << buffer.str();
+                throw std::invalid_argument(buffer.str());
             }
         }
     }

@@ -17,7 +17,21 @@ The following attribute template can be used to configure this model:
 
 ```json
 {
-  "serial_number": "XXXXXXXXXXX"
+  "serial_number": "XXXXXXXXXXX",
+  "format": {
+    "depth": "Y16",
+    "color": "MJPG"
+  },
+  "resolution": {
+    "depth": {
+      "width": 800,
+      "height": 600
+    },
+    "color": {
+      "width": 800,
+      "height": 600
+    }
+  }
 }
 ```
 
@@ -43,6 +57,33 @@ The following attributes are available for this model:
 | Name          | Type   | Inclusion | Description                |
 |---------------|--------|-----------|----------------------------|
 | `serial_number` | string | **Required** | The serial number of the specific Orbbec camera to use. This number is printed on the device. The serial number of each plugged-in and available orbbec camera will be logged on module startup.  |
+|`resolution` | struct | **Optional** | The native resolution of the color and depth cameras |
+| `format`    | struct | **Optional** | The native format of the color and depth cameras |
+
+`format` attributes:
+
+| Name | Type | Inclusion | Description | Available Values | Default Value |
+|------|------|-----------|-------------|------------------|---------------|
+| `color` | string | **Optional** | The native format of the color camera | `MJPG`, `RGB` | `MJPG` |
+| `depth` | string | **Optional** | The native format of the depth camera | `Y16` | `Y16` |
+
+`resolution` attributes:
+
+| Name | Type | Inclusion | Description | Default Value |
+|------|------|-----------|-------------|---------------|
+| `color` | struct | **Optional** | The native resolution of the color camera, consists of two fields: `width` and `height` | `width`: 1280, `height`: 720 |
+| `depth` | struct | **Optional** | The native resolution of the depth camera, consists of two fields: `width` and `height` | `width`: 1600, `height`: 1200 |
+
+`resolution` combinations
+
+| Color | Depth |
+|-------|-------|
+| `1920x1080` | `1600x1200`, `800X600`, `400X300` | 
+| `1440X1080` | `1600x1200`, `800X600`, `400X300` | 
+| `1280X720` | `1600x1200`, `800X600`, `400X300` | 
+| `800X600` | `800X600`, `400X300` | 
+| `640X480` | `800X600`, `400X300` | 
+| `640X360` | `800X600`, `400X300` | 
 
 ## Troubleshooting
 

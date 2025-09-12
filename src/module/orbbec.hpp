@@ -14,9 +14,13 @@ struct Resolution {
     uint32_t width{};
     uint32_t height{};
 
+    bool operator==(const Resolution& other) const {
+        return width == other.width && height == other.height;
+    }
+
     std::string to_string() const {
         std::ostringstream os;
-        os << "Resolution(" << width << "x" << height << ")";
+        os << "(" << width << "x" << height << ")";
         return os.str();
     }
 };
@@ -47,7 +51,7 @@ struct DeviceFormat {
 
     std::string to_string() const {
         std::ostringstream os;
-        os << "DeviceFormat(";
+        os << "(";
         if (color_format.has_value())
             os << "color_format=" << *color_format;
         else
@@ -75,7 +79,7 @@ struct ObResourceConfig {
         : serial_number(serial_number), resource_name(resource_name), device_resolution(device_resolution), device_format(device_format) {}
     std::string to_string() const {
         std::ostringstream os;
-        os << "ObResourceConfig(resource_name=" << resource_name << ", serial_number=" << serial_number;
+        os << "(resource_name=" << resource_name << ", serial_number=" << serial_number;
         if (device_resolution.has_value()) {
             os << ", device_resolution=" << device_resolution->to_string();
         } else {
@@ -114,6 +118,7 @@ class Orbbec final : public viam::sdk::Camera, public viam::sdk::Reconfigurable 
     static const std::string default_depth_format;
     static const Resolution default_color_resolution;
     static const Resolution default_depth_resolution;
+    static const std::unordered_map<Resolution, std::unordered_set<Resolution>> color_to_depth_supported_resolutions;
 
    private:
     std::shared_ptr<ob::Context> ob_ctx_;
@@ -124,3 +129,15 @@ class Orbbec final : public viam::sdk::Camera, public viam::sdk::Reconfigurable 
 };
 
 }  // namespace orbbec
+
+namespace std {
+template <>
+struct hash<orbbec::Resolution> {
+    std::size_t operator()(const orbbec::Resolution& res) const {
+        // Combine hash of width and height
+        std::size_t h1 = std::hash<uint32_t>{}(res.width);
+        std::size_t h2 = std::hash<uint32_t>{}(res.height);
+        return h1 ^ (h2 << 1);  // Simple hash combining
+    }
+};
+}  // namespace std
