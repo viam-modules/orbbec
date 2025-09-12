@@ -825,51 +825,60 @@ std::vector<std::string> Orbbec::validate(vsdk::ResourceConfig cfg) {
     return {};
 }
 
+std::string getSerialNumber(const vsdk::ResourceConfig& cfg) {
+    auto attrs = cfg.attributes();
+    if (attrs.count("serial_number")) {
+        auto serial = attrs.at("serial_number").get<std::string>();
+        if (serial) {
+            return *serial;
+        }
+    }
+    throw std::invalid_argument("serial_number is a required argument");
+}
+
 Orbbec::Orbbec(vsdk::Dependencies deps, vsdk::ResourceConfig cfg, std::shared_ptr<ob::Context> ctx)
-    : Camera(cfg.name()), config_(configure(std::move(deps), std::move(cfg))), ob_ctx_(std::move(ctx)) {
-    VIAM_SDK_LOG(info) << "Orbbec constructor start " << config_->serial_number;
+    : Camera(cfg.name()), serial_number_(getSerialNumber(cfg)), ob_ctx_(std::move(ctx)) {
+    VIAM_SDK_LOG(info) << "Orbbec constructor start " << serial_number_;
+    auto config = configure(deps, cfg);
     {
         std::lock_guard<std::mutex> lock(config_by_serial_mu());
-        config_by_serial().insert_or_assign(config_->serial_number, *config_);
-        VIAM_SDK_LOG(info) << "initial config_by_serial_: " << config_by_serial().at(config_->serial_number).to_string();
+        config_by_serial().insert_or_assign(serial_number_, *config);
+        VIAM_SDK_LOG(info) << "initial config_by_serial_: " << config_by_serial().at(serial_number_).to_string();
     }
-    startDevice(config_->serial_number);
+    startDevice(serial_number_);
     {
         std::lock_guard<std::mutex> lock(serial_by_resource_mu());
-        serial_by_resource()[config_->resource_name] = config_->serial_number;
+        serial_by_resource()[config->resource_name] = serial_number_;
     }
 
     // set firmware version  member variable
     {
         std::lock_guard<std::mutex> lock(devices_by_serial_mu());
-        auto search = devices_by_serial().find(config_->serial_number);
+        auto search = devices_by_serial().find(serial_number_);
         if (search != devices_by_serial().end()) {
             firmware_version_ = search->second->device->getDeviceInfo()->firmwareVersion();
         }
     }
 
-    VIAM_SDK_LOG(info) << "Orbbec constructor end " << config_->serial_number;
+    VIAM_SDK_LOG(info) << "Orbbec constructor end " << serial_number_;
 }
 
 Orbbec::~Orbbec() {
-    if (config_ == nullptr) {
-        VIAM_SDK_LOG(error) << "Orbbec destructor start: config_ is null, no available serial number";
-    } else {
-        VIAM_SDK_LOG(info) << "Orbbec destructor start " << config_->serial_number;
-    }
+    VIAM_SDK_LOG(info) << "Orbbec destructor start " << serial_number_;
     std::string prev_serial_number;
     std::string prev_resource_name;
     {
-        const std::lock_guard<std::mutex> lock(config_mu_);
-        prev_serial_number = config_->serial_number;
-        prev_resource_name = config_->resource_name;
+        const std::lock_guard<std::mutex> lock(config_by_serial_mu());
+        if (config_by_serial().count(serial_number_) == 0) {
+            VIAM_SDK_LOG(error) << "Orbbec destructor: device with serial number " << serial_number_
+                               << " is not in config_by_serial, skipping erase";
+        } else {
+            prev_serial_number = config_by_serial().at(serial_number_).serial_number;
+            prev_resource_name = config_by_serial().at(serial_number_).resource_name;
+        }
     }
     stopDevice(prev_serial_number, prev_resource_name);
-    if (config_ == nullptr) {
-        VIAM_SDK_LOG(error) << "Orbbec destructor end: config_ is null, no available serial number";
-    } else {
-        VIAM_SDK_LOG(info) << "Orbbec destructor end " << config_->serial_number;
-    }
+    VIAM_SDK_LOG(info) << "Orbbec destructor end " << serial_number_;
 }
 
 void Orbbec::reconfigure(const vsdk::Dependencies& deps, const vsdk::ResourceConfig& cfg) {
@@ -877,25 +886,34 @@ void Orbbec::reconfigure(const vsdk::Dependencies& deps, const vsdk::ResourceCon
     std::string prev_serial_number;
     std::string prev_resource_name;
     {
-        const std::lock_guard<std::mutex> lock(config_mu_);
-        prev_serial_number = config_->serial_number;
-        prev_resource_name = config_->resource_name;
+        const std::lock_guard<std::mutex> lock_serial(serial_number_mu_);
+        const std::lock_guard<std::mutex> lock(config_by_serial_mu());
+        if (config_by_serial().count(serial_number_) == 0) {
+            std::ostringstream buffer;
+            buffer << "[reconfigure] device with serial number " << serial_number_ << " is not in config_by_serial, skipping reconfigure";
+            VIAM_SDK_LOG(error) << buffer.str();
+            throw std::runtime_error(buffer.str());
+        } else {
+            prev_serial_number = config_by_serial().at(serial_number_).serial_number;
+            prev_resource_name = config_by_serial().at(serial_number_).resource_name;
+        }
     }
     stopDevice(prev_serial_number, prev_resource_name);
     std::string new_serial_number;
     std::string new_resource_name;
     {
-        const std::lock_guard<std::mutex> lock(config_mu_);
-        config_.reset();
-        config_ = configure(deps, cfg);
-        new_serial_number = config_->serial_number;
-        new_resource_name = config_->resource_name;
-    }
-
-    {
-        std::lock_guard<std::mutex> lock(config_by_serial_mu());
-        config_by_serial().erase(prev_serial_number);
-        config_by_serial().insert_or_assign(new_serial_number, *config_);
+        auto config = configure(deps, cfg);
+        {
+            const std::lock_guard<std::mutex> lock(config_by_serial_mu());
+            config_by_serial().erase(prev_serial_number);
+            config_by_serial().insert_or_assign(config->serial_number, *config);
+        }
+        {
+            const std::lock_guard<std::mutex> lock(serial_number_mu_);
+            serial_number_ = config->serial_number;
+        }
+        new_serial_number = config->serial_number;
+        new_resource_name = config->resource_name;
         VIAM_SDK_LOG(info) << "[reconfigure] updated config_by_serial_: " << config_by_serial().at(new_serial_number).to_string();
     }
 
@@ -912,8 +930,9 @@ void Orbbec::reconfigure(const vsdk::Dependencies& deps, const vsdk::ResourceCon
 
     // set firmware version member variable
     {
+        std::lock_guard<std::mutex> lock_serial(serial_number_mu_);
         std::lock_guard<std::mutex> lock(devices_by_serial_mu());
-        auto search = devices_by_serial().find(config_->serial_number);
+        auto search = devices_by_serial().find(serial_number_);
         if (search != devices_by_serial().end()) {
             firmware_version_ = search->second->device->getDeviceInfo()->firmwareVersion();
         }
@@ -926,8 +945,8 @@ vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::Pro
         VIAM_SDK_LOG(debug) << "[get_image] start";
         std::string serial_number;
         {
-            const std::lock_guard<std::mutex> lock(config_mu_);
-            serial_number = config_->serial_number;
+            const std::lock_guard<std::mutex> lock(serial_number_mu_);
+            serial_number = serial_number_;
         }
 
         checkFirmwareVersion(firmware_version_);
@@ -1035,14 +1054,11 @@ vsdk::Camera::properties Orbbec::get_properties() {
 
         std::string serial_number;
         {
-            const std::lock_guard<std::mutex> lock(config_mu_);
-            if (config_ == nullptr) {
-                throw std::runtime_error("native config is null");
+            const std::lock_guard<std::mutex> lock(serial_number_mu_);
+            if (serial_number_.empty()) {
+                throw std::runtime_error("serial number is null");
             }
-            if (config_->serial_number.empty()) {
-                throw std::runtime_error("native config serial number is empty");
-            }
-            serial_number = config_->serial_number;
+            serial_number = serial_number_;
         }
 
         OBCameraIntrinsic props;
@@ -1087,8 +1103,8 @@ vsdk::Camera::image_collection Orbbec::get_images() {
         VIAM_SDK_LOG(debug) << "[get_images] start";
         std::string serial_number;
         {
-            const std::lock_guard<std::mutex> lock(config_mu_);
-            serial_number = config_->serial_number;
+            const std::lock_guard<std::mutex> lock(serial_number_mu_);
+            serial_number = serial_number_;
         }
 
         checkFirmwareVersion(firmware_version_);
@@ -1249,8 +1265,8 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
         if (kv.first == firmware_key) {
             std::string serial_number;
             {
-                const std::lock_guard<std::mutex> lock(config_mu_);
-                serial_number = config_->serial_number;
+                const std::lock_guard<std::mutex> lock(serial_number_mu_);
+                serial_number = serial_number_;
             }
             {
                 // note: under lock for the entire firmware update to ensure device can't be destructed.
@@ -1302,8 +1318,8 @@ vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const v
         VIAM_SDK_LOG(debug) << "[get_point_cloud] start";
         std::string serial_number;
         {
-            const std::lock_guard<std::mutex> lock(config_mu_);
-            serial_number = config_->serial_number;
+            const std::lock_guard<std::mutex> lock(serial_number_mu_);
+            serial_number = serial_number_;
         }
 
         checkFirmwareVersion(firmware_version_);

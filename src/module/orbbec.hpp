@@ -117,9 +117,9 @@ class Orbbec final : public viam::sdk::Camera, public viam::sdk::Reconfigurable 
 
    private:
     std::shared_ptr<ob::Context> ob_ctx_;
-    std::unique_ptr<ObResourceConfig> config_;
-    std::mutex config_mu_;
     std::string firmware_version_;
+    std::mutex serial_number_mu_;
+    std::string serial_number_;
     static std::unique_ptr<ObResourceConfig> configure(viam::sdk::Dependencies deps, viam::sdk::ResourceConfig cfg);
 };
 
