@@ -953,7 +953,7 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
         }
 
         if (response.images.empty()) {
-            VIAM_SDK_LOG(warn) << "[get_images] no camera sources matched the filter";
+            VIAM_SDK_LOG(error) << "[get_images] error: no camera sources matched the filter";
             return response;
         }
 
