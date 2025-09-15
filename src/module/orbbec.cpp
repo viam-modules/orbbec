@@ -1122,7 +1122,7 @@ vsdk::Camera::properties Orbbec::get_properties() {
     }
 }
 
-vsdk::Camera::image_collection Orbbec::get_images() {
+vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filter_source_names, const vsdk::ProtoStruct& extra) {
     try {
         VIAM_SDK_LOG(debug) << "[get_images] start";
         std::string serial_number;
@@ -1143,134 +1143,173 @@ vsdk::Camera::image_collection Orbbec::get_images() {
             fs = search->second;
         }
 
-        std::shared_ptr<ob::Frame> color = fs->getFrame(OB_FRAME_COLOR);
-        if (color == nullptr) {
-            throw std::invalid_argument("no color frame");
-        }
-        if (supported_color_formats.count(ob::TypeHelper::convertOBFormatTypeToString(color->getFormat())) == 0) {
-            std::ostringstream buffer;
-            buffer << "[get_images] unsupported color format: " << ob::TypeHelper::convertOBFormatTypeToString(color->getFormat())
-                   << ", supported: ";
-            for (const auto& format : supported_color_formats) {
-                buffer << format << " ";
+        bool should_process_color = false;
+        bool should_process_depth = false;
+
+        if (filter_source_names.empty()) {
+            should_process_color = true;
+            should_process_depth = true;
+        } else {
+            for (const auto& name : filter_source_names) {
+                if (name == kColorSourceName) {
+                    should_process_color = true;
+                }
+                if (name == kDepthSourceName) {
+                    should_process_depth = true;
+                }
             }
-
-            VIAM_SDK_LOG(error) << buffer.str();
-            throw std::invalid_argument(buffer.str());
         }
 
+        vsdk::Camera::image_collection response;
+        std::shared_ptr<ob::Frame> color = nullptr;
+        std::shared_ptr<ob::Frame> depth = nullptr;
         uint64_t nowUs = getNowUs();
-        uint64_t diff = timeSinceFrameUs(nowUs, color->getSystemTimeStampUs());
-        if (diff > maxFrameAgeUs) {
-            std::ostringstream buffer;
-            buffer << "no recent color frame: check USB connection, diff: " << diff << "us";
-            throw std::invalid_argument(buffer.str());
-        }
 
-        std::shared_ptr<ob::Frame> depth = fs->getFrame(OB_FRAME_DEPTH);
-        if (depth == nullptr) {
-            throw std::invalid_argument("no depth frame");
-        }
-
-        diff = timeSinceFrameUs(nowUs, depth->getSystemTimeStampUs());
-        if (diff > maxFrameAgeUs) {
-            std::ostringstream buffer;
-            buffer << "no recent depth frame: check USB connection, diff: " << diff << "us";
-            throw std::invalid_argument(buffer.str());
-        }
-
-        std::optional<DeviceFormat> res_format_opt;
-        {
-            std::lock_guard<std::mutex> lock(config_by_serial_mu());
-            if (config_by_serial().count(serial_number) == 0) {
-                throw std::invalid_argument("device with serial number " + serial_number + " is not in config_by_serial");
+        if (should_process_color) {
+            color = fs->getFrame(OB_FRAME_COLOR);
+            if (color == nullptr) {
+                throw std::invalid_argument("no color frame");
             }
-            res_format_opt = config_by_serial().at(serial_number).device_format;
-        }
-        if (res_format_opt.has_value()) {
-            if (res_format_opt->color_format.has_value()) {
-                if (ob::TypeHelper::convertOBFormatTypeToString(color->getFormat()) != res_format_opt->color_format.value()) {
+            if (supported_color_formats.count(ob::TypeHelper::convertOBFormatTypeToString(color->getFormat())) == 0) {
+                std::ostringstream buffer;
+                buffer << "[get_images] unsupported color format: " << ob::TypeHelper::convertOBFormatTypeToString(color->getFormat())
+                       << ", supported: ";
+                for (const auto& format : supported_color_formats) {
+                    buffer << format << " ";
+                }
+
+                VIAM_SDK_LOG(error) << buffer.str();
+                throw std::invalid_argument(buffer.str());
+            }
+
+            uint64_t diff = timeSinceFrameUs(nowUs, color->getSystemTimeStampUs());
+            if (diff > maxFrameAgeUs) {
+                std::ostringstream buffer;
+                buffer << "no recent color frame: check USB connection, diff: " << diff << "us";
+                throw std::invalid_argument(buffer.str());
+            }
+
+            if (color->getFormat() != OB_FORMAT_MJPG) {
+                throw std::invalid_argument("color frame was not in jpeg format");
+            }
+
+            std::optional<DeviceFormat> res_format_opt;
+            {
+                std::lock_guard<std::mutex> lock(config_by_serial_mu());
+                if (config_by_serial().count(serial_number) == 0) {
+                    throw std::invalid_argument("device with serial number " + serial_number + " is not in config_by_serial");
+                }
+                res_format_opt = config_by_serial().at(serial_number).device_format;
+            }
+            if (res_format_opt.has_value()) {
+                if (res_format_opt->color_format.has_value()) {
+                    if (ob::TypeHelper::convertOBFormatTypeToString(color->getFormat()) != res_format_opt->color_format.value()) {
+                        std::ostringstream buffer;
+                        buffer << "color format mismatch, expected " << res_format_opt->color_format.value() << " got "
+                               << ob::TypeHelper::convertOBFormatTypeToString(color->getFormat());
+                        throw std::invalid_argument(buffer.str());
+                    }
+                }
+                if (res_format_opt->depth_format.has_value()) {
+                    if (ob::TypeHelper::convertOBFormatTypeToString(depth->getFormat()) != res_format_opt->depth_format.value()) {
+                        std::ostringstream buffer;
+                        buffer << "depth format mismatch, expected " << res_format_opt->depth_format.value() << " got "
+                               << ob::TypeHelper::convertOBFormatTypeToString(depth->getFormat());
+                        throw std::invalid_argument(buffer.str());
+                    }
+                }
+            } else {
+                if (ob::TypeHelper::convertOBFormatTypeToString(color->getFormat()) != Orbbec::default_color_format) {
                     std::ostringstream buffer;
-                    buffer << "color format mismatch, expected " << res_format_opt->color_format.value() << " got "
+                    buffer << "color format mismatch, expected " << Orbbec::default_color_format << " got "
                            << ob::TypeHelper::convertOBFormatTypeToString(color->getFormat());
                     throw std::invalid_argument(buffer.str());
                 }
-            }
-            if (res_format_opt->depth_format.has_value()) {
-                if (ob::TypeHelper::convertOBFormatTypeToString(depth->getFormat()) != res_format_opt->depth_format.value()) {
+                if (ob::TypeHelper::convertOBFormatTypeToString(depth->getFormat()) != Orbbec::default_depth_format) {
                     std::ostringstream buffer;
-                    buffer << "depth format mismatch, expected " << res_format_opt->depth_format.value() << " got "
+                    buffer << "depth format mismatch, expected " << Orbbec::default_depth_format << " got "
                            << ob::TypeHelper::convertOBFormatTypeToString(depth->getFormat());
                     throw std::invalid_argument(buffer.str());
                 }
             }
-        } else {
-            if (ob::TypeHelper::convertOBFormatTypeToString(color->getFormat()) != Orbbec::default_color_format) {
+
+            std::uint8_t* colorData = (std::uint8_t*)color->getData();
+            if (colorData == nullptr) {
+                throw std::runtime_error("[get_image] color data is null");
+            }
+            std::uint32_t colorDataSize = color->dataSize();
+
+            vsdk::Camera::raw_image color_image;
+
+            if (color->getFormat() == OB_FORMAT_MJPG) {
+                color_image.mime_type = kColorMimeTypeJPEG;
+                color_image.bytes.assign(colorData, colorData + colorDataSize);
+            } else if (color->getFormat() == OB_FORMAT_RGBA) {
+                color_image.mime_type = kColorMimeTypePNG;
+                auto width = color->getStreamProfile()->as<ob::VideoStreamProfile>()->getWidth();
+                auto height = color->getStreamProfile()->as<ob::VideoStreamProfile>()->getHeight();
+                color_image.bytes = encoding::encode_to_png(colorData, width, height, encoding::ImageFormat::RGBA);
+            } else if (color->getFormat() == OB_FORMAT_RGB) {
+                color_image.mime_type = kColorMimeTypePNG;
+                auto width = color->getStreamProfile()->as<ob::VideoStreamProfile>()->getWidth();
+                auto height = color->getStreamProfile()->as<ob::VideoStreamProfile>()->getHeight();
+                color_image.bytes = encoding::encode_to_png(colorData, width, height, encoding::ImageFormat::RGB);
+            } else {
                 std::ostringstream buffer;
-                buffer << "color format mismatch, expected " << Orbbec::default_color_format << " got "
-                       << ob::TypeHelper::convertOBFormatTypeToString(color->getFormat());
+                buffer << "[get_images] unsupported color format: " << ob::TypeHelper::convertOBFormatTypeToString(color->getFormat());
+                VIAM_SDK_LOG(error) << buffer.str();
                 throw std::invalid_argument(buffer.str());
             }
-            if (ob::TypeHelper::convertOBFormatTypeToString(depth->getFormat()) != Orbbec::default_depth_format) {
+        }
+
+        if (should_process_depth) {
+            depth = fs->getFrame(OB_FRAME_DEPTH);
+            if (depth == nullptr) {
+                throw std::invalid_argument("no depth frame");
+            }
+
+            uint64_t diff = timeSinceFrameUs(nowUs, depth->getSystemTimeStampUs());
+            if (diff > maxFrameAgeUs) {
                 std::ostringstream buffer;
-                buffer << "depth format mismatch, expected " << Orbbec::default_depth_format << " got "
-                       << ob::TypeHelper::convertOBFormatTypeToString(depth->getFormat());
+                buffer << "no recent depth frame: check USB connection, diff: " << diff << "us";
                 throw std::invalid_argument(buffer.str());
             }
+
+            unsigned char* depthData = (unsigned char*)depth->getData();
+            if (depthData == nullptr) {
+                throw std::runtime_error("[get_images] depth data is null");
+            }
+            auto depthVid = depth->as<ob::VideoFrame>();
+
+            vsdk::Camera::raw_image depth_image;
+            depth_image.source_name = kDepthSourceName;
+            depth_image.mime_type = kDepthMimeTypeViamDep;
+            depth_image.bytes = encoding::encode_to_depth_raw(depthData, depthVid->getWidth(), depthVid->getHeight());
+            response.images.emplace_back(std::move(depth_image));
         }
 
-        std::uint8_t* colorData = (std::uint8_t*)color->getData();
-        if (colorData == nullptr) {
-            throw std::runtime_error("[get_image] color data is null");
+        if (response.images.empty()) {
+            VIAM_SDK_LOG(error) << "[get_images] error: no camera sources matched the filter";
+            return response;
         }
-        std::uint32_t colorDataSize = color->dataSize();
 
-        vsdk::Camera::raw_image color_image;
+        uint64_t colorTS = color ? color->getSystemTimeStampUs() : 0;
+        uint64_t depthTS = depth ? depth->getSystemTimeStampUs() : 0;
+        uint64_t timestamp = 0;
 
-        if (color->getFormat() == OB_FORMAT_MJPG) {
-            color_image.mime_type = kColorMimeTypeJPEG;
-            color_image.bytes.assign(colorData, colorData + colorDataSize);
-        } else if (color->getFormat() == OB_FORMAT_RGBA) {
-            color_image.mime_type = kColorMimeTypePNG;
-            auto width = color->getStreamProfile()->as<ob::VideoStreamProfile>()->getWidth();
-            auto height = color->getStreamProfile()->as<ob::VideoStreamProfile>()->getHeight();
-            color_image.bytes = encoding::encode_to_png(colorData, width, height, encoding::ImageFormat::RGBA);
-        } else if (color->getFormat() == OB_FORMAT_RGB) {
-            color_image.mime_type = kColorMimeTypePNG;
-            auto width = color->getStreamProfile()->as<ob::VideoStreamProfile>()->getWidth();
-            auto height = color->getStreamProfile()->as<ob::VideoStreamProfile>()->getHeight();
-            color_image.bytes = encoding::encode_to_png(colorData, width, height, encoding::ImageFormat::RGB);
+        if (colorTS > 0 && depthTS > 0) {
+            if (colorTS != depthTS) {
+                VIAM_SDK_LOG(info) << "color and depth timestamps differ, defaulting to "
+                                      "older of the two"
+                                   << "color timestamp was " << colorTS << " depth timestamp was " << depthTS;
+            }
+            // use the older of the two timestamps
+            timestamp = (colorTS > depthTS) ? depthTS : colorTS;
+        } else if (colorTS > 0) {
+            timestamp = colorTS;
         } else {
-            std::ostringstream buffer;
-            buffer << "[get_images] unsupported color format: " << ob::TypeHelper::convertOBFormatTypeToString(color->getFormat());
-            VIAM_SDK_LOG(error) << buffer.str();
-            throw std::invalid_argument(buffer.str());
+            timestamp = depthTS;
         }
-
-        std::uint8_t* depthData = (std::uint8_t*)depth->getData();
-        if (depthData == nullptr) {
-            throw std::runtime_error("[get_images] depth data is null");
-        }
-        auto depthVid = depth->as<ob::VideoFrame>();
-        vsdk::Camera::raw_image depth_image;
-
-        depth_image.source_name = kDepthSourceName;
-        depth_image.mime_type = kDepthMimeTypeViamDep;
-        depth_image.bytes = encoding::encode_to_depth_raw(depthData, depthVid->getWidth(), depthVid->getHeight());
-
-        vsdk::Camera::image_collection response;
-        response.images.emplace_back(std::move(color_image));
-        response.images.emplace_back(std::move(depth_image));
-
-        uint64_t colorTS = color->getSystemTimeStampUs();
-        uint64_t depthTS = depth->getSystemTimeStampUs();
-        if (colorTS != depthTS) {
-            VIAM_SDK_LOG(info) << "color and depth timestamps differ, defaulting to "
-                                  "older of the two"
-                               << "color timestamp was " << colorTS << " depth timestamp was " << depthTS;
-        }
-        // use the older of the two timestamps
-        uint64_t timestamp = (colorTS > depthTS) ? depthTS : colorTS;
 
         std::chrono::microseconds latestTimestamp(timestamp);
         response.metadata.captured_at = vsdk::time_pt{std::chrono::duration_cast<std::chrono::nanoseconds>(latestTimestamp)};
