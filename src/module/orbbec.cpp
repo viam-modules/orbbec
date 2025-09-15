@@ -1048,16 +1048,11 @@ vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::Pro
         if (color->getFormat() == OB_FORMAT_MJPG) {
             response.mime_type = kColorMimeTypeJPEG;
             response.bytes.assign(colorData, colorData + colorDataSize);
-        } else if (color->getFormat() == OB_FORMAT_RGBA) {
-            response.mime_type = kColorMimeTypePNG;
-            auto width = color->getStreamProfile()->as<ob::VideoStreamProfile>()->getWidth();
-            auto height = color->getStreamProfile()->as<ob::VideoStreamProfile>()->getHeight();
-            response.bytes = encoding::encode_to_png(colorData, width, height, encoding::ImageFormat::RGBA);
         } else if (color->getFormat() == OB_FORMAT_RGB) {
             response.mime_type = kColorMimeTypePNG;
             auto width = color->getStreamProfile()->as<ob::VideoStreamProfile>()->getWidth();
             auto height = color->getStreamProfile()->as<ob::VideoStreamProfile>()->getHeight();
-            response.bytes = encoding::encode_to_png(colorData, width, height, encoding::ImageFormat::RGB);
+            response.bytes = encoding::encode_to_png(colorData, width, height);
         } else {
             std::ostringstream buffer;
             buffer << "[get_image] unsupported color format: " << ob::TypeHelper::convertOBFormatTypeToString(color->getFormat());
@@ -1244,16 +1239,11 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
             if (color->getFormat() == OB_FORMAT_MJPG) {
                 color_image.mime_type = kColorMimeTypeJPEG;
                 color_image.bytes.assign(colorData, colorData + colorDataSize);
-            } else if (color->getFormat() == OB_FORMAT_RGBA) {
-                color_image.mime_type = kColorMimeTypePNG;
-                auto width = color->getStreamProfile()->as<ob::VideoStreamProfile>()->getWidth();
-                auto height = color->getStreamProfile()->as<ob::VideoStreamProfile>()->getHeight();
-                color_image.bytes = encoding::encode_to_png(colorData, width, height, encoding::ImageFormat::RGBA);
             } else if (color->getFormat() == OB_FORMAT_RGB) {
                 color_image.mime_type = kColorMimeTypePNG;
                 auto width = color->getStreamProfile()->as<ob::VideoStreamProfile>()->getWidth();
                 auto height = color->getStreamProfile()->as<ob::VideoStreamProfile>()->getHeight();
-                color_image.bytes = encoding::encode_to_png(colorData, width, height, encoding::ImageFormat::RGB);
+                color_image.bytes = encoding::encode_to_png(colorData, width, height);
             } else {
                 std::ostringstream buffer;
                 buffer << "[get_images] unsupported color format: " << ob::TypeHelper::convertOBFormatTypeToString(color->getFormat());

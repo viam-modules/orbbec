@@ -16,7 +16,7 @@ std::vector<std::uint8_t> encode_to_depth_raw(std::uint8_t const* const data, ui
     return viam::sdk::Camera::encode_depth_map(m);
 }
 
-std::vector<std::uint8_t> encode_to_png(std::uint8_t const* const image_data, int const width, int const height, ImageFormat const format) {
+std::vector<std::uint8_t> encode_to_png(std::uint8_t const* const image_data, int const width, int const height) {
     std::vector<std::uint8_t> png_buffer;
 
     // PNG write callback function
@@ -47,22 +47,8 @@ std::vector<std::uint8_t> encode_to_png(std::uint8_t const* const image_data, in
     // Set custom write function
     png_set_write_fn(png_ptr, &png_buffer, png_write_callback, nullptr);
 
-    // Determine PNG color type based on channels
-    int color_type;
-    switch (format) {
-        case ImageFormat::GRAY:
-            color_type = PNG_COLOR_TYPE_GRAY;
-            break;
-        case ImageFormat::RGB:
-            color_type = PNG_COLOR_TYPE_RGB;
-            break;
-        case ImageFormat::RGBA:
-            color_type = PNG_COLOR_TYPE_RGBA;
-            break;
-        default:
-            png_destroy_write_struct(&png_ptr, &info_ptr);
-            throw std::runtime_error("Unsupported number of channels");
-    }
+    // For now we are only supporting RGB images, so we set color type to RGB. In the future we can add support for RGBA and GRAY.
+    int color_type = PNG_COLOR_TYPE_RGB;
 
     // Write PNG header
     png_set_IHDR(
@@ -71,9 +57,10 @@ std::vector<std::uint8_t> encode_to_png(std::uint8_t const* const image_data, in
     png_write_info(png_ptr, info_ptr);
 
     // Write image data row by row
+    int const RGB_CHANNELS = 3;
     std::vector<png_bytep> row_pointers(height);
     for (int y = 0; y < height; y++) {
-        row_pointers[y] = const_cast<png_bytep>(&image_data[y * width * format_to_channels.at(format)]);
+        row_pointers[y] = const_cast<png_bytep>(&image_data[y * width * RGB_CHANNELS]);
     }
 
     png_write_image(png_ptr, row_pointers.data());
