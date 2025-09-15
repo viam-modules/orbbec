@@ -119,7 +119,8 @@ class Orbbec final : public viam::sdk::Camera, public viam::sdk::Reconfigurable 
     static const std::string default_depth_format;
     static const Resolution default_color_resolution;
     static const Resolution default_depth_resolution;
-    static const std::map<Resolution, std::set<Resolution, std::greater<Resolution>>, std::greater<Resolution>> color_to_depth_supported_resolutions;
+    static const std::map<Resolution, std::set<Resolution, std::greater<Resolution>>, std::greater<Resolution>>
+        color_to_depth_supported_resolutions;
 
    private:
     std::shared_ptr<ob::Context> ob_ctx_;
