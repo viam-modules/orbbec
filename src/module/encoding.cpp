@@ -10,13 +10,13 @@ std::vector<std::uint8_t> encode_to_depth_raw(std::uint8_t const* const data, st
     double const mmToMeterMultiplier = 0.001;
 
     for (size_t i = 0; i < m.size(); i++) {
-        auto const round_value = std::lround(m[i] * mmToMeterMultiplier * 1000.0) / 1000.0;
-        // Let's make sure round_value is within the range of uint16_t after conversion to mm using numeric limits of depth_map
+        auto const rounded_value = std::lround(m[i] * mmToMeterMultiplier * 1000.0) / 1000.0;
+        // Let's make sure rounded_value is within the range of uint16_t after conversion to mm using numeric limits of depth_map
         // If it's out of range, we throw an exception
-        if(round_value < 0 || round_value > std::numeric_limits<viam::sdk::Camera::depth_map::value_type>::max()) {
+        if (rounded_value < 0 || rounded_value > std::numeric_limits<viam::sdk::Camera::depth_map::value_type>::max()) {
             throw std::out_of_range("Depth value out of range");
         }
-        m[i] = m[i] * mmToMeterMultiplier;
+        m[i] = rounded_value;
     }
 
     return viam::sdk::Camera::encode_depth_map(m);
