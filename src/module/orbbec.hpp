@@ -6,6 +6,7 @@
 #include <libobsensor/ObSensor.hpp>
 
 #include <optional>
+#include <set>
 #include <unordered_set>
 
 namespace orbbec {
@@ -14,8 +15,8 @@ struct Resolution {
     uint32_t width{};
     uint32_t height{};
 
-    bool operator==(const Resolution& other) const {
-        return width == other.width && height == other.height;
+    bool operator>(const Resolution& other) const {
+        return (width > other.width) || (width == other.width && height > other.height);
     }
 
     std::string to_string() const {
@@ -118,7 +119,7 @@ class Orbbec final : public viam::sdk::Camera, public viam::sdk::Reconfigurable 
     static const std::string default_depth_format;
     static const Resolution default_color_resolution;
     static const Resolution default_depth_resolution;
-    static const std::unordered_map<Resolution, std::unordered_set<Resolution>> color_to_depth_supported_resolutions;
+    static const std::map<Resolution, std::set<Resolution, std::greater<Resolution>>, std::greater<Resolution>> color_to_depth_supported_resolutions;
 
    private:
     std::shared_ptr<ob::Context> ob_ctx_;

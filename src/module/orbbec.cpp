@@ -54,7 +54,7 @@ std::string const Orbbec::default_color_format = "MJPG";
 std::string const Orbbec::default_depth_format = "Y16";
 Resolution const Orbbec::default_color_resolution{1280, 720};
 Resolution const Orbbec::default_depth_resolution{1600, 1200};
-std::unordered_map<Resolution, std::unordered_set<Resolution>> const Orbbec::color_to_depth_supported_resolutions{
+std::map<Resolution, std::set<Resolution, std::greater<Resolution>>, std::greater<Resolution>> const Orbbec::color_to_depth_supported_resolutions{
     {{1920, 1080}, {{1600, 1200}, {800, 600}, {400, 300}}},
     {{1440, 1080}, {{1600, 1200}, {800, 600}, {400, 300}}},
     {{1280, 720}, {{1600, 1200}, {800, 600}, {400, 300}}},
