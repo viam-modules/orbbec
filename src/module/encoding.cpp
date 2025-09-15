@@ -3,20 +3,26 @@
 namespace orbbec {
 namespace encoding {
 
-std::vector<std::uint8_t> encode_to_depth_raw(std::uint8_t const* const data, uint64_t const width, uint64_t const height) {
+std::vector<std::uint8_t> encode_to_depth_raw(std::uint8_t const* const data, std::uint32_t const width, std::uint32_t const height) {
     viam::sdk::Camera::depth_map m = xt::xarray<uint16_t>::from_shape({height, width});
     std::copy(reinterpret_cast<const uint16_t*>(data), reinterpret_cast<const uint16_t*>(data) + height * width, m.begin());
 
-    double const mmToMeterMultiple = 0.001;
+    double const mmToMeterMultiplier = 0.001;
 
     for (size_t i = 0; i < m.size(); i++) {
-        m[i] = m[i] * mmToMeterMultiple;
+        auto const round_value = std::lround(m[i] * mmToMeterMultiplier * 1000.0) / 1000.0;
+        // Let's make sure round_value is within the range of uint16_t after conversion to mm using numeric limits of depth_map
+        // If it's out of range, we throw an exception
+        if(round_value < 0 || round_value > std::numeric_limits<viam::sdk::Camera::depth_map::value_type>::max()) {
+            throw std::out_of_range("Depth value out of range");
+        }
+        m[i] = m[i] * mmToMeterMultiplier;
     }
 
     return viam::sdk::Camera::encode_depth_map(m);
 }
 
-std::vector<std::uint8_t> encode_to_png(std::uint8_t const* const image_data, int const width, int const height) {
+std::vector<std::uint8_t> encode_to_png(std::uint8_t const* const image_data, std::uint32_t const width, std::uint32_t const height) {
     std::vector<std::uint8_t> png_buffer;
 
     // PNG write callback function
