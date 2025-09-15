@@ -126,6 +126,7 @@ class Orbbec final : public viam::sdk::Camera, public viam::sdk::Reconfigurable 
     std::mutex serial_number_mu_;
     std::string serial_number_;
     static std::unique_ptr<ObResourceConfig> configure(viam::sdk::Dependencies deps, viam::sdk::ResourceConfig cfg);
+    static void validate_sensor(std::pair<std::string, viam::sdk::ProtoValue> const& sensor_pair);
 };
 
 }  // namespace orbbec
