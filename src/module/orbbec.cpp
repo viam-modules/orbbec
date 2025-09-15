@@ -15,7 +15,6 @@
 #include "orbbec.hpp"
 #include "device_control.hpp"
 #include "encoding.hpp"
-#include "device_control.hpp"
 
 #include <curl/curl.h>
 #include <math.h>
@@ -25,8 +24,6 @@
 #include <cstdint>
 #include <cstdio>
 
-#include <filesystem>  // For path manipulation and absolute paths
-#include <fstream>     // <-- Add this line near your other includes
 #include <filesystem>  // For path manipulation and absolute paths
 #include <fstream>     // <-- Add this line near your other includes
 #include <iostream>
@@ -612,24 +609,24 @@ auto frameCallback(const std::string& serialNumber) {
             return;
         }
 
-    std::shared_ptr<ob::Frame> depth = frameSet->getFrame(OB_FRAME_DEPTH);
-    if (depth == nullptr) {
-        std::cerr << "no depth frame\n";
-        return;
-    }
+        std::shared_ptr<ob::Frame> depth = frameSet->getFrame(OB_FRAME_DEPTH);
+        if (depth == nullptr) {
+            std::cerr << "no depth frame\n";
+            return;
+        }
 
-    std::lock_guard<std::mutex> lock(frame_set_by_serial_mu());
-    uint64_t nowUs = getNowUs();
-    uint64_t diff = timeSinceFrameUs(nowUs, color->getSystemTimeStampUs());
-    if (diff > maxFrameAgeUs) {
-        std::cerr << "color frame is " << diff << "us older than now, nowUs: " << nowUs << " frameTimeUs " << color->getSystemTimeStampUs()
-                  << "\n";
-    }
-    diff = timeSinceFrameUs(nowUs, depth->getSystemTimeStampUs());
-    if (diff > maxFrameAgeUs) {
-        std::cerr << "depth frame is " << diff << "us older than now, nowUs: " << nowUs << " frameTimeUs " << depth->getSystemTimeStampUs()
-                  << "\n";
-    }
+        std::lock_guard<std::mutex> lock(frame_set_by_serial_mu());
+        uint64_t nowUs = getNowUs();
+        uint64_t diff = timeSinceFrameUs(nowUs, color->getSystemTimeStampUs());
+        if (diff > maxFrameAgeUs) {
+            std::cerr << "color frame is " << diff << "us older than now, nowUs: " << nowUs << " frameTimeUs "
+                      << color->getSystemTimeStampUs() << "\n";
+        }
+        diff = timeSinceFrameUs(nowUs, depth->getSystemTimeStampUs());
+        if (diff > maxFrameAgeUs) {
+            std::cerr << "depth frame is " << diff << "us older than now, nowUs: " << nowUs << " frameTimeUs "
+                      << depth->getSystemTimeStampUs() << "\n";
+        }
 
         auto it = frame_set_by_serial().find(serialNumber);
         if (it != frame_set_by_serial().end()) {
