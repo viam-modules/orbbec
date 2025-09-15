@@ -4,51 +4,28 @@ on:
   push:
     branches:
       - main
-      - Orbbec-on-jetpack6-base-image 
   pull_request:
-  workflow_dispatch:
-    branches:
-      - main
-      - Orbbec-on-jetpack6-base-image 
 
 jobs:
   build-module:
     strategy:
       matrix:
         include:
-          - os: ubuntu-24.04-arm
-            flavor: jetpack6
+          - os: macos-latest
+          - os: ubuntu-latest
             container:
-              image: nvcr.io/nvidia/l4t-jetpack:r36.2.0
+                image: ghcr.io/viamrobotics/rdk-devenv:amd64
+                options: --platform linux/amd64
+          - os: buildjet-8vcpu-ubuntu-2204-arm
+            container:
+              image: ghcr.io/viamrobotics/rdk-devenv:arm64
               options: --platform linux/arm64
-          # - os: macos-latest
-          # - os: ubuntu-latest
-          #   container:
-          #       image: ghcr.io/viamrobotics/rdk-devenv:amd64
-          #       options: --platform linux/amd64
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Install viam-cpp-sdk dependencies
-        if: matrix.flavor == 'jetpack6'
-        run: |
-          apt-get update
-          apt-get -y dist-upgrade
-          apt-get -y --no-install-recommends install build-essential ca-certificates curl doxygen g++ gdb git gnupg gpg less libboost-all-dev libgrpc++-dev libprotobuf-dev libssl-dev ninja-build pkg-config protobuf-compiler protobuf-compiler-grpc software-properties-common sudo wget unzip python3.10-venv python3-pip
-          wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor > /usr/share/keyrings/llvm-snapshot-keyring.gpg
-          echo "deb [signed-by=/usr/share/keyrings/llvm-snapshot-keyring.gpg] http://apt.llvm.org/jammy/ llvm-toolchain-jammy-15 main" > /etc/apt/sources.list.d/llvm.list
-          wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - > /usr/share/keyrings/kitware-archive-keyring.gpg
-          echo 'deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] https://apt.kitware.com/ubuntu/ jammy main' > /etc/apt/sources.list.d/kitware.list
-          apt-get update
-          apt-get remove -y libllvm15 || true
-          apt-get -y --no-install-recommends install -t llvm-toolchain-jammy-15 libllvm15 clang-15 clang-tidy-15 clang-format libclang-cpp15
-          apt-get -y install cmake
-          pip3 install --user appimage-builder
-          export PATH=$PATH:~/.local/bin
 
       - name: Set up build environment
         run: |
