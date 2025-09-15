@@ -1663,6 +1663,27 @@ vsdk::ProtoStruct setDeviceProperties(std::shared_ptr<ob::Device> device, const 
     return getDeviceProperties(device);
 }
 
+vsdk::ProtoStruct getCameraPresets(std::shared_ptr<ob::Device> device, std::string const& command) {
+    std::shared_ptr<ob::DevicePresetList> presetLists = device->getAvailablePresetList();
+    if (presetLists && presetLists->getCount() == 0) {
+        VIAM_SDK_LOG(error) << "The current device does not support preset mode" << std::endl;
+        return {{"error", "The current device does not support preset mode"}};
+    }
+
+    vsdk::ProtoList presets;
+    VIAM_SDK_LOG(info) << "Available Presets:" << std::endl;
+    for (uint32_t index = 0; index < presetLists->getCount(); index++) {
+        // Print available preset name.
+        VIAM_SDK_LOG(info) << " - " << index << "." << presetLists->getName(index) << std::endl;
+        presets.push_back(presetLists->getName(index));
+    }
+
+    // Print current preset name.
+    VIAM_SDK_LOG(info) << "Current PresetName: " << device->getCurrentPresetName() << std::endl;
+
+    return {{"presets", presets}, {"current_preset", device->getCurrentPresetName()}};
+}
+
 vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
     try {
         viam::sdk::ProtoStruct resp = viam::sdk::ProtoStruct{};
@@ -1860,6 +1881,9 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
                     }
                     if (key == "get_camera_params") {
                         return getCameraParams(my_dev->pipe);
+                    }
+                    if (key == "get_camera_presets") {
+                        return getCameraPresets(my_dev->device, key);
                     }
                 }
             }
