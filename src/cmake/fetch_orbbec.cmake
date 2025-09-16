@@ -20,6 +20,12 @@ elseif (LINUX)
     else()
       message(FATAL_ERROR "Unsupported arch")
     endif()
+elseif (WIN32)
+  set(_ob_version "v2.4.8")
+  set(_ob_commit "ec8e346")
+  set(_ob_timestamp "202507032159")
+  set(_ob_suffix "win_x64")
+  set(_ob_sha256 "427f0f0596b5dcc229f10a78ad728da51e3065b599e2cc8737cbdedcc31f0aac")
 else()
     message(FATAL_ERROR "Unsupported platform")
 endif()
@@ -40,6 +46,16 @@ if(LINUX)
       ${CMAKE_CURRENT_BINARY_DIR}/_deps/orbbec-sdk-release-src/shared/99-obsensor-libusb.rules
       ${CMAKE_CURRENT_SOURCE_DIR}/99-obsensor-libusb.rules
     ONLY_IF_DIFFERENT
+  )
+elseif(WIN32)
+  # Copy dlls to the orbbecsdk lib folder
+  file(COPY
+  ${CMAKE_CURRENT_BINARY_DIR}/_deps/orbbec-sdk-release-src/bin/orbbecsdk.dll
+  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/_deps/orbbec-sdk-release-src/lib
+  )
+  file(COPY
+  ${CMAKE_CURRENT_BINARY_DIR}/_deps/orbbec-sdk-release-src/bin/extensions
+  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/_deps/orbbec-sdk-release-src/lib
   )
 endif()
 
