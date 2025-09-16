@@ -26,7 +26,7 @@ class Orbbec final : public viam::sdk::Camera, public viam::sdk::Reconfigurable 
     void reconfigure(const viam::sdk::Dependencies& deps, const viam::sdk::ResourceConfig& cfg) override;
     viam::sdk::ProtoStruct do_command(const viam::sdk::ProtoStruct& command) override;
     raw_image get_image(std::string mime_type, const viam::sdk::ProtoStruct& extra) override;
-    image_collection get_images() override;
+    image_collection get_images(std::vector<std::string> filter_source_names, const viam::sdk::ProtoStruct& extra) override;
     point_cloud get_point_cloud(std::string mime_type, const viam::sdk::ProtoStruct& extra) override;
     properties get_properties() override;
     std::vector<viam::sdk::GeometryConfig> get_geometries(const viam::sdk::ProtoStruct& extra) override;
