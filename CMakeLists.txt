@@ -10,12 +10,12 @@ project(viam-orbbec
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src/cmake")
 
-# Here we set the rpath to accomodate one and only one supported deployment
-# case, a directory containing
+# Here we set the rpath to accomodate the deployment case, a directory containing
 # ├── bin
 # │   └── orbbec-module
 # ├── lib
 #     └── <runtime dependencies>
+# On Windows the directory structure is flat
 if (APPLE)
     list(PREPEND CMAKE_INSTALL_RPATH "@loader_path/../lib")
 else()
@@ -71,22 +71,39 @@ if (APPLE)
     set(_framework_dest_arg "FRAMEWORK" "DESTINATION" "lib")
 endif()
 
-install(
-    TARGETS orbbec-module
-    RUNTIME_DEPENDENCIES
-		POST_EXCLUDE_REGEXES ${_post_exclude_regex}
-    RUNTIME
-    LIBRARY
-    ${_framework_dest_arg}
-)
 
-# The lib/extensions directory contains some shared libraries which are
-# mandatory for our use case but not picked up by the runtime dependency set
-# because they are loaded at runtime.
-install(
-    DIRECTORY ${OrbbecSDK_DIR}/extensions
-    DESTINATION lib
-)
+if (WIN32)
+    # Install the target without scanning system DLLs
+    install(TARGETS orbbec-module
+        RUNTIME
+    )
+    install(FILES "${OrbbecSDK_DIR}/orbbecsdk.dll" DESTINATION bin)
+    install(DIRECTORY "${OrbbecSDK_DIR}/extensions" DESTINATION bin)
+
+else()
+    install(
+        TARGETS orbbec-module
+        RUNTIME_DEPENDENCIES
+            POST_EXCLUDE_REGEXES ${_post_exclude_regex}
+        RUNTIME
+        LIBRARY
+        ${_framework_dest_arg}
+    )
+    install(
+        PROGRAMS
+            first_run.sh
+            install_udev_rules.sh
+        DESTINATION ${CMAKE_INSTALL_PREFIX}
+    )
+    # The lib/extensions directory contains some shared libraries which are
+    # mandatory for our use case but not picked up by the runtime dependency set
+    # because they are loaded at runtime.
+    install(
+        DIRECTORY ${OrbbecSDK_DIR}/extensions
+        DESTINATION lib
+        )
+endif()
+
 
 install(
     FILES
@@ -95,9 +112,3 @@ install(
     DESTINATION ${CMAKE_INSTALL_PREFIX}
 )
 
-install(
-    PROGRAMS
-        first_run.sh
-        install_udev_rules.sh
-    DESTINATION ${CMAKE_INSTALL_PREFIX}
-)
