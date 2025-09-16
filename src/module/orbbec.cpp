@@ -633,7 +633,7 @@ void startDevice(std::string serialNumber) {
         }
         auto resolution_opt = config_by_serial().at(serialNumber).device_resolution;
         auto format_opt = config_by_serial().at(serialNumber).device_format;
-        VIAM_SDK_LOG(info) << "[startDevice] Resolution from config: ";
+        VIAM_SDK_LOG(info) << "[startDevice] Resolution from config: " << (resolution_opt.has_value()? resolution_opt->to_string() : "not specified, Format from config: ") << (format_opt.has_value()? format_opt->to_string() : "not specifed");
         if (resolution_opt.has_value() or format_opt.has_value()) {
             // Create the pipeline
             auto config = createHwD2CAlignConfig(search->second->pipe, resolution_opt, format_opt);
@@ -647,8 +647,6 @@ void startDevice(std::string serialNumber) {
                 throw std::runtime_error(buffer.str());
             }
             my_dev->config = config;
-        } else {
-            VIAM_SDK_LOG(info) << "  not specified, using default";
         }
     }
 
