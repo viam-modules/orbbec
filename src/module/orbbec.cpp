@@ -648,7 +648,7 @@ void startDevice(std::string serialNumber) {
         VIAM_SDK_LOG(info) << "[startDevice] Resolution from config: "
                            << (resolution_opt.has_value() ? resolution_opt->to_string() : "not specified, Format from config: ")
                            << (format_opt.has_value() ? format_opt->to_string() : "not specifed");
-        if (resolution_opt.has_value() or format_opt.has_value()) {
+        if (resolution_opt.has_value() || format_opt.has_value()) {
             // Create the pipeline
             auto config = createHwD2CAlignConfig(search->second->pipe, resolution_opt, format_opt);
             if (config == nullptr) {
