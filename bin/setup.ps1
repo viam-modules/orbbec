@@ -45,7 +45,7 @@ Push-Location viam-cpp-sdk
 
 # NOTE: If you change this version, also change it in the `conanfile.py` requirements
 # and in dockerfile
-git checkout releases/v0.16.0
+git checkout releases/v0.19.0
 
 # Build the C++ SDK repo.
 #
