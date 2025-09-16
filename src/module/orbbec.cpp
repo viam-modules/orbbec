@@ -325,7 +325,7 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
         auto colorProfile = colorStreamProfiles->getProfile(i);
         auto colorVsp = colorProfile->as<ob::VideoStreamProfile>();
 
-        if (deviceFormat.has_value() and deviceFormat->color_format.has_value()) {
+        if (deviceFormat.has_value() && deviceFormat->color_format.has_value()) {
             if (ob::TypeHelper::convertOBFormatTypeToString(colorVsp->getFormat()) != deviceFormat->color_format.value()) {
                 continue;
             }
@@ -333,7 +333,7 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
             continue;
         }
 
-        if (deviceRes.has_value() and deviceRes->color_resolution.has_value()) {
+        if (deviceRes.has_value() && deviceRes->color_resolution.has_value()) {
             if (colorVsp->getWidth() != deviceRes->color_resolution->width ||
                 colorVsp->getHeight() != deviceRes->color_resolution->height) {
                 continue;
@@ -353,7 +353,7 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
                 continue;
             }
 
-            if (deviceFormat.has_value() and deviceFormat->depth_format.has_value()) {
+            if (deviceFormat.has_value() && deviceFormat->depth_format.has_value()) {
                 if (ob::TypeHelper::convertOBFormatTypeToString(depthVsp->getFormat()) != deviceFormat->depth_format.value()) {
                     continue;
                 }
@@ -361,7 +361,7 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
                 continue;
             }
 
-            if (deviceRes.has_value() and deviceRes->depth_resolution.has_value()) {
+            if (deviceRes.has_value() && deviceRes->depth_resolution.has_value()) {
                 if (depthVsp->getWidth() != deviceRes->depth_resolution->width ||
                     depthVsp->getHeight() != deviceRes->depth_resolution->height) {
                     continue;
