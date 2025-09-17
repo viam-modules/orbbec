@@ -15,6 +15,9 @@
 #include "orbbec.hpp"
 #include "device_control.hpp"
 #include "encoding.hpp"
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 #include <curl/curl.h>
 #include <math.h>
@@ -23,6 +26,7 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
+#include <iomanip>
 
 #include <filesystem>  // For path manipulation and absolute paths
 #include <fstream>     // <-- Add this line near your other includes
@@ -58,13 +62,13 @@ std::string const Orbbec::default_color_format = "MJPG";
 std::string const Orbbec::default_depth_format = "Y16";
 Resolution const Orbbec::default_color_resolution{1280, 720};
 Resolution const Orbbec::default_depth_resolution{1600, 1200};
-std::unordered_map<Resolution, std::unordered_set<Resolution>> const Orbbec::color_to_depth_supported_resolutions{
-    {{1920, 1080}, {{1600, 1200}, {800, 600}, {400, 300}}},
-    {{1440, 1080}, {{1600, 1200}, {800, 600}, {400, 300}}},
-    {{1280, 720}, {{1600, 1200}, {800, 600}, {400, 300}}},
-    {{800, 600}, {{800, 600}, {400, 300}}},
-    {{640, 480}, {{800, 600}, {400, 300}}},
-    {{640, 360}, {{800, 600}, {400, 300}}}};
+std::map<Resolution, std::set<Resolution, std::greater<Resolution>>, std::greater<Resolution>> const
+    Orbbec::color_to_depth_supported_resolutions{{{1920, 1080}, {{1600, 1200}, {800, 600}, {400, 300}}},
+                                                 {{1440, 1080}, {{1600, 1200}, {800, 600}, {400, 300}}},
+                                                 {{1280, 720}, {{1600, 1200}, {800, 600}, {400, 300}}},
+                                                 {{800, 600}, {{800, 600}, {400, 300}}},
+                                                 {{640, 480}, {{800, 600}, {400, 300}}},
+                                                 {{640, 360}, {{800, 600}, {400, 300}}}};
 
 // CONSTANTS BEGIN
 const std::string kColorSourceName = "color";
@@ -166,6 +170,13 @@ void checkFirmwareVersion(const std::string version) {
         throw std::runtime_error("Unsupported firmware version. Required: >= 2.8.20, Current: " + version +
                                  ". Call update_firmware command to upgrade.");
     }
+}
+
+// Convert integer to uppercase 4-digit hex string
+std::string uint16ToHex(uint16_t value) {
+    std::stringstream ss;
+    ss << std::uppercase << std::hex << std::setw(4) << std::setfill('0') << value;
+    return ss.str();
 }
 
 uint64_t getNowUs() {
@@ -323,7 +334,7 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
         auto colorProfile = colorStreamProfiles->getProfile(i);
         auto colorVsp = colorProfile->as<ob::VideoStreamProfile>();
 
-        if (deviceFormat.has_value() and deviceFormat->color_format.has_value()) {
+        if (deviceFormat.has_value() && deviceFormat->color_format.has_value()) {
             if (ob::TypeHelper::convertOBFormatTypeToString(colorVsp->getFormat()) != deviceFormat->color_format.value()) {
                 continue;
             }
@@ -331,7 +342,7 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
             continue;
         }
 
-        if (deviceRes.has_value() and deviceRes->color_resolution.has_value()) {
+        if (deviceRes.has_value() && deviceRes->color_resolution.has_value()) {
             if (colorVsp->getWidth() != deviceRes->color_resolution->width ||
                 colorVsp->getHeight() != deviceRes->color_resolution->height) {
                 continue;
@@ -351,7 +362,7 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
                 continue;
             }
 
-            if (deviceFormat.has_value() and deviceFormat->depth_format.has_value()) {
+            if (deviceFormat.has_value() && deviceFormat->depth_format.has_value()) {
                 if (ob::TypeHelper::convertOBFormatTypeToString(depthVsp->getFormat()) != deviceFormat->depth_format.value()) {
                     continue;
                 }
@@ -359,7 +370,7 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
                 continue;
             }
 
-            if (deviceRes.has_value() and deviceRes->depth_resolution.has_value()) {
+            if (deviceRes.has_value() && deviceRes->depth_resolution.has_value()) {
                 if (depthVsp->getWidth() != deviceRes->depth_resolution->width ||
                     depthVsp->getHeight() != deviceRes->depth_resolution->height) {
                     continue;
@@ -685,8 +696,10 @@ void startDevice(std::string serialNumber) {
         }
         auto resolution_opt = config_by_serial().at(serialNumber).device_resolution;
         auto format_opt = config_by_serial().at(serialNumber).device_format;
-        VIAM_SDK_LOG(info) << "[startDevice] Resolution from config: ";
-        if (resolution_opt.has_value() or format_opt.has_value()) {
+        VIAM_SDK_LOG(info) << "[startDevice] Resolution from config: "
+                           << (resolution_opt.has_value() ? resolution_opt->to_string() : "not specified, Format from config: ")
+                           << (format_opt.has_value() ? format_opt->to_string() : "not specifed");
+        if (resolution_opt.has_value() || format_opt.has_value()) {
             // Create the pipeline
             auto config = createHwD2CAlignConfig(search->second->pipe, resolution_opt, format_opt);
             if (config == nullptr) {
@@ -699,8 +712,6 @@ void startDevice(std::string serialNumber) {
                 throw std::runtime_error(buffer.str());
             }
             my_dev->config = config;
-        } else {
-            VIAM_SDK_LOG(info) << "  not specified, using default";
         }
     }
 
@@ -761,35 +772,69 @@ void stopDevice(std::string serialNumber, std::string resourceName) {
     }
 }
 
-void listDevices(const ob::Context& ctx) {
-    try {
-        auto devList = ctx.queryDeviceList();
-        int devCount = devList->getCount();
-        VIAM_SDK_LOG(info) << "devCount: " << devCount << "\n";
-
-        std::shared_ptr<ob::Device> dev = nullptr;
-        std::shared_ptr<ob::DeviceInfo> info = nullptr;
-        for (size_t i = 0; i < devCount; i++) {
-            dev = devList->getDevice(i);
-            info = dev->getDeviceInfo();
-            printDeviceInfo(info);
-            dev.reset();
-        }
-    } catch (ob::Error& e) {
-        std::cerr << "listDevices\n"
-                  << "function:" << e.getFunction() << "\nargs:" << e.getArgs() << "\nname:" << e.getName() << "\nmessage:" << e.what()
-                  << "\ntype:" << e.getExceptionType() << std::endl;
-        throw e;
-    }
-}
-
 // HELPERS END
 
 // RESOURCE BEGIN
+void Orbbec::validate_sensor(std::pair<std::string, viam::sdk::ProtoValue> const& sensor_pair) {
+    auto const& sensor_type = sensor_pair.first;
+    auto const& sensor = sensor_pair.second.get<viam::sdk::ProtoStruct>();
+    if (!sensor) {
+        throw std::invalid_argument("sensor must be a struct");
+    }
+    if (!sensor->count("width")) {
+        throw std::invalid_argument("sensor must contain width key");
+    }
+    auto width = sensor->at("width").get<double>();
+    if (!width) {
+        throw std::invalid_argument("sensor width must be a double");
+    }
+    if (*width <= 0) {
+        throw std::invalid_argument("sensor width must be positive");
+    }
+    if (!sensor->count("height")) {
+        throw std::invalid_argument("sensor must contain height key");
+    }
+    auto height = sensor->at("height").get<double>();
+    if (!height) {
+        throw std::invalid_argument("sensor height must be a double");
+    }
+    if (*height <= 0) {
+        throw std::invalid_argument("sensor height must be positive");
+    }
+    auto const format = sensor->at("format").get<std::string>();
+    if (!format) {
+        throw std::invalid_argument("sensor format must be a string");
+    }
+    if (sensor_type == "color") {
+        if (!supported_color_formats.count(*format)) {
+            std::ostringstream buffer;
+            buffer << "color sensor format must be one of: ";
+            for (const auto& type : supported_color_formats) {
+                buffer << type << " ";
+            }
+            VIAM_SDK_LOG(error) << buffer.str();
+            throw std::invalid_argument(buffer.str());
+        }
+
+    } else if (sensor_type == "depth") {
+        if (!supported_depth_formats.count(*format)) {
+            std::ostringstream buffer;
+            buffer << "depth sensor format must be one of: ";
+            for (const auto& type : supported_depth_formats) {
+                buffer << type << " ";
+            }
+            VIAM_SDK_LOG(error) << buffer.str();
+            throw std::invalid_argument(buffer.str());
+        }
+    } else {
+        throw std::invalid_argument("sensor type must be color or depth");
+    }
+}
+
 std::vector<std::string> Orbbec::validate(vsdk::ResourceConfig cfg) {
     auto attrs = cfg.attributes();
 
-    if (not attrs.count("serial_number")) {
+    if (!attrs.count("serial_number")) {
         throw std::invalid_argument("serial_number is a required argument");
     }
 
@@ -803,98 +848,43 @@ std::vector<std::string> Orbbec::validate(vsdk::ResourceConfig cfg) {
         throw std::invalid_argument("serial_number must be a non-empty string");
     }
 
-    if (attrs.count("format")) {
-        auto format = attrs["format"].get<viam::sdk::ProtoStruct>();
-        if (format) {
-            if (!format->count("color") || !format->count("depth")) {
-                throw std::invalid_argument("format must contain color and depth keys");
-            }
-            auto color_format = format->at("color").get<std::string>();
-            if (!color_format) {
-                throw std::invalid_argument("color format must be a string");
-            }
-            if (Orbbec::supported_color_formats.count(*color_format) == 0) {
-                std::ostringstream buffer;
-                buffer << "color format must be one of: ";
-                for (const auto& fmt : Orbbec::supported_color_formats) {
-                    buffer << fmt << " ";
-                }
-                VIAM_SDK_LOG(error) << buffer.str();
-                throw std::invalid_argument(buffer.str());
-            }
-
-            auto depth_format = format->at("depth").get<std::string>();
-            if (!depth_format) {
-                throw std::invalid_argument("depth format must be a string");
-            }
-            if (Orbbec::supported_depth_formats.count(*depth_format) == 0) {
-                std::ostringstream buffer;
-                buffer << "depth format must be one of: ";
-                for (const auto& fmt : Orbbec::supported_depth_formats) {
-                    buffer << fmt << " ";
-                }
-                VIAM_SDK_LOG(error) << buffer.str();
-                throw std::invalid_argument(buffer.str());
+    if (attrs.count("sensors")) {
+        auto sensors = attrs["sensors"].get<viam::sdk::ProtoStruct>();
+        if (!sensors) {
+            throw std::invalid_argument("sensors must be a struct");
+        }
+        if (sensors) {
+            for (auto const& sensor_pair : *sensors) {
+                validate_sensor(sensor_pair);
             }
         }
-    }
-
-    if (attrs.count("resolution")) {
-        auto resolution = attrs["resolution"].get<viam::sdk::ProtoStruct>();
-        if (resolution) {
-            if (!resolution->count("color") || !resolution->count("depth")) {
-                throw std::invalid_argument("resolution must contain color and depth keys");
+        auto color_width_uint32 =
+            static_cast<std::uint32_t>(*sensors->at("color").get<viam::sdk::ProtoStruct>()->at("width").get<double>());
+        auto color_height_uint32 =
+            static_cast<std::uint32_t>(*sensors->at("color").get<viam::sdk::ProtoStruct>()->at("height").get<double>());
+        if (color_to_depth_supported_resolutions.count({color_width_uint32, color_height_uint32}) == 0) {
+            std::ostringstream buffer;
+            buffer << "color resolution must be one of: ";
+            for (const auto& res : color_to_depth_supported_resolutions) {
+                buffer << "{" << res.first.to_string() << "} ";
             }
-            auto color_resolution = resolution->at("color").get<viam::sdk::ProtoStruct>();
-            if (color_resolution->count("width") == 0 || color_resolution->count("height") == 0) {
-                throw std::invalid_argument("color must contain width and height keys");
+            VIAM_SDK_LOG(error) << buffer.str();
+            throw std::invalid_argument(buffer.str());
+        }
+        auto depth_width_uint32 =
+            static_cast<std::uint32_t>(*sensors->at("depth").get<viam::sdk::ProtoStruct>()->at("width").get<double>());
+        auto depth_height_uint32 =
+            static_cast<std::uint32_t>(*sensors->at("depth").get<viam::sdk::ProtoStruct>()->at("height").get<double>());
+        if (color_to_depth_supported_resolutions.at({color_width_uint32, color_height_uint32})
+                .count({depth_width_uint32, depth_height_uint32}) == 0) {
+            std::ostringstream buffer;
+            buffer << "color/depth resolution combination not supported, for color resolution " << "{" << color_width_uint32 << ", "
+                   << color_height_uint32 << "}, depth resolution must be one of: ";
+            for (const auto& res : color_to_depth_supported_resolutions.at({color_width_uint32, color_height_uint32})) {
+                buffer << "{" << res.to_string() << "} ";
             }
-            auto color_width = color_resolution->at("width").get<double>();
-            auto color_height = color_resolution->at("height").get<double>();
-            if (!color_width || !color_height) {
-                throw std::invalid_argument("color width and height must be doubles");
-            }
-            if (*color_width <= 0 || *color_height <= 0) {
-                throw std::invalid_argument("color width and height must be positive");
-            }
-            auto color_width_uint32 = static_cast<std::uint32_t>(*color_width);
-            auto color_height_uint32 = static_cast<std::uint32_t>(*color_height);
-
-            auto depth_resolution = resolution->at("depth").get<viam::sdk::ProtoStruct>();
-            if (depth_resolution->count("width") == 0 || depth_resolution->count("height") == 0) {
-                throw std::invalid_argument("depth must contain width and height keys");
-            }
-            auto depth_width = depth_resolution->at("width").get<double>();
-            auto depth_height = depth_resolution->at("height").get<double>();
-            if (!depth_width || !depth_height) {
-                throw std::invalid_argument("depth width and height must be double");
-            }
-            if (*depth_width <= 0 || *depth_height <= 0) {
-                throw std::invalid_argument("depth width and height must be positive");
-            }
-
-            auto depth_width_uint32 = static_cast<std::uint32_t>(*depth_width);
-            auto depth_height_uint32 = static_cast<std::uint32_t>(*depth_height);
-            if (color_to_depth_supported_resolutions.count({color_width_uint32, color_height_uint32}) == 0) {
-                std::ostringstream buffer;
-                buffer << "color resolution must be one of: ";
-                for (const auto& res : color_to_depth_supported_resolutions) {
-                    buffer << "{" << res.first.to_string() << "} ";
-                }
-                VIAM_SDK_LOG(error) << buffer.str();
-                throw std::invalid_argument(buffer.str());
-            }
-            if (color_to_depth_supported_resolutions.at({color_width_uint32, color_height_uint32})
-                    .count({depth_width_uint32, depth_height_uint32}) == 0) {
-                std::ostringstream buffer;
-                buffer << "color/depth resolution combination not supported, for color resolution " << "{" << color_width_uint32 << ", "
-                       << color_height_uint32 << "}, depth resolution must be one of: ";
-                for (const auto& res : color_to_depth_supported_resolutions.at({color_width_uint32, color_height_uint32})) {
-                    buffer << "{" << res.to_string() << "} ";
-                }
-                VIAM_SDK_LOG(error) << buffer.str();
-                throw std::invalid_argument(buffer.str());
-            }
+            VIAM_SDK_LOG(error) << buffer.str();
+            throw std::invalid_argument(buffer.str());
         }
     }
 
@@ -2020,44 +2010,26 @@ std::unique_ptr<orbbec::ObResourceConfig> Orbbec::configure(vsdk::Dependencies d
     serial_number_from_config = *serial_val;
 
     std::optional<DeviceResolution> dev_res = std::nullopt;
-    if (attrs.count("resolution")) {
-        VIAM_SDK_LOG(info) << "[configure] resolution specified in config";
+    std::optional<DeviceFormat> dev_fmt = std::nullopt;
+    if (attrs.count("sensors")) {
+        VIAM_SDK_LOG(info) << "[configure] sensors specified in config";
+        auto sensors = attrs["sensors"].get<viam::sdk::ProtoStruct>();
 
-        auto resolution = attrs["resolution"].get<viam::sdk::ProtoStruct>();
+        auto const color_height = sensors->at("color").get<viam::sdk::ProtoStruct>()->at("height").get_unchecked<double>();
+        auto const color_width = sensors->at("color").get<viam::sdk::ProtoStruct>()->at("width").get_unchecked<double>();
+        auto const color_res = Resolution{static_cast<uint32_t>(color_width), static_cast<uint32_t>(color_height)};
+        auto const color_format = sensors->at("color").get<viam::sdk::ProtoStruct>()->at("format").get_unchecked<std::string>();
 
-        std::optional<Resolution> color_res = std::nullopt;
-        if (resolution->count("color")) {
-            auto color_height = resolution->at("color").get<viam::sdk::ProtoStruct>()->at("height").get_unchecked<double>();
-            auto color_width = resolution->at("color").get<viam::sdk::ProtoStruct>()->at("width").get_unchecked<double>();
-            color_res = Resolution{static_cast<uint32_t>(color_width), static_cast<uint32_t>(color_height)};
-        }
-
-        std::optional<Resolution> depth_res = std::nullopt;
-        if (resolution->count("depth")) {
-            auto depth_height = resolution->at("depth").get<viam::sdk::ProtoStruct>()->at("height").get_unchecked<double>();
-            auto depth_width = resolution->at("depth").get<viam::sdk::ProtoStruct>()->at("width").get_unchecked<double>();
-            depth_res = Resolution{static_cast<uint32_t>(depth_width), static_cast<uint32_t>(depth_height)};
-        }
+        auto const depth_height = sensors->at("depth").get<viam::sdk::ProtoStruct>()->at("height").get_unchecked<double>();
+        auto const depth_width = sensors->at("depth").get<viam::sdk::ProtoStruct>()->at("width").get_unchecked<double>();
+        auto const depth_res = Resolution{static_cast<uint32_t>(depth_width), static_cast<uint32_t>(depth_height)};
+        auto const depth_format = sensors->at("depth").get<viam::sdk::ProtoStruct>()->at("format").get_unchecked<std::string>();
 
         dev_res = DeviceResolution{color_res, depth_res};
-    }
-
-    std::optional<DeviceFormat> dev_fmt = std::nullopt;
-    if (attrs.count("format")) {
-        VIAM_SDK_LOG(info) << "[configure] format specified in config";
-        auto format = attrs["format"].get<viam::sdk::ProtoStruct>();
-
-        std::optional<std::string> color_format = std::nullopt;
-        if (format->count("color")) {
-            color_format = format->at("color").get_unchecked<std::string>();
-        }
-        std::optional<std::string> depth_format = std::nullopt;
-        if (format->count("depth")) {
-            depth_format = format->at("depth").get_unchecked<std::string>();
-        }
         dev_fmt = DeviceFormat{color_format, depth_format};
+    } else {
+        VIAM_SDK_LOG(info) << "[configure] no sensors specified in config, using defaults";
     }
-
     auto native_config = std::make_unique<orbbec::ObResourceConfig>(serial_number_from_config, configuration.name(), dev_res, dev_fmt);
     VIAM_SDK_LOG(info) << "[configure] configured: " << native_config->to_string();
     return native_config;
@@ -2085,6 +2057,102 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
 
     pointCloudFilter->setCreatePointFormat(OB_FORMAT_RGB_POINT);
 
+#ifdef _WIN32
+    // On windows, we must add a metadata value to the windows device registry for the device to work correctly.
+    // Adapted from the orbbec SDK setup script:
+    // https://github.com/orbbec/OrbbecSDK_v2/blob/main/scripts/env_setup/obsensor_metadata_win10.ps1
+    try {
+        const char* command = "powershell -Command \"Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force\"";
+        int result = std::system(command);
+        if (result != 0) {
+            // command failed, try the backup
+            command = "powershell -Command \"Set-ExecutionPolicy -ExecutionPolicy Unrestricted -Scope CurrentUser -Force\"";
+            int result = std::system(command);
+            if (result != 0) {
+                VIAM_SDK_LOG(error) << "Could not set execution policy";
+            }
+        }
+
+        // Base registry paths
+        std::vector<std::string> searchTrees = {
+            // KSCATEGORY_CAPTURE class,used for video capture devices
+            "SYSTEM\\CurrentControlSet\\Control\\DeviceClasses\\{e5323777-f976-4f5b-9b55-b94699c46e44}",
+            // KSCATEGORY_RENDER class, used for rendering devices
+            "SYSTEM\\CurrentControlSet\\Control\\DeviceClasses\\{65E8773D-8F56-11D0-A3B9-00A0C9223196}"};
+
+        uint16_t vid = dev->getDeviceInfo()->vid();
+        uint16_t pid = dev->getDeviceInfo()->pid();
+        std::string baseDeviceId = "##?#USB#VID_" + uint16ToHex(vid) + "&PID_" + uint16ToHex(pid);
+
+        for (const auto& subtree : searchTrees) {
+            // Open the device registry key
+            HKEY hkey;
+            if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, subtree.c_str(), 0, KEY_ENUMERATE_SUB_KEYS, &hkey) != ERROR_SUCCESS) {
+                VIAM_SDK_LOG(error) << "Could not open device registry key: " << subtree;
+                continue;
+            }
+
+            char name[512];
+            DWORD nameSize;
+            DWORD index = 0;
+            while (true) {
+                // reset before each call
+                nameSize = sizeof(name);
+
+                // enumerate all of the keys in the devices folder we previously opened
+                LONG result = RegEnumKeyExA(hkey, index, name, &nameSize, NULL, NULL, NULL, NULL);
+                if (result == ERROR_NO_MORE_ITEMS) {
+                    break;  // normal end of enumeration
+                } else if (result != ERROR_SUCCESS) {
+                    VIAM_SDK_LOG(error) << "device registry key enumeration failed: " << result;
+                    break;
+                }
+                std::string subKeyName(name);
+                // find the enteries for our orbbec device.
+                if (subKeyName.find("USB#VID_" + uint16ToHex(vid) + "&PID_" + uint16ToHex(pid)) == std::string::npos) {
+                    // not a match for an orbbec device, go to next key
+                    ++index;
+                    continue;
+                }
+
+                std::string deviceParamsKey = subtree + "\\" + subKeyName + "\\#GLOBAL\\Device Parameters";
+                std::string valueName = "MetadataBufferSizeInKB0";
+                HKEY hDeviceKey;
+                // open the orbbec device parameters key
+                result = RegOpenKeyExA(HKEY_LOCAL_MACHINE, deviceParamsKey.c_str(), 0, KEY_READ | KEY_SET_VALUE, &hDeviceKey);
+                if (result != ERROR_SUCCESS) {
+                    VIAM_SDK_LOG(error) << "Couldn't open windows registry device parameters key: " << deviceParamsKey;
+                    ++index;
+                    continue;
+                }
+                // check if the metadata value already exists
+                DWORD data;
+                DWORD dataSize = sizeof(data);
+                result = RegQueryValueExA(hDeviceKey, valueName.c_str(), nullptr, nullptr, reinterpret_cast<BYTE*>(&data), &dataSize);
+                if (result == ERROR_FILE_NOT_FOUND) {
+                    // value does not exist yet, create it.
+                    DWORD value = 5;
+                    result =
+                        RegSetValueExA(hDeviceKey, valueName.c_str(), 0, REG_DWORD, reinterpret_cast<const BYTE*>(&value), sizeof(value));
+                    if (result != ERROR_SUCCESS) {
+                        VIAM_SDK_LOG(error) << "Couldn't set metadata registry value for key " << deviceParamsKey;
+                    } else {
+                        VIAM_SDK_LOG(info) << "Created value " << valueName << " = " << value << " for key " << deviceParamsKey;
+                    }
+                } else if (result == ERROR_SUCCESS) {
+                    VIAM_SDK_LOG(info) << "Value already exists on key " << deviceParamsKey << ", skipping.";
+                } else {
+                    VIAM_SDK_LOG(error) << "Error reading metadata value for key " << deviceParamsKey << ": " << result;
+                }
+                RegCloseKey(hDeviceKey);
+                ++index;
+            }
+            RegCloseKey(hkey);
+        }
+    } catch (const std::exception& e) {
+        throw std::runtime_error("failed to update windows device registry keys: " + std::string(e.what()));
+    }
+#endif
     {
         std::lock_guard<std::mutex> lock(devices_by_serial_mu());
         std::unique_ptr<ViamOBDevice> my_dev = std::make_unique<ViamOBDevice>();
