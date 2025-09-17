@@ -191,7 +191,6 @@ uint64_t timeSinceFrameUs(uint64_t nowUs, uint64_t imageTimeUs) {
 
 std::vector<std::uint8_t> RGBPointsToPCD(std::shared_ptr<ob::Frame> frame, float scale) {
     int numPoints = frame->dataSize() / sizeof(OBColorPoint);
-    VIAM_SDK_LOG(info) << "[RGBPointsToPCD] input numPoints: " << numPoints;
 
     OBColorPoint* points = (OBColorPoint*)frame->data();
     std::vector<PointXYZRGB> pcdPoints;
@@ -209,8 +208,6 @@ std::vector<std::uint8_t> RGBPointsToPCD(std::shared_ptr<ob::Frame> frame, float
         pt.rgb = rgb;
         pcdPoints.push_back(pt);
     }
-
-    VIAM_SDK_LOG(info) << "[RGBPointsToPCD] PCD number of points generated: " << pcdPoints.size();
 
     std::stringstream header;
     header << "VERSION .7\n"
@@ -390,18 +387,9 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
                                    << " format: " << ob::TypeHelper::convertOBFormatTypeToString(depthVsp->getFormat()) << "\n";
                 // If support, create a config for hardware depth-to-color alignment
                 auto hwD2CAlignConfig = std::make_shared<ob::Config>();
-                VIAM_SDK_LOG(info) << "Enabling hardware depth-to-color alignment";
-                VIAM_SDK_LOG(info) << "Color stream: width: " << colorVsp->getWidth() << " height: " << colorVsp->getHeight()
-                                   << " format: " << ob::TypeHelper::convertOBFormatTypeToString(colorVsp->getFormat())
-                                   << " fps: " << colorVsp->getFps();
-                VIAM_SDK_LOG(info) << "Depth stream: width: " << depthVsp->getWidth() << " height: " << depthVsp->getHeight()
-                                   << " format: " << ob::TypeHelper::convertOBFormatTypeToString(depthVsp->getFormat())
-                                   << " fps: " << depthVsp->getFps();
 
-                hwD2CAlignConfig->enableStream(colorProfile);  // enable color stream
-                hwD2CAlignConfig->enableStream(depthProfile);  // enable depth stream
-                // hwD2CAlignConfig->enableVideoStream(OB_STREAM_DEPTH, 800, 600, 30, OB_FORMAT_Y16);
-                // hwD2CAlignConfig->enableVideoStream(OB_STREAM_COLOR, 800, 600, 30, OB_FORMAT_MJPEG);
+                hwD2CAlignConfig->enableStream(colorProfile);       // enable color stream
+                hwD2CAlignConfig->enableStream(depthProfile);       // enable depth stream
                 hwD2CAlignConfig->setAlignMode(ALIGN_D2C_HW_MODE);  // enable hardware depth-to-color alignment
                 hwD2CAlignConfig->setFrameAggregateOutputMode(OB_FRAME_AGGREGATE_OUTPUT_ALL_TYPE_FRAME_REQUIRE);  // output
                                                                                                                   // frameset
@@ -423,38 +411,6 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
                         << (deviceRes.has_value() ? deviceRes->to_string() : "none") << ", "
                         << (deviceFormat.has_value() ? deviceFormat->to_string() : "none") << ")\n";
     return nullptr;
-}
-
-void displayPresets(std::shared_ptr<ob::Device> device) {
-    std::shared_ptr<ob::DevicePresetList> presetLists = device->getAvailablePresetList();
-    if (presetLists && presetLists->getCount() == 0) {
-        VIAM_SDK_LOG(error) << "The current device does not support preset mode" << std::endl;
-        return;
-    }
-
-    VIAM_SDK_LOG(info) << "Available Presets:" << std::endl;
-    for (uint32_t index = 0; index < presetLists->getCount(); index++) {
-        // Print available preset name.
-        VIAM_SDK_LOG(info) << " - " << index << "." << presetLists->getName(index) << std::endl;
-    }
-
-    // Print current preset name.
-    VIAM_SDK_LOG(info) << "Current PresetName: " << device->getCurrentPresetName() << std::endl;
-}
-
-void setDepthSoftFilter(std::shared_ptr<ob::Device> device, bool enable) {
-    try {
-        if (device->isPropertySupported(OB_PROP_DEPTH_NOISE_REMOVAL_FILTER_BOOL, OB_PERMISSION_WRITE)) {
-            device->setBoolProperty(OB_PROP_DEPTH_NOISE_REMOVAL_FILTER_BOOL, enable);
-            VIAM_SDK_LOG(info) << "[setDepthSoftFilter] " << (enable ? "enabled" : "disabled") << " depth soft filter" << std::endl;
-        } else {
-            VIAM_SDK_LOG(error) << "[setDepthSoftFilter] OB_PROP_DEPTH_NOISE_REMOVAL_FILTER_BOOL is not supported";
-        }
-    } catch (ob::Error& e) {
-        std::cerr << "function:" << e.getFunction() << "\nargs:" << e.getArgs() << "\nmessage:" << e.what()
-                  << "\ntype:" << e.getExceptionType() << std::endl;
-        exit(EXIT_FAILURE);
-    }
 }
 
 size_t writeFileCallback(void* contents, size_t size, size_t nmemb, void* userp) {
@@ -1410,22 +1366,22 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
     try {
         viam::sdk::ProtoStruct resp = viam::sdk::ProtoStruct{};
         constexpr char firmware_key[] = "update_firmware";
-        for (auto const& [key, value] : command) {
-            if (key == firmware_key) {
-                std::string serial_number;
-                {
-                    const std::lock_guard<std::mutex> lock(serial_number_mu_);
-                    serial_number = serial_number_;
-                }
-                {
-                    // note: under lock for the entire firmware update to ensure device can't be destructed.
-                    const std::lock_guard<std::mutex> lock(devices_by_serial_mu());
-                    auto search = devices_by_serial().find(serial_number);
-                    if (search == devices_by_serial().end()) {
-                        throw std::invalid_argument("device is not connected");
-                    }
+        std::string serial_number;
+        {
+            const std::lock_guard<std::mutex> lock(serial_number_mu_);
+            serial_number = serial_number_;
+        }
+        {
+            // note: under lock for the entire firmware update to ensure device can't be destructed.
+            const std::lock_guard<std::mutex> lock(devices_by_serial_mu());
+            auto search = devices_by_serial().find(serial_number);
+            if (search == devices_by_serial().end()) {
+                throw std::invalid_argument("device is not connected");
+            }
 
-                    std::unique_ptr<ViamOBDevice>& dev = search->second;
+            std::unique_ptr<ViamOBDevice>& dev = search->second;
+            for (auto const& [key, value] : command) {
+                if (key == firmware_key) {
                     if (firmware_version_.find(minFirmwareVer) != std::string::npos) {
                         std::ostringstream buffer;
                         buffer << "device firmware already on version " << minFirmwareVer;
@@ -1456,106 +1412,47 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
 #else
                     resp.emplace(firmware_key, std::string("firmware successfully updated, unplug and replug the device"));
 #endif
-                }
-            } else {
-                std::string value_str;
-                switch (value.kind()) {
-                    case vsdk::ProtoValue::Kind::k_null:
-                        break;
-                    case vsdk::ProtoValue::Kind::k_bool:
-                        value_str = value.get_unchecked<bool>() ? "true" : "false";
-                        break;
-                    case vsdk::ProtoValue::Kind::k_double:
-                        value_str = std::to_string(value.get_unchecked<double>());
-                        break;
-                    case vsdk::ProtoValue::Kind::k_string:
-                        value_str = value.get_unchecked<std::string>();
-                        break;
-                    default:
-                        value_str = "unknown";
-                        break;
-                }
-
-                auto const serialNumber = serial_number_;
-                {
-                    const std::lock_guard<std::mutex> lock(devices_by_serial_mu());
-                    auto search = devices_by_serial().find(serialNumber);
-                    if (search == devices_by_serial().end()) {
-                        VIAM_SDK_LOG(error) << service_name << ": unable to stop undetected device " << serialNumber;
-                        return vsdk::ProtoStruct{};
+                } else if (key == "dump_pcl_files") {
+                    if (not value.is_a<bool>()) {
+                        VIAM_SDK_LOG(error) << "[do_command] dump_pcl_files: expected bool, got " << value.kind();
+                        return vsdk::ProtoStruct{{"error", "expected bool"}};
                     }
-                    std::unique_ptr<ViamOBDevice>& my_dev = search->second;
-                    if (!my_dev->started) {
-                        VIAM_SDK_LOG(error) << service_name << ": unable to stop device that is not currently running " << serialNumber;
-                        return vsdk::ProtoStruct{};
+                    dev->dumpPCLFiles = value.get_unchecked<bool>();
+                    return {{"dump_pcl_files", dev->dumpPCLFiles}};
+                } else if (key == "skip_alignment") {
+                    if (not value.is_a<bool>()) {
+                        VIAM_SDK_LOG(error) << "[do_command] skip_alignment: expected bool, got " << value.kind();
+                        return vsdk::ProtoStruct{{"error", "expected bool"}};
                     }
-
-                    VIAM_SDK_LOG(info) << "[do_command] key: " << key << ", value: " << value_str;
-                    if (key == "dump_pcl_files") {
-                        if (not value.is_a<bool>()) {
-                            VIAM_SDK_LOG(error) << "[do_command] dump_pcl_files: expected bool, got " << value.kind();
-                            return vsdk::ProtoStruct{{"error", "expected bool"}};
-                        }
-                        my_dev->dumpPCLFiles = value.get_unchecked<bool>();
-                        return {{"dump_pcl_files", my_dev->dumpPCLFiles}};
-                    }
-                    if (key == "skip_alignment") {
-                        if (not value.is_a<bool>()) {
-                            VIAM_SDK_LOG(error) << "[do_command] skip_alignment: expected bool, got " << value.kind();
-                            return vsdk::ProtoStruct{{"error", "expected bool"}};
-                        }
-                        my_dev->skipAlignment = value.get_unchecked<bool>();
-                        return {{"skip_alignment", my_dev->skipAlignment}};
-                    }
-                    if (key == "apply_post_process_depth_filters") {
-                        return device_control::applyPostProcessDepthFilters(my_dev, value, key);
-                    }
-                    if (key == "get_recommended_post_process_depth_filters") {
-                        return device_control::getRecommendedPostProcessDepthFilters(my_dev->device);
-                    }
-
-                    if (key == "set_recommended_post_process_depth_filters") {
-                        return device_control::setRecommendedPostProcessDepthFilters(my_dev);
-                    }
-
-                    if (key == "get_post_process_depth_filters") {
-                        return device_control::getPostProcessDepthFilters(my_dev->postProcessDepthFilters, key);
-                    }
-
-                    if (key == "set_post_process_depth_filters") {
-                        return device_control::setPostProcessDepthFilters(my_dev->postProcessDepthFilters, value, key);
-                    }
-
-                    if (key == "get_depth_unit") {
-                        return device_control::getDepthUnit(my_dev->device, key);
-                    }
-
-                    if (key == "set_depth_unit") {
-                        return device_control::setDepthUnit(my_dev->device, value, key);
-                    }
-
-                    if (key == "get_device_properties") {
-                        return device_control::getDeviceProperties(my_dev->device, key);
-                    }
-
-                    if (key == "set_device_properties") {
-                        return device_control::setDeviceProperties(my_dev->device, value, key);
-                    }
-
-                    if (key == "get_device_property") {
-                        return device_control::getDeviceProperty(my_dev->device, value, key);
-                    }
-
-                    if (key == "set_device_property") {
-                        return device_control::setDeviceProperty(my_dev->device, value, key);
-                    }
-
-                    if (key == "get_camera_params") {
-                        return getCameraParams(my_dev->pipe);
-                    }
+                    dev->skipAlignment = value.get_unchecked<bool>();
+                    return {{"skip_alignment", dev->skipAlignment}};
+                } else if (key == "apply_post_process_depth_filters") {
+                    return device_control::applyPostProcessDepthFilters(dev, value, key);
+                } else if (key == "get_recommended_post_process_depth_filters") {
+                    return device_control::getRecommendedPostProcessDepthFilters(dev->device);
+                } else if (key == "set_recommended_post_process_depth_filters") {
+                    return device_control::setRecommendedPostProcessDepthFilters(dev);
+                } else if (key == "get_post_process_depth_filters") {
+                    return device_control::getPostProcessDepthFilters(dev->postProcessDepthFilters, key);
+                } else if (key == "set_post_process_depth_filters") {
+                    return device_control::setPostProcessDepthFilters(dev->postProcessDepthFilters, value, key);
+                } else if (key == "get_depth_unit") {
+                    return device_control::getDepthUnit(dev->device, key);
+                } else if (key == "set_depth_unit") {
+                    return device_control::setDepthUnit(dev->device, value, key);
+                } else if (key == "get_device_properties") {
+                    return device_control::getDeviceProperties(dev->device, key);
+                } else if (key == "set_device_properties") {
+                    return device_control::setDeviceProperties(dev->device, value, key);
+                } else if (key == "get_device_property") {
+                    return device_control::getDeviceProperty(dev->device, value, key);
+                } else if (key == "set_device_property") {
+                    return device_control::setDeviceProperty(dev->device, value, key);
+                } else if (key == "get_camera_params") {
+                    return getCameraParams(dev->pipe);
                 }
             }
-        }
+        } // unlock devices_by_serial_mu_
     } catch (const std::exception& e) {
         VIAM_SDK_LOG(error) << service_name << ": exception caught: " << e.what();
     }
