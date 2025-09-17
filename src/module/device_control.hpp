@@ -437,5 +437,4 @@ viam::sdk::ProtoStruct setDepthUnit(std::shared_ptr<DeviceT>& device, viam::sdk:
         return {{"error", error_ss.str()}};
     }
 }
-
 }  // namespace device_control

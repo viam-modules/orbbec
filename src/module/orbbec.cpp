@@ -387,7 +387,6 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
                                    << " format: " << ob::TypeHelper::convertOBFormatTypeToString(depthVsp->getFormat()) << "\n";
                 // If support, create a config for hardware depth-to-color alignment
                 auto hwD2CAlignConfig = std::make_shared<ob::Config>();
-
                 hwD2CAlignConfig->enableStream(colorProfile);       // enable color stream
                 hwD2CAlignConfig->enableStream(depthProfile);       // enable depth stream
                 hwD2CAlignConfig->setAlignMode(ALIGN_D2C_HW_MODE);  // enable hardware depth-to-color alignment
@@ -1364,7 +1363,6 @@ vsdk::ProtoStruct getCameraParams(std::shared_ptr<ob::Pipeline> pipe) {
 
 vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
     try {
-        viam::sdk::ProtoStruct resp = viam::sdk::ProtoStruct{};
         constexpr char firmware_key[] = "update_firmware";
         std::string serial_number;
         {
@@ -1382,6 +1380,7 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
             std::unique_ptr<ViamOBDevice>& dev = search->second;
             for (auto const& [key, value] : command) {
                 if (key == firmware_key) {
+                    vsdk::ProtoStruct resp = viam::sdk::ProtoStruct{};
                     if (firmware_version_.find(minFirmwareVer) != std::string::npos) {
                         std::ostringstream buffer;
                         buffer << "device firmware already on version " << minFirmwareVer;
@@ -1412,6 +1411,7 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
 #else
                     resp.emplace(firmware_key, std::string("firmware successfully updated, unplug and replug the device"));
 #endif
+                    return resp;
                 } else if (key == "dump_pcl_files") {
                     if (not value.is_a<bool>()) {
                         VIAM_SDK_LOG(error) << "[do_command] dump_pcl_files: expected bool, got " << value.kind();
@@ -1452,7 +1452,7 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
                     return getCameraParams(dev->pipe);
                 }
             }
-        } // unlock devices_by_serial_mu_
+        }  // unlock devices_by_serial_mu_
     } catch (const std::exception& e) {
         VIAM_SDK_LOG(error) << service_name << ": exception caught: " << e.what();
     }
@@ -1531,11 +1531,7 @@ vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const v
             throw std::invalid_argument("device is not started");
         }
 
-        std::shared_ptr<ob::ColorFrame> colorFrame = color->as<ob::ColorFrame>();
-
-        VIAM_SDK_LOG(info) << "[get_point_cloud] colorFrame width: " << colorFrame->getWidth() << ", height: " << colorFrame->getHeight();
-        VIAM_SDK_LOG(info) << "[get_point_cloud] depthFrame width: " << depthFrame->getWidth() << ", height: " << depthFrame->getHeight();
-
+        // If we have any post process depth filters configured, apply them now
         if (my_dev->applyEnabledPostProcessDepthFilters && my_dev->postProcessDepthFilters.size() > 0) {
             for (auto& filter : my_dev->postProcessDepthFilters) {
                 depth = filter->process(depth);
@@ -1544,6 +1540,7 @@ vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const v
         }
 
         std::vector<unsigned char> data;
+        // If skipAlignment is set we skip the align->process call and just generate the pointcloud
         if (my_dev->skipAlignment) {
             VIAM_SDK_LOG(info) << "[get_point_cloud] skipping alignment as per configuration";
             data = RGBPointsToPCD(my_dev->pointCloudFilter->process(fs), scale * mmToMeterMultiple);
@@ -1551,6 +1548,7 @@ vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const v
             data = RGBPointsToPCD(my_dev->pointCloudFilter->process(my_dev->align->process(fs)), scale * mmToMeterMultiple);
         }
 
+        // Write PCD to file if dumpPCLFiles is set
         if (my_dev->dumpPCLFiles) {
             auto timestamp = getNowUs();
             std::stringstream outfile_name;
@@ -1622,15 +1620,6 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
                                "alignment.";
         return;
     }
-
-    auto depthSensor = dev->getSensor(OB_SENSOR_DEPTH);
-    auto depthFilterList = depthSensor->createRecommendedFilters();
-
-    std::shared_ptr<ob::PointCloudFilter> pointCloudFilter = std::make_shared<ob::PointCloudFilter>();
-    // NOTE: Swap this to depth if you want to align to depth
-    std::shared_ptr<ob::Align> align = std::make_shared<ob::Align>(OB_STREAM_COLOR);
-
-    pointCloudFilter->setCreatePointFormat(OB_FORMAT_RGB_POINT);
 
 #ifdef _WIN32
     // On windows, we must add a metadata value to the windows device registry for the device to work correctly.
@@ -1728,6 +1717,18 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
         throw std::runtime_error("failed to update windows device registry keys: " + std::string(e.what()));
     }
 #endif
+
+    auto depthSensor = dev->getSensor(OB_SENSOR_DEPTH);
+    if (depthSensor == nullptr) {
+        throw std::runtime_error("Current device does not have a depth sensor.");
+    }
+    auto depthFilterList = depthSensor->createRecommendedFilters();
+
+    // NOTE: Swap this to depth if you want to align to depth
+    std::shared_ptr<ob::Align> align = std::make_shared<ob::Align>(OB_STREAM_COLOR);
+
+    std::shared_ptr<ob::PointCloudFilter> pointCloudFilter = std::make_shared<ob::PointCloudFilter>();
+    pointCloudFilter->setCreatePointFormat(OB_FORMAT_RGB_POINT);
     {
         std::lock_guard<std::mutex> lock(devices_by_serial_mu());
         std::unique_ptr<ViamOBDevice> my_dev = std::make_unique<ViamOBDevice>();
@@ -1738,7 +1739,10 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
         my_dev->pointCloudFilter = pointCloudFilter;
         my_dev->align = align;
         my_dev->config = config;
-        my_dev->postProcessDepthFilters = depthFilterList;
+        my_dev->postProcessDepthFilters =
+            depthFilterList;  // We save the recommended post process filters as the default, user can modify later via do_command
+        my_dev->applyEnabledPostProcessDepthFilters =
+            false;  // We don't apply the post process filters by default, user can enable via `apply_post_process_depth_filters` do_command
 
         devices_by_serial()[serialNumber] = std::move(my_dev);
     }
