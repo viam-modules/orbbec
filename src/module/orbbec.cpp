@@ -839,6 +839,31 @@ std::string getSerialNumber(const vsdk::ResourceConfig& cfg) {
     throw std::invalid_argument("serial_number is a required argument");
 }
 
+void applyExperimentalConfig(std::unique_ptr<ViamOBDevice>& my_dev, vsdk::ProtoStruct const& config) {
+    if (config.count("device_properties") > 0) {
+        auto device_properties = config.at("device_properties").get<vsdk::ProtoStruct>();
+        if (device_properties) {
+            device_control::setDeviceProperties(my_dev->device, *device_properties, "Orbbec Constructor");
+            VIAM_SDK_LOG(info) << "[applyExperimentalConfig] device_properties applied";
+        }
+    }
+    if (config.count("post_process_depth_filters") > 0) {
+        auto filters = config.at("post_process_depth_filters").get<vsdk::ProtoStruct>();
+        if (filters) {
+            device_control::setPostProcessDepthFilters(my_dev->postProcessDepthFilters, *filters, "Orbbec Constructor");
+            VIAM_SDK_LOG(info) << "[applyExperimentalConfig] postProcessDepthFilters size: " << my_dev->postProcessDepthFilters.size();
+        }
+    }
+    if (config.count("apply_post_process_depth_filters") > 0) {
+        auto apply_filters = config.at("apply_post_process_depth_filters").get<bool>();
+        if (apply_filters) {
+            device_control::applyPostProcessDepthFilters(my_dev, *apply_filters, "Orbbec Constructor");
+            VIAM_SDK_LOG(info) << "[applyExperimentalConfig] apply_post_process_depth_filters: "
+                               << my_dev->applyEnabledPostProcessDepthFilters;
+        }
+    }
+}
+
 Orbbec::Orbbec(vsdk::Dependencies deps, vsdk::ResourceConfig cfg, std::shared_ptr<ob::Context> ctx)
     : Camera(cfg.name()), serial_number_(getSerialNumber(cfg)), ob_ctx_(std::move(ctx)) {
     VIAM_SDK_LOG(info) << "Orbbec constructor start " << serial_number_;
@@ -848,6 +873,19 @@ Orbbec::Orbbec(vsdk::Dependencies deps, vsdk::ResourceConfig cfg, std::shared_pt
         config_by_serial().insert_or_assign(serial_number_, *config);
         VIAM_SDK_LOG(info) << "initial config_by_serial_: " << config_by_serial().at(serial_number_).to_string();
     }
+
+    {
+        std::lock_guard<std::mutex> lock(devices_by_serial_mu());
+        auto search = devices_by_serial().find(serial_number_);
+        if (search == devices_by_serial().end()) {
+            std::ostringstream buffer;
+            buffer << service_name << ": unable to start undetected device" << serial_number_;
+            throw std::invalid_argument(buffer.str());
+        }
+        std::unique_ptr<ViamOBDevice>& my_dev = search->second;
+        applyExperimentalConfig(my_dev, cfg.attributes());
+    }
+
     startDevice(serial_number_);
     {
         std::lock_guard<std::mutex> lock(serial_by_resource_mu());
@@ -931,13 +969,15 @@ void Orbbec::reconfigure(const vsdk::Dependencies& deps, const vsdk::ResourceCon
         serial_by_resource()[new_resource_name] = new_serial_number;
     }
 
-    // set firmware version member variable
+    // set firmware version member variable and apply experimental config
     {
         std::lock_guard<std::mutex> lock_serial(serial_number_mu_);
         std::lock_guard<std::mutex> lock(devices_by_serial_mu());
         auto search = devices_by_serial().find(serial_number_);
         if (search != devices_by_serial().end()) {
             firmware_version_ = search->second->device->getDeviceInfo()->firmwareVersion();
+            std::unique_ptr<ViamOBDevice>& my_dev = search->second;
+            applyExperimentalConfig(my_dev, cfg.attributes());
         }
     }
     VIAM_SDK_LOG(info) << "[reconfigure] Orbbec reconfigure end";
@@ -1400,7 +1440,7 @@ viam::sdk::ProtoStruct Orbbec::createModuleConfig(std::unique_ptr<ViamOBDevice>&
     result["post_process_depth_filters"] =
         device_control::getPostProcessDepthFilters(dev->postProcessDepthFilters, "create_module_config")["create_module_config"];
     result["apply_post_process_depth_filters"] = dev->applyEnabledPostProcessDepthFilters;
-    result["device_properties"] = device_control::getDeviceProperties(device, "create_module_config")["create_module_config"];
+    result["device_properties"] = device_control::getDeviceProperties(device, "create_module_config");
 
     return result;
 }
