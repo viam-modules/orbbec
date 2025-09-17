@@ -32,6 +32,7 @@ class orbbec(ConanFile):
         self.requires("openssl/3.3.2")
         self.requires("libcurl/8.9.1")
         self.requires("libzip/1.11.1")
+        self.requires("libpng/1.6.50")
 
     def validate(self):
         check_min_cppstd(self, 17)
