@@ -1413,14 +1413,14 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
 #endif
                     return resp;
                 } else if (key == "dump_pcl_files") {
-                    if (not value.is_a<bool>()) {
+                    if (!value.is_a<bool>()) {
                         VIAM_SDK_LOG(error) << "[do_command] dump_pcl_files: expected bool, got " << value.kind();
                         return vsdk::ProtoStruct{{"error", "expected bool"}};
                     }
                     dev->dumpPCLFiles = value.get_unchecked<bool>();
                     return {{"dump_pcl_files", dev->dumpPCLFiles}};
                 } else if (key == "skip_alignment") {
-                    if (not value.is_a<bool>()) {
+                    if (!value.is_a<bool>()) {
                         VIAM_SDK_LOG(error) << "[do_command] skip_alignment: expected bool, got " << value.kind();
                         return vsdk::ProtoStruct{{"error", "expected bool"}};
                     }
