@@ -90,23 +90,6 @@ struct PointXYZRGB {
     float x, y, z;
     std::uint32_t rgb;
 };
-
-struct ViamOBDevice {
-    ~ViamOBDevice() {
-        std::cout << "deleting ViamOBDevice " << serial_number << "\n";
-    }
-    std::string serial_number{};
-    std::shared_ptr<ob::Device> device{};
-    bool started{};
-    std::shared_ptr<ob::Pipeline> pipe{};
-    std::shared_ptr<ob::PointCloudFilter> pointCloudFilter{};
-    std::shared_ptr<ob::Align> align{};
-    std::shared_ptr<ob::Config> config{};
-    std::vector<std::shared_ptr<ob::Filter>> postProcessDepthFilters{};
-    bool applyEnabledPostProcessDepthFilters{};
-    bool dumpPCLFiles{};
-    bool skipAlignment{};
-};
 // STRUCTS END
 
 // GLOBALS BEGIN
@@ -1361,6 +1344,66 @@ vsdk::ProtoStruct getCameraParams(std::shared_ptr<ob::Pipeline> pipe) {
     return result;
 }
 
+viam::sdk::ProtoStruct Orbbec::createModuleConfig( std::unique_ptr<ViamOBDevice>& dev) {
+    if (dev == nullptr) {
+        return {{"error", "device is null"}};
+    }
+    if (dev->pipe == nullptr) {
+        return {{"error", "pipe is null"}};
+    }
+    auto const config = dev->pipe->getConfig();
+    if (!config) {
+        return {{"error", "failed to get pipeline config"}};
+    }
+
+    auto const device = dev->device;
+    if (device == nullptr) {
+        return {{"error", "device is null"}};
+    }
+
+    auto enabledStreamProfileListPtr = config->getEnabledStreamProfileList();
+    if (!enabledStreamProfileListPtr) {
+        return {{"error", "failed to get enabled stream profile list"}};
+    }
+
+    auto const& enabledStreamProfileList = *enabledStreamProfileListPtr;
+    auto const count = enabledStreamProfileList.getCount();
+
+    viam::sdk::ProtoStruct sensors;
+    viam::sdk::ProtoStruct depth_sensor;
+    viam::sdk::ProtoStruct color_sensor;
+    for(int i = 0; i < count; i++) {
+        auto sp = enabledStreamProfileList.getProfile(i);
+        if(sp == nullptr) {
+            return {{"error", "failed to get stream profile"}};
+        }
+        if(sp->getType() != OB_STREAM_COLOR && sp->getType() != OB_STREAM_DEPTH) {
+            continue;
+        }
+        if(sp->getType() == OB_STREAM_DEPTH) {
+            depth_sensor["width"] = static_cast<int>(sp->as<ob::VideoStreamProfile>()->getWidth());
+            depth_sensor["height"] = static_cast<int>(sp->as<ob::VideoStreamProfile>()->getHeight());
+            depth_sensor["format"] = ob::TypeHelper::convertOBFormatTypeToString(sp->as<ob::VideoStreamProfile>()->getFormat());
+            sensors["depth"] = depth_sensor;
+
+        } else if (sp->getType() == OB_STREAM_COLOR) {
+            color_sensor["width"] = static_cast<int>(sp->as<ob::VideoStreamProfile>()->getWidth());
+            color_sensor["height"] = static_cast<int>(sp->as<ob::VideoStreamProfile>()->getHeight());
+            color_sensor["format"] = ob::TypeHelper::convertOBFormatTypeToString(sp->as<ob::VideoStreamProfile>()->getFormat());
+            sensors["color"] = color_sensor;
+        }
+    }
+
+    viam::sdk::ProtoStruct result;
+    result["serial_number"] = dev->serial_number;
+    result["sensors"] = sensors;
+    result["post_process_depth_filters"] = device_control::getPostProcessDepthFilters(dev->postProcessDepthFilters, "create_module_config")["create_module_config"];
+    result["apply_post_process_depth_filters"] = dev->applyEnabledPostProcessDepthFilters;
+    result["device_properties"] = device_control::getDeviceProperties(device, "create_module_config")["create_module_config"];
+
+    return result;
+}
+
 vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
     try {
         constexpr char firmware_key[] = "update_firmware";
@@ -1419,13 +1462,6 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
                     }
                     dev->dumpPCLFiles = value.get_unchecked<bool>();
                     return {{"dump_pcl_files", dev->dumpPCLFiles}};
-                } else if (key == "skip_alignment") {
-                    if (!value.is_a<bool>()) {
-                        VIAM_SDK_LOG(error) << "[do_command] skip_alignment: expected bool, got " << value.kind();
-                        return vsdk::ProtoStruct{{"error", "expected bool"}};
-                    }
-                    dev->skipAlignment = value.get_unchecked<bool>();
-                    return {{"skip_alignment", dev->skipAlignment}};
                 } else if (key == "apply_post_process_depth_filters") {
                     return device_control::applyPostProcessDepthFilters(dev, value, key);
                 } else if (key == "get_recommended_post_process_depth_filters") {
@@ -1450,6 +1486,8 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
                     return device_control::setDeviceProperty(dev->device, value, key);
                 } else if (key == "get_camera_params") {
                     return getCameraParams(dev->pipe);
+                } else if (key == "create_module_config") {
+                    return createModuleConfig(dev);
                 }
             }
         }  // unlock devices_by_serial_mu_
@@ -1540,13 +1578,7 @@ vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const v
         }
 
         std::vector<unsigned char> data;
-        // If skipAlignment is set we skip the align->process call and just generate the pointcloud
-        if (my_dev->skipAlignment) {
-            VIAM_SDK_LOG(info) << "[get_point_cloud] skipping alignment as per configuration";
-            data = RGBPointsToPCD(my_dev->pointCloudFilter->process(fs), scale * mmToMeterMultiple);
-        } else {
-            data = RGBPointsToPCD(my_dev->pointCloudFilter->process(my_dev->align->process(fs)), scale * mmToMeterMultiple);
-        }
+        data = RGBPointsToPCD(my_dev->pointCloudFilter->process(my_dev->align->process(fs)), scale * mmToMeterMultiple);
 
         // Write PCD to file if dumpPCLFiles is set
         if (my_dev->dumpPCLFiles) {

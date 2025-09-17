@@ -199,7 +199,7 @@ viam::sdk::ProtoStruct getDeviceProperties(std::shared_ptr<DeviceT> device,
         auto const& b_map = b.get_unchecked<viam::sdk::ProtoStruct>();
         return a_map.at("name").get_unchecked<std::string>() < b_map.at("name").get_unchecked<std::string>();
     });
-    properties["properties"] = properties_list;
+    properties[command] = properties_list;
     return properties;
 }
 
@@ -287,10 +287,11 @@ viam::sdk::ProtoStruct getFilterInfo(std::shared_ptr<FilterT> filter) {
 
 template <typename FilterT>
 viam::sdk::ProtoStruct filterListToProtoStruct(std::vector<std::shared_ptr<FilterT>> const& recommendedDepthFilters,
-                                               std::unordered_set<std::string> const& writable_properties = {}) {
+                                               std::unordered_set<std::string> const& writable_properties = {},
+                                               bool const only_enabled_filters = false) {
     viam::sdk::ProtoStruct recommendedFilters;
     for (const auto& filter : recommendedDepthFilters) {
-        if (!writable_properties.empty() && writable_properties.count(filter->getName()) == 0) {
+        if ((only_enabled_filters && !filter->isEnabled()) || (!writable_properties.empty() && writable_properties.count(filter->getName()) == 0)) {
             continue;
         }
         VIAM_SDK_LOG(info) << "[filterListToProtoStruct] " << filter->getName() << ": " << (filter->isEnabled() ? "enabled" : "disabled");
@@ -302,11 +303,11 @@ viam::sdk::ProtoStruct filterListToProtoStruct(std::vector<std::shared_ptr<Filte
 }
 
 template <typename DeviceT>
-viam::sdk::ProtoStruct getRecommendedPostProcessDepthFilters(std::shared_ptr<DeviceT>& device) {
+viam::sdk::ProtoStruct getRecommendedPostProcessDepthFilters(std::shared_ptr<DeviceT>& device, bool const only_enabled_filters = false) {
     auto depthSensor = device->getSensor(OB_SENSOR_DEPTH);
     auto depthFilterList = depthSensor->createRecommendedFilters();
 
-    return filterListToProtoStruct(depthFilterList);
+    return filterListToProtoStruct(depthFilterList, {}, only_enabled_filters);
 }
 
 template <typename ViamDeviceT>
@@ -361,7 +362,8 @@ viam::sdk::ProtoStruct getPostProcessDepthFilters(std::vector<std::shared_ptr<Fi
     VIAM_SDK_LOG(info) << "[getPostProcessDepthFilters]" << command
                        << ": getting current post process depth filters, writable properties size: " << writable_properties.size();
     try {
-        auto const current_post_process_depth_filters = filterListToProtoStruct(depthFilters, writable_properties);
+        bool const only_enabled_filters = true;
+        auto const current_post_process_depth_filters = filterListToProtoStruct(depthFilters, writable_properties, only_enabled_filters);
         return {{command, current_post_process_depth_filters}};
     } catch (const std::exception& e) {
         VIAM_SDK_LOG(error) << "[do_command]" << command << ": " << e.what();

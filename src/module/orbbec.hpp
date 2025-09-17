@@ -96,6 +96,22 @@ struct ObResourceConfig {
     }
 };
 
+struct ViamOBDevice {
+    ~ViamOBDevice() {
+        std::cout << "deleting ViamOBDevice " << serial_number << "\n";
+    }
+    std::string serial_number{};
+    std::shared_ptr<ob::Device> device{};
+    bool started{};
+    std::shared_ptr<ob::Pipeline> pipe{};
+    std::shared_ptr<ob::PointCloudFilter> pointCloudFilter{};
+    std::shared_ptr<ob::Align> align{};
+    std::shared_ptr<ob::Config> config{};
+    std::vector<std::shared_ptr<ob::Filter>> postProcessDepthFilters{};
+    bool applyEnabledPostProcessDepthFilters{};
+    bool dumpPCLFiles{};
+};
+
 void startOrbbecSDK(ob::Context& ctx);
 void printDeviceInfo(const std::shared_ptr<ob::DeviceInfo> info);
 
@@ -129,6 +145,7 @@ class Orbbec final : public viam::sdk::Camera, public viam::sdk::Reconfigurable 
     std::string serial_number_;
     static std::unique_ptr<ObResourceConfig> configure(viam::sdk::Dependencies deps, viam::sdk::ResourceConfig cfg);
     static void validate_sensor(std::pair<std::string, viam::sdk::ProtoValue> const& sensor_pair);
+    viam::sdk::ProtoStruct createModuleConfig( std::unique_ptr<ViamOBDevice>& dev);
 };
 
 }  // namespace orbbec
