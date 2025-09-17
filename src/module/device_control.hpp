@@ -135,7 +135,7 @@ template <typename DeviceT>
 viam::sdk::ProtoStruct setDeviceProperty(std::shared_ptr<DeviceT> device,
                                          const viam::sdk::ProtoValue& property,
                                          std::string const& command) {
-    if (not property.template is_a<viam::sdk::ProtoStruct>()) {
+    if (!property.template is_a<viam::sdk::ProtoStruct>()) {
         return {{"error", "property must be a struct"}};
     }
     auto const& property_map = property.template get_unchecked<viam::sdk::ProtoStruct>();
@@ -207,7 +207,7 @@ template <typename DeviceT>
 viam::sdk::ProtoStruct setDeviceProperties(std::shared_ptr<DeviceT> device,
                                            const viam::sdk::ProtoValue& properties,
                                            std::string const& command) {
-    if (not properties.template is_a<viam::sdk::ProtoStruct>()) {
+    if (!properties.template is_a<viam::sdk::ProtoStruct>()) {
         return {{"error", "properties must be a struct"}};
     }
     std::unordered_set<std::string> writable_properties;
@@ -374,7 +374,7 @@ viam::sdk::ProtoStruct setPostProcessDepthFilters(std::vector<std::shared_ptr<Fi
                                                   viam::sdk::ProtoValue const& newDepthFilters,
                                                   std::string const& command) {
     try {
-        if (not newDepthFilters.is_a<viam::sdk::ProtoStruct>()) {
+        if (!newDepthFilters.is_a<viam::sdk::ProtoStruct>()) {
             std::stringstream error_ss;
             error_ss << "[setPostProcessDepthFilters] set_depth_filters: expected struct, got " << newDepthFilters.kind();
             VIAM_SDK_LOG(error) << error_ss.str();
@@ -394,7 +394,7 @@ template <typename ViamDeviceT>
 viam::sdk::ProtoStruct applyPostProcessDepthFilters(std::unique_ptr<ViamDeviceT>& my_dev,
                                                     viam::sdk::ProtoValue const& value,
                                                     std::string const& command) {
-    if (not value.is_a<bool>()) {
+    if (!value.is_a<bool>()) {
         VIAM_SDK_LOG(error) << "[do_command] apply_recommended_depth_filters: expected bool, got " << value.kind();
         return viam::sdk::ProtoStruct{{"error", "expected bool"}};
     }
@@ -404,7 +404,7 @@ viam::sdk::ProtoStruct applyPostProcessDepthFilters(std::unique_ptr<ViamDeviceT>
 
 template <typename DeviceT>
 viam::sdk::ProtoStruct getDepthUnit(std::shared_ptr<DeviceT>& device, std::string const& command) {
-    if (not device) {
+    if (!device) {
         return {{"error", "Device not found."}};
     }
     try {
@@ -433,10 +433,10 @@ viam::sdk::ProtoStruct getDepthUnit(std::shared_ptr<DeviceT>& device, std::strin
 
 template <typename DeviceT>
 viam::sdk::ProtoStruct setDepthUnit(std::shared_ptr<DeviceT>& device, viam::sdk::ProtoValue const& value, std::string const& command) {
-    if (not device) {
+    if (!device) {
         return {{"error", "Device not found."}};
     }
-    if (not value.template is_a<double>()) {
+    if (!value.template is_a<double>()) {
         return {{"error", "Invalid value type for Depth Unit. Expected double."}};
     }
     double const depthUnit = value.get_unchecked<double>();
