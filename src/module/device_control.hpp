@@ -291,7 +291,8 @@ viam::sdk::ProtoStruct filterListToProtoStruct(std::vector<std::shared_ptr<Filte
                                                bool const only_enabled_filters = false) {
     viam::sdk::ProtoStruct recommendedFilters;
     for (const auto& filter : recommendedDepthFilters) {
-        if ((only_enabled_filters && !filter->isEnabled()) || (!writable_properties.empty() && writable_properties.count(filter->getName()) == 0)) {
+        if ((only_enabled_filters && !filter->isEnabled()) ||
+            (!writable_properties.empty() && writable_properties.count(filter->getName()) == 0)) {
             continue;
         }
         VIAM_SDK_LOG(info) << "[filterListToProtoStruct] " << filter->getName() << ": " << (filter->isEnabled() ? "enabled" : "disabled");

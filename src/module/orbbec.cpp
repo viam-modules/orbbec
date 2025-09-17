@@ -1344,7 +1344,7 @@ vsdk::ProtoStruct getCameraParams(std::shared_ptr<ob::Pipeline> pipe) {
     return result;
 }
 
-viam::sdk::ProtoStruct Orbbec::createModuleConfig( std::unique_ptr<ViamOBDevice>& dev) {
+viam::sdk::ProtoStruct Orbbec::createModuleConfig(std::unique_ptr<ViamOBDevice>& dev) {
     if (dev == nullptr) {
         return {{"error", "device is null"}};
     }
@@ -1372,15 +1372,15 @@ viam::sdk::ProtoStruct Orbbec::createModuleConfig( std::unique_ptr<ViamOBDevice>
     viam::sdk::ProtoStruct sensors;
     viam::sdk::ProtoStruct depth_sensor;
     viam::sdk::ProtoStruct color_sensor;
-    for(int i = 0; i < count; i++) {
+    for (int i = 0; i < count; i++) {
         auto sp = enabledStreamProfileList.getProfile(i);
-        if(sp == nullptr) {
+        if (sp == nullptr) {
             return {{"error", "failed to get stream profile"}};
         }
-        if(sp->getType() != OB_STREAM_COLOR && sp->getType() != OB_STREAM_DEPTH) {
+        if (sp->getType() != OB_STREAM_COLOR && sp->getType() != OB_STREAM_DEPTH) {
             continue;
         }
-        if(sp->getType() == OB_STREAM_DEPTH) {
+        if (sp->getType() == OB_STREAM_DEPTH) {
             depth_sensor["width"] = static_cast<int>(sp->as<ob::VideoStreamProfile>()->getWidth());
             depth_sensor["height"] = static_cast<int>(sp->as<ob::VideoStreamProfile>()->getHeight());
             depth_sensor["format"] = ob::TypeHelper::convertOBFormatTypeToString(sp->as<ob::VideoStreamProfile>()->getFormat());
@@ -1397,7 +1397,8 @@ viam::sdk::ProtoStruct Orbbec::createModuleConfig( std::unique_ptr<ViamOBDevice>
     viam::sdk::ProtoStruct result;
     result["serial_number"] = dev->serial_number;
     result["sensors"] = sensors;
-    result["post_process_depth_filters"] = device_control::getPostProcessDepthFilters(dev->postProcessDepthFilters, "create_module_config")["create_module_config"];
+    result["post_process_depth_filters"] =
+        device_control::getPostProcessDepthFilters(dev->postProcessDepthFilters, "create_module_config")["create_module_config"];
     result["apply_post_process_depth_filters"] = dev->applyEnabledPostProcessDepthFilters;
     result["device_properties"] = device_control::getDeviceProperties(device, "create_module_config")["create_module_config"];
 
