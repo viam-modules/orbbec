@@ -1406,273 +1406,6 @@ vsdk::ProtoStruct getCameraParams(std::shared_ptr<ob::Pipeline> pipe) {
     return result;
 }
 
-viam::sdk::ProtoStruct setDepthWorkingMode(std::unique_ptr<ViamOBDevice>& viam_device,
-                                           viam::sdk::ProtoValue const& value,
-                                           std::string const& serialNumber,
-                                           std::string const& command) {
-    if (not value.is_a<std::string>()) {
-        return {{"error", "Invalid value type for Depth Working Mode. Expected string."}};
-    }
-    auto device = viam_device->device;
-    if (not device) {
-        return {{"error", "Device not found."}};
-    }
-    std::string const mode = value.get_unchecked<std::string>();
-    if (mode == "In-scene Calibration") {
-        return {{"error", "In-scene Calibration mode is apparently not supported by the SDK."}};
-    }
-    try {
-        if (device->isPropertySupported(OB_STRUCT_CURRENT_DEPTH_ALG_MODE, OB_PERMISSION_WRITE)) {
-            auto depthModeList = device->getDepthWorkModeList();
-            bool modeFound = false;
-            for (uint32_t i = 0; i < depthModeList->getCount(); i++) {
-                if ((*depthModeList)[i].name == mode) {
-                    modeFound = true;
-                    break;
-                }
-            }
-            if (!modeFound) {
-                std::stringstream error_ss;
-                error_ss << "Depth working mode " << mode << " not found. Available modes are: ";
-                for (uint32_t i = 0; i < depthModeList->getCount(); i++) {
-                    error_ss << (*depthModeList)[i].name << " ";
-                }
-                return {{"error", error_ss.str()}};
-            }
-            viam_device->started = false;
-            viam_device->pipe->stop();
-
-            device->switchDepthWorkMode(mode.c_str());
-            auto resolution_opt = config_by_serial().at(serialNumber).device_resolution;
-            auto format_opt = config_by_serial().at(serialNumber).device_format;
-
-            std::shared_ptr<ob::Pipeline> pipe = std::make_shared<ob::Pipeline>(device);
-            std::shared_ptr<ob::Config> config = createHwD2CAlignConfig(pipe, resolution_opt, format_opt);
-
-            pipe->enableFrameSync();
-            viam_device->pipe = pipe;
-            viam_device->config = config;
-
-            viam_device->pipe->start(config, [serialNumber](std::shared_ptr<ob::FrameSet> frameSet) { frameCallback(serialNumber); });
-            viam_device->started = true;
-            return device_control::getDepthWorkingMode(device, command);
-        } else {
-            return {{"error", "Depth working mode property is not supported."}};
-        }
-    } catch (ob::Error& e) {
-        std::stringstream error_ss;
-        error_ss << "function:" << e.getFunction() << "\nargs:" << e.getArgs() << "\nmessage:" << e.what()
-                 << "\ntype:" << e.getExceptionType() << std::endl;
-        return {{"error", error_ss.str()}};
-    }
-}
-
-bool isPrimaryTypeProperty(OBPropertyItem propertyItem) {
-    return propertyItem.type == OB_INT_PROPERTY || propertyItem.type == OB_FLOAT_PROPERTY || propertyItem.type == OB_BOOL_PROPERTY;
-}
-
-std::string permissionToString(OBPermissionType permission) {
-    switch (permission) {
-        case OB_PERMISSION_DENY:
-            return "deny";
-        case OB_PERMISSION_READ:
-            return "read";
-        case OB_PERMISSION_WRITE:
-            return "write";
-        case OB_PERMISSION_READ_WRITE:
-            return "read_write";
-        case OB_PERMISSION_ANY:
-            return "any";
-        default:
-            return "unknown";
-    }
-}
-
-std::string propertyTypeToString(OBPropertyType type) {
-    switch (type) {
-        case OB_BOOL_PROPERTY:
-            return "bool";
-        case OB_INT_PROPERTY:
-            return "int";
-        case OB_FLOAT_PROPERTY:
-            return "float";
-        case OB_STRUCT_PROPERTY:
-            return "struct";
-        default:
-            return "unknown";
-    }
-}
-
-vsdk::ProtoStruct getDeviceProperty(std::shared_ptr<ob::Device> device, viam::sdk::ProtoValue const& value) {
-    if (!value.is_a<std::string>()) {
-        return {{"error", "value must be a struct"}};
-    }
-    std::string property = value.get_unchecked<std::string>();
-    uint32_t size = device->getSupportedPropertyCount();
-    for (uint32_t i = 0; i < size; i++) {
-        OBPropertyItem property_item = device->getSupportedProperty(i);
-        if (property_item.name == property) {
-            viam::sdk::ProtoStruct property_struct;
-            property_struct["name"] = property_item.name;
-            property_struct["id"] = property_item.id;
-            property_struct["type"] = propertyTypeToString(property_item.type);
-            property_struct["permission"] = permissionToString(property_item.permission);
-            if (property_item.type == OB_INT_PROPERTY) {
-                OBIntPropertyRange valueRange = device->getIntPropertyRange(property_item.id);
-                property_struct["current"] = valueRange.cur;
-                property_struct["min"] = valueRange.min;
-                property_struct["max"] = valueRange.max;
-                property_struct["default"] = valueRange.def;
-            } else if (property_item.type == OB_FLOAT_PROPERTY) {
-                OBFloatPropertyRange valueRange = device->getFloatPropertyRange(property_item.id);
-                property_struct["current"] = valueRange.cur;
-                property_struct["min"] = valueRange.min;
-                property_struct["max"] = valueRange.max;
-                property_struct["default"] = valueRange.def;
-            } else if (property_item.type == OB_BOOL_PROPERTY) {
-                OBBoolPropertyRange valueRange = device->getBoolPropertyRange(property_item.id);
-                property_struct["current"] = valueRange.cur;
-                property_struct["default"] = valueRange.def;
-            } else if (property_item.type == OB_STRUCT_PROPERTY) {
-                // For struct properties, we can add more detailed handling if needed
-                // uint32_t bufferSize = 65536;  // Choose a size you expect to be sufficient
-                // std::vector<uint8_t> buffer(bufferSize);
-                // device->getStructuredData(property_item.id, buffer.data(), &bufferSize);
-                // VIAM_SDK_LOG(info) << "Retrieved structured data for property " << property_item.id << ", size: " << bufferSize;
-                property_struct["current"] = "struct_property";
-            } else {
-                property_struct["current"] = "unknown_type";
-            }
-            return property_struct;
-        }
-    }
-
-    return {};
-}
-vsdk::ProtoStruct setDeviceProperty(std::shared_ptr<ob::Device> device, const vsdk::ProtoValue& property) {
-    if (not property.is_a<vsdk::ProtoStruct>()) {
-        return {{"error", "property must be a struct"}};
-    }
-    auto const& property_map = property.get_unchecked<vsdk::ProtoStruct>();
-    if (property_map.size() == 0) {
-        return {{"error", "property map is empty"}};
-    }
-    if (property_map.size() > 1) {
-        return {{"error", "property map must contain exactly one entry"}};
-    }
-
-    uint32_t size = device->getSupportedPropertyCount();
-    for (uint32_t i = 0; i < size; i++) {
-        OBPropertyItem property_item = device->getSupportedProperty(i);
-        if (property_item.name == property_map.begin()->first) {
-            // Set the property value
-            if (property_item.type == OB_INT_PROPERTY) {
-                if (not property_map.begin()->second.is_a<double>()) {
-                    return {{"error", "Invalid type for int property"}};
-                }
-                int int_value = property_map.begin()->second.get_unchecked<double>();
-                device->setIntProperty(property_item.id, int_value);
-            } else if (property_item.type == OB_FLOAT_PROPERTY) {
-                if (not property_map.begin()->second.is_a<double>()) {
-                    return {{"error", "Invalid type for float property"}};
-                }
-                float float_value = property_map.begin()->second.get_unchecked<double>();
-                device->setFloatProperty(property_item.id, float_value);
-            } else if (property_item.type == OB_BOOL_PROPERTY) {
-                if (not property_map.begin()->second.is_a<bool>()) {
-                    return {{"error", "Invalid type for bool property"}};
-                }
-                bool bool_value = property_map.begin()->second.get_unchecked<bool>();
-                device->setBoolProperty(property_item.id, bool_value);
-            } else {
-                return {{"error", "Unsupported property type"}};
-            }
-            return getDeviceProperty(device, property_item.name);
-        }
-    }
-
-    return {};
-}
-
-// Get property list
-vsdk::ProtoStruct getDeviceProperties(std::shared_ptr<ob::Device> device) {
-    vsdk::ProtoStruct properties_list;
-    uint32_t size = device->getSupportedPropertyCount();
-    for (uint32_t i = 0; i < size; i++) {
-        OBPropertyItem property_item = device->getSupportedProperty(i);
-        if (/*isPrimaryTypeProperty(property_item) && property_item.permission != OB_PERMISSION_DENY*/ true) {
-            properties_list[property_item.name] = getDeviceProperty(device, property_item.name);
-        }
-    }
-    return properties_list;
-}
-
-vsdk::ProtoStruct setDeviceProperties(std::shared_ptr<ob::Device> device, const vsdk::ProtoValue& properties) {
-    if (not properties.is_a<viam::sdk::ProtoStruct>()) {
-        return {{"error", "properties must be a struct"}};
-    }
-    auto const& properties_map = properties.get_unchecked<viam::sdk::ProtoStruct>();
-    int const supportedPropertyCount = device->getSupportedPropertyCount();
-    for (int i = 0; i < supportedPropertyCount; i++) {
-        OBPropertyItem property_item = device->getSupportedProperty(i);
-        if (properties_map.count(property_item.name) > 0) {
-            auto const& value = properties_map.at(property_item.name);
-            if (property_item.permission == OB_PERMISSION_DENY || property_item.permission == OB_PERMISSION_READ) {
-                std::stringstream error_ss;
-                error_ss << "Property " << property_item.name << " is not writable, skipping.";
-                VIAM_SDK_LOG(warn) << error_ss.str();
-                return {{"error", error_ss.str()}};
-                continue;
-            }
-            try {
-                if (property_item.type == OB_INT_PROPERTY && value.is_a<double>()) {
-                    int int_value = static_cast<int>(value.get_unchecked<double>());
-                    device->setIntProperty(property_item.id, int_value);
-                    VIAM_SDK_LOG(info) << "Set int property " << property_item.name << " to " << int_value;
-                } else if (property_item.type == OB_FLOAT_PROPERTY && value.is_a<double>()) {
-                    double float_value = value.get_unchecked<double>();
-                    device->setFloatProperty(property_item.id, float_value);
-                    VIAM_SDK_LOG(info) << "Set float property " << property_item.name << " to " << float_value;
-                } else if (property_item.type == OB_BOOL_PROPERTY && value.is_a<bool>()) {
-                    bool bool_value = value.get_unchecked<bool>();
-                    device->setBoolProperty(property_item.id, bool_value);
-                    VIAM_SDK_LOG(info) << "Set bool property " << property_item.name << " to " << (bool_value ? "true" : "false");
-                } else {
-                    VIAM_SDK_LOG(warn) << "Type mismatch or unsupported type for property " << property_item.name << ", skipping.";
-                    return {{"error", "Type mismatch or unsupported type"}};
-                }
-            } catch (ob::Error& e) {
-                std::stringstream error_ss;
-                error_ss << "Failed to set property " << property_item.name << ": " << e.what();
-                VIAM_SDK_LOG(error) << error_ss.str();
-                return {{"error", error_ss.str()}};
-            }
-        }
-    }
-    return getDeviceProperties(device);
-}
-
-vsdk::ProtoStruct getCameraPresets(std::shared_ptr<ob::Device> device, std::string const& command) {
-    std::shared_ptr<ob::DevicePresetList> presetLists = device->getAvailablePresetList();
-    if (presetLists && presetLists->getCount() == 0) {
-        VIAM_SDK_LOG(error) << "The current device does not support preset mode" << std::endl;
-        return {{"error", "The current device does not support preset mode"}};
-    }
-
-    vsdk::ProtoList presets;
-    VIAM_SDK_LOG(info) << "Available Presets:" << std::endl;
-    for (uint32_t index = 0; index < presetLists->getCount(); index++) {
-        // Print available preset name.
-        VIAM_SDK_LOG(info) << " - " << index << "." << presetLists->getName(index) << std::endl;
-        presets.push_back(presetLists->getName(index));
-    }
-
-    // Print current preset name.
-    VIAM_SDK_LOG(info) << "Current PresetName: " << device->getCurrentPresetName() << std::endl;
-
-    return {{"presets", presets}, {"current_preset", device->getCurrentPresetName()}};
-}
-
 vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
     try {
         viam::sdk::ProtoStruct resp = viam::sdk::ProtoStruct{};
@@ -1793,54 +1526,6 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
                         return device_control::setPostProcessDepthFilters(my_dev->postProcessDepthFilters, value, key);
                     }
 
-                    if (key == "get_depth_noise_removal_filter") {
-                        return device_control::getDepthNoiseRemovalFilter(my_dev->device, key);
-                    }
-
-                    if (key == "set_depth_noise_removal_filter") {
-                        return device_control::setDepthNoiseRemovalFilter(my_dev->device, value, key);
-                    }
-
-                    if (key == "get_depth_gain") {
-                        return device_control::getDepthGain(my_dev->device);
-                    }
-
-                    if (key == "set_depth_gain") {
-                        return device_control::setDepthGain(my_dev->device, value);
-                    }
-
-                    if (key == "get_depth_auto_exposure") {
-                        return device_control::getDepthAutoExposure(my_dev->device, key);
-                    }
-
-                    if (key == "set_depth_auto_exposure") {
-                        return device_control::setDepthAutoExposure(my_dev->device, value, key);
-                    }
-
-                    if (key == "get_laser") {
-                        return device_control::getLaser(my_dev->device, key);
-                    }
-
-                    if (key == "set_laser") {
-                        return device_control::setLaser(my_dev->device, value, key);
-                    }
-
-                    if (key == "get_depth_mirror") {
-                        return device_control::getDepthMirror(my_dev->device, key);
-                    }
-
-                    if (key == "set_depth_mirror") {
-                        return device_control::setDepthMirror(my_dev->device, value, key);
-                    }
-
-                    if (key == "get_depth_exposure") {
-                        return device_control::getDepthExposure(my_dev->device, key);
-                    }
-
-                    if (key == "set_depth_exposure") {
-                        return device_control::setDepthExposure(my_dev->device, value, key);
-                    }
-
                     if (key == "get_depth_unit") {
                         return device_control::getDepthUnit(my_dev->device, key);
                     }
@@ -1849,30 +1534,24 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
                         return device_control::setDepthUnit(my_dev->device, value, key);
                     }
 
-                    if (key == "get_depth_working_mode") {
-                        return device_control::getDepthWorkingMode(my_dev->device, key);
-                    }
-
-                    if (key == "set_depth_working_mode") {
-                        return setDepthWorkingMode(my_dev, value, serialNumber, key);
-                    }
                     if (key == "get_device_properties") {
                         return device_control::getDeviceProperties(my_dev->device, key);
                     }
+
                     if (key == "set_device_properties") {
                         return device_control::setDeviceProperties(my_dev->device, value, key);
                     }
+
                     if (key == "get_device_property") {
                         return device_control::getDeviceProperty(my_dev->device, value, key);
                     }
+
                     if (key == "set_device_property") {
                         return device_control::setDeviceProperty(my_dev->device, value, key);
                     }
+
                     if (key == "get_camera_params") {
                         return getCameraParams(my_dev->pipe);
-                    }
-                    if (key == "get_camera_presets") {
-                        return getCameraPresets(my_dev->device, key);
                     }
                 }
             }
