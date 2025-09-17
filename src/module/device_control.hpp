@@ -181,13 +181,16 @@ viam::sdk::ProtoStruct setDeviceProperty(std::shared_ptr<DeviceT> device,
 
 // Get property list
 template <typename DeviceT>
-viam::sdk::ProtoStruct getDeviceProperties(std::shared_ptr<DeviceT> device, std::string const& command) {
+viam::sdk::ProtoStruct getDeviceProperties(std::shared_ptr<DeviceT> device,
+                                           std::string const& command,
+                                           std::unordered_set<std::string> const& filter = {}) {
     viam::sdk::ProtoStruct properties;
     viam::sdk::ProtoList properties_list;
     uint32_t size = device->getSupportedPropertyCount();
     for (uint32_t i = 0; i < size; i++) {
         OBPropertyItem property_item = device->getSupportedProperty(i);
-        if (isPrimaryTypeProperty(property_item) && property_item.permission != OB_PERMISSION_DENY) {
+        if (isPrimaryTypeProperty(property_item) && property_item.permission != OB_PERMISSION_DENY &&
+            (filter.empty() || filter.count(property_item.name) > 0)) {
             properties_list.push_back(getDeviceProperty(device, property_item.name, command));
         }
     }
@@ -207,6 +210,7 @@ viam::sdk::ProtoStruct setDeviceProperties(std::shared_ptr<DeviceT> device,
     if (not properties.template is_a<viam::sdk::ProtoStruct>()) {
         return {{"error", "properties must be a struct"}};
     }
+    std::unordered_set<std::string> writable_properties;
     auto const& properties_map = properties.template get_unchecked<viam::sdk::ProtoStruct>();
     int const supportedPropertyCount = device->getSupportedPropertyCount();
     for (int i = 0; i < supportedPropertyCount; i++) {
@@ -221,6 +225,7 @@ viam::sdk::ProtoStruct setDeviceProperties(std::shared_ptr<DeviceT> device,
                 continue;
             }
             try {
+                writable_properties.insert(property_item.name);
                 if (property_item.type == OB_INT_PROPERTY && value.is_a<double>()) {
                     int int_value = static_cast<int>(value.get_unchecked<double>());
                     device->setIntProperty(property_item.id, int_value);
@@ -245,7 +250,7 @@ viam::sdk::ProtoStruct setDeviceProperties(std::shared_ptr<DeviceT> device,
             }
         }
     }
-    return getDeviceProperties(device, command);
+    return getDeviceProperties(device, command, writable_properties);
 }
 
 template <typename DeviceT>
@@ -281,9 +286,13 @@ viam::sdk::ProtoStruct getFilterInfo(std::shared_ptr<FilterT> filter) {
 }
 
 template <typename FilterT>
-viam::sdk::ProtoStruct filterListToProtoStruct(std::vector<std::shared_ptr<FilterT>> const& recommendedDepthFilters) {
+viam::sdk::ProtoStruct filterListToProtoStruct(std::vector<std::shared_ptr<FilterT>> const& recommendedDepthFilters,
+                                               std::unordered_set<std::string> const& writable_properties = {}) {
     viam::sdk::ProtoStruct recommendedFilters;
     for (const auto& filter : recommendedDepthFilters) {
+        if (!writable_properties.empty() && writable_properties.count(filter->getName()) == 0) {
+            continue;
+        }
         VIAM_SDK_LOG(info) << "[filterListToProtoStruct] " << filter->getName() << ": " << (filter->isEnabled() ? "enabled" : "disabled");
 
         viam::sdk::ProtoStruct filterInfo = getFilterInfo(filter);
@@ -313,6 +322,8 @@ viam::sdk::ProtoStruct setRecommendedPostProcessDepthFilters(std::unique_ptr<Via
 template <typename FilterT>
 viam::sdk::ProtoStruct setPostProcessDepthFilters(std::vector<std::shared_ptr<FilterT>>& currentDepthFilters,
                                                   viam::sdk::ProtoStruct const& newFiltersConfig) {
+    VIAM_SDK_LOG(error) << "[setPostProcessDepthFilters] begin";
+    std::unordered_set<std::string> writable_properties;
     for (auto& filter : currentDepthFilters) {
         if (newFiltersConfig.count(filter->getName())) {
             auto const& filterConfigValue = newFiltersConfig.at(filter->getName());
@@ -336,15 +347,21 @@ viam::sdk::ProtoStruct setPostProcessDepthFilters(std::vector<std::shared_ptr<Fi
                     }
                 }
             }
+            writable_properties.insert(filter->getName());
         }
     }
-    return filterListToProtoStruct(currentDepthFilters);
+    VIAM_SDK_LOG(error) << "[setPostProcessDepthFilters] writable properties size: " << writable_properties.size();
+    return filterListToProtoStruct(currentDepthFilters, writable_properties);
 }
 
 template <typename FilterT>
-viam::sdk::ProtoStruct getPostProcessDepthFilters(std::vector<std::shared_ptr<FilterT>> const& depthFilters, std::string const& command) {
+viam::sdk::ProtoStruct getPostProcessDepthFilters(std::vector<std::shared_ptr<FilterT>> const& depthFilters,
+                                                  std::string const& command,
+                                                  std::unordered_set<std::string> const& writable_properties = {}) {
+    VIAM_SDK_LOG(info) << "[getPostProcessDepthFilters]" << command
+                       << ": getting current post process depth filters, writable properties size: " << writable_properties.size();
     try {
-        auto const current_post_process_depth_filters = filterListToProtoStruct(depthFilters);
+        auto const current_post_process_depth_filters = filterListToProtoStruct(depthFilters, writable_properties);
         return {{command, current_post_process_depth_filters}};
     } catch (const std::exception& e) {
         VIAM_SDK_LOG(error) << "[do_command]" << command << ": " << e.what();
