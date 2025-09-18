@@ -1124,9 +1124,12 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
             std::lock_guard<std::mutex> lock(frame_set_by_serial_mu());
             auto search = frame_set_by_serial().find(serial_number);
             if (search == frame_set_by_serial().end()) {
-                throw std::invalid_argument("no frame yet");
+                throw std::runtime_error("no frame yet");
             }
             fs = search->second;
+        }
+        if (fs == nullptr) {
+            throw std::runtime_error("no frameset");
         }
 
         bool should_process_color = false;
@@ -1150,11 +1153,19 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
         std::shared_ptr<ob::Frame> color = nullptr;
         std::shared_ptr<ob::Frame> depth = nullptr;
         uint64_t nowUs = getNowUs();
+        std::optional<DeviceFormat> device_format_opt;
+        {
+            std::lock_guard<std::mutex> lock(config_by_serial_mu());
+            if (config_by_serial().count(serial_number) == 0) {
+                throw std::runtime_error("device with serial number " + serial_number + " is not in config_by_serial");
+            }
+            device_format_opt = config_by_serial().at(serial_number).device_format;
+        }
 
         if (should_process_color) {
             color = fs->getFrame(OB_FRAME_COLOR);
             if (color == nullptr) {
-                throw std::invalid_argument("no color frame");
+                throw std::runtime_error("no color frame");
             }
             if (supported_color_formats.count(ob::TypeHelper::convertOBFormatTypeToString(color->getFormat())) == 0) {
                 std::ostringstream buffer;
@@ -1165,43 +1176,23 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
                 }
 
                 VIAM_SDK_LOG(error) << buffer.str();
-                throw std::invalid_argument(buffer.str());
+                throw std::runtime_error(buffer.str());
             }
 
             uint64_t diff = timeSinceFrameUs(nowUs, color->getSystemTimeStampUs());
             if (diff > maxFrameAgeUs) {
                 std::ostringstream buffer;
                 buffer << "no recent color frame: check USB connection, diff: " << diff << "us";
-                throw std::invalid_argument(buffer.str());
+                throw std::runtime_error(buffer.str());
             }
 
-            if (color->getFormat() != OB_FORMAT_MJPG) {
-                throw std::invalid_argument("color frame was not in jpeg format");
-            }
-
-            std::optional<DeviceFormat> res_format_opt;
-            {
-                std::lock_guard<std::mutex> lock(config_by_serial_mu());
-                if (config_by_serial().count(serial_number) == 0) {
-                    throw std::invalid_argument("device with serial number " + serial_number + " is not in config_by_serial");
-                }
-                res_format_opt = config_by_serial().at(serial_number).device_format;
-            }
-            if (res_format_opt.has_value()) {
-                if (res_format_opt->color_format.has_value()) {
-                    if (ob::TypeHelper::convertOBFormatTypeToString(color->getFormat()) != res_format_opt->color_format.value()) {
+            if (device_format_opt.has_value()) {
+                if (device_format_opt->color_format.has_value()) {
+                    if (ob::TypeHelper::convertOBFormatTypeToString(color->getFormat()) != device_format_opt->color_format.value()) {
                         std::ostringstream buffer;
-                        buffer << "color format mismatch, expected " << res_format_opt->color_format.value() << " got "
+                        buffer << "color format mismatch, expected " << device_format_opt->color_format.value() << " got "
                                << ob::TypeHelper::convertOBFormatTypeToString(color->getFormat());
-                        throw std::invalid_argument(buffer.str());
-                    }
-                }
-                if (res_format_opt->depth_format.has_value()) {
-                    if (ob::TypeHelper::convertOBFormatTypeToString(depth->getFormat()) != res_format_opt->depth_format.value()) {
-                        std::ostringstream buffer;
-                        buffer << "depth format mismatch, expected " << res_format_opt->depth_format.value() << " got "
-                               << ob::TypeHelper::convertOBFormatTypeToString(depth->getFormat());
-                        throw std::invalid_argument(buffer.str());
+                        throw std::runtime_error(buffer.str());
                     }
                 }
             } else {
@@ -1209,13 +1200,7 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
                     std::ostringstream buffer;
                     buffer << "color format mismatch, expected " << Orbbec::default_color_format << " got "
                            << ob::TypeHelper::convertOBFormatTypeToString(color->getFormat());
-                    throw std::invalid_argument(buffer.str());
-                }
-                if (ob::TypeHelper::convertOBFormatTypeToString(depth->getFormat()) != Orbbec::default_depth_format) {
-                    std::ostringstream buffer;
-                    buffer << "depth format mismatch, expected " << Orbbec::default_depth_format << " got "
-                           << ob::TypeHelper::convertOBFormatTypeToString(depth->getFormat());
-                    throw std::invalid_argument(buffer.str());
+                    throw std::runtime_error(buffer.str());
                 }
             }
 
@@ -1239,21 +1224,46 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
                 std::ostringstream buffer;
                 buffer << "[get_images] unsupported color format: " << ob::TypeHelper::convertOBFormatTypeToString(color->getFormat());
                 VIAM_SDK_LOG(error) << buffer.str();
-                throw std::invalid_argument(buffer.str());
+                throw std::runtime_error(buffer.str());
             }
         }
 
         if (should_process_depth) {
             depth = fs->getFrame(OB_FRAME_DEPTH);
             if (depth == nullptr) {
-                throw std::invalid_argument("no depth frame");
+                throw std::runtime_error("no depth frame");
+            }
+            if (supported_depth_formats.count(ob::TypeHelper::convertOBFormatTypeToString(depth->getFormat())) == 0) {
+                std::ostringstream buffer;
+                buffer << "[get_images] unsupported depth format: " << ob::TypeHelper::convertOBFormatTypeToString(depth->getFormat())
+                       << ", supported: ";
+                for (const auto& format : supported_depth_formats) {
+                    buffer << format << " ";
+                }
+                VIAM_SDK_LOG(error) << buffer.str();
+                throw std::runtime_error(buffer.str());
             }
 
             uint64_t diff = timeSinceFrameUs(nowUs, depth->getSystemTimeStampUs());
             if (diff > maxFrameAgeUs) {
                 std::ostringstream buffer;
                 buffer << "no recent depth frame: check USB connection, diff: " << diff << "us";
-                throw std::invalid_argument(buffer.str());
+                throw std::runtime_error(buffer.str());
+            }
+            if (device_format_opt->depth_format.has_value()) {
+                if (ob::TypeHelper::convertOBFormatTypeToString(depth->getFormat()) != device_format_opt->depth_format.value()) {
+                    std::ostringstream buffer;
+                    buffer << "depth format mismatch, expected " << device_format_opt->depth_format.value() << " got "
+                           << ob::TypeHelper::convertOBFormatTypeToString(depth->getFormat());
+                    throw std::runtime_error(buffer.str());
+                }
+            } else {
+                if (ob::TypeHelper::convertOBFormatTypeToString(depth->getFormat()) != Orbbec::default_depth_format) {
+                    std::ostringstream buffer;
+                    buffer << "depth format mismatch, expected " << Orbbec::default_depth_format << " got "
+                           << ob::TypeHelper::convertOBFormatTypeToString(depth->getFormat());
+                    throw std::runtime_error(buffer.str());
+                }
             }
 
             unsigned char* depthData = (unsigned char*)depth->getData();
