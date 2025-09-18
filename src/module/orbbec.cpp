@@ -1203,10 +1203,6 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
                 throw std::invalid_argument(buffer.str());
             }
 
-            if (color->getFormat() != OB_FORMAT_MJPG) {
-                throw std::invalid_argument("color frame was not in jpeg format");
-            }
-
             std::optional<DeviceFormat> res_format_opt;
             {
                 std::lock_guard<std::mutex> lock(config_by_serial_mu());
