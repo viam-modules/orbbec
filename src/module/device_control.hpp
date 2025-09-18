@@ -116,11 +116,6 @@ viam::sdk::ProtoStruct getDeviceProperty(std::shared_ptr<DeviceT> device, viam::
                 property_struct["current"] = valueRange.cur;
                 property_struct["default"] = valueRange.def;
             } else if (property_item.type == OB_STRUCT_PROPERTY) {
-                // For struct properties, we can add more detailed handling if needed
-                // uint32_t bufferSize = 65536;  // Choose a size you expect to be sufficient
-                // std::vector<uint8_t> buffer(bufferSize);
-                // device->getStructuredData(property_item.id, buffer.data(), &bufferSize);
-                // VIAM_SDK_LOG(info) << "Retrieved structured data for property " << property_item.id << ", size: " << bufferSize;
                 property_struct["current"] = "struct_property";
             } else {
                 property_struct["current"] = "unknown_type";
@@ -152,19 +147,19 @@ viam::sdk::ProtoStruct setDeviceProperty(std::shared_ptr<DeviceT> device,
         if (property_item.name == property_map.begin()->first) {
             // Set the property value
             if (property_item.type == OB_INT_PROPERTY) {
-                if (not property_map.begin()->second.is_a<double>()) {
+                if (!property_map.begin()->second.is_a<double>()) {
                     return {{"error", "Invalid type for int property"}};
                 }
                 int int_value = property_map.begin()->second.get_unchecked<double>();
                 device->setIntProperty(property_item.id, int_value);
             } else if (property_item.type == OB_FLOAT_PROPERTY) {
-                if (not property_map.begin()->second.is_a<double>()) {
+                if (!property_map.begin()->second.is_a<double>()) {
                     return {{"error", "Invalid type for float property"}};
                 }
                 float float_value = property_map.begin()->second.get_unchecked<double>();
                 device->setFloatProperty(property_item.id, float_value);
             } else if (property_item.type == OB_BOOL_PROPERTY) {
-                if (not property_map.begin()->second.is_a<bool>()) {
+                if (!property_map.begin()->second.is_a<bool>()) {
                     return {{"error", "Invalid type for bool property"}};
                 }
                 bool bool_value = property_map.begin()->second.get_unchecked<bool>();
