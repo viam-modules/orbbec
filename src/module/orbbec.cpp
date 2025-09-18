@@ -1330,121 +1330,6 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
     }
 }
 
-vsdk::ProtoStruct getCameraParams(std::shared_ptr<ob::Pipeline> pipe) {
-    if (pipe == nullptr) {
-        return {{"error", "pipe is null"}};
-    }
-    auto const config = pipe->getConfig();
-    if (!config) {
-        return {{"error", "failed to get pipeline config"}};
-    }
-
-    auto enabledStreamProfileListPtr = config->getEnabledStreamProfileList();
-
-    vsdk::ProtoStruct result;
-    if (enabledStreamProfileListPtr) {
-        auto const& enabledStreamProfileList = *enabledStreamProfileListPtr;
-        auto const count = enabledStreamProfileList.getCount();
-        for (int i = 0; i < count; i++) {
-            auto sp = enabledStreamProfileList.getProfile(i);
-            auto vsp = sp->as<ob::VideoStreamProfile>();
-            std::string sensorName = ob::TypeHelper::convertOBStreamTypeToString(sp->getType());
-            vsdk::ProtoStruct profile;
-            profile["width"] = static_cast<int>(vsp->getWidth());
-            profile["height"] = static_cast<int>(vsp->getHeight());
-            profile["format"] = ob::TypeHelper::convertOBFormatTypeToString(vsp->getFormat());
-            profile["fps"] = static_cast<int>(vsp->getFps());
-
-            vsdk::ProtoStruct intrinsics_struct;
-            auto intrinsics = vsp->getIntrinsic();
-            intrinsics_struct["fx"] = static_cast<double>(intrinsics.fx);
-            intrinsics_struct["fy"] = static_cast<double>(intrinsics.fy);
-            intrinsics_struct["cx"] = static_cast<double>(intrinsics.cx);
-            intrinsics_struct["cy"] = static_cast<double>(intrinsics.cy);
-            intrinsics_struct["width"] = static_cast<double>(intrinsics.width);
-            intrinsics_struct["height"] = static_cast<double>(intrinsics.height);
-            profile["intrinsics"] = intrinsics_struct;
-
-            vsdk::ProtoStruct distortion_struct;
-            auto distortion = vsp->getDistortion();
-            distortion_struct["k1"] = static_cast<double>(distortion.k1);
-            distortion_struct["k2"] = static_cast<double>(distortion.k2);
-            distortion_struct["k3"] = static_cast<double>(distortion.k3);
-            distortion_struct["k4"] = static_cast<double>(distortion.k4);
-            distortion_struct["k5"] = static_cast<double>(distortion.k5);
-            distortion_struct["k6"] = static_cast<double>(distortion.k6);
-            distortion_struct["p1"] = static_cast<double>(distortion.p1);
-            distortion_struct["p2"] = static_cast<double>(distortion.p2);
-            profile["distortion"] = distortion_struct;
-
-            result[sensorName] = profile;
-        }
-    }
-
-    return result;
-}
-
-viam::sdk::ProtoStruct Orbbec::createModuleConfig(std::unique_ptr<ViamOBDevice>& dev) {
-    if (dev == nullptr) {
-        return {{"error", "device is null"}};
-    }
-    if (dev->pipe == nullptr) {
-        return {{"error", "pipe is null"}};
-    }
-    auto const config = dev->pipe->getConfig();
-    if (!config) {
-        return {{"error", "failed to get pipeline config"}};
-    }
-
-    auto const device = dev->device;
-    if (device == nullptr) {
-        return {{"error", "device is null"}};
-    }
-
-    auto enabledStreamProfileListPtr = config->getEnabledStreamProfileList();
-    if (!enabledStreamProfileListPtr) {
-        return {{"error", "failed to get enabled stream profile list"}};
-    }
-
-    auto const& enabledStreamProfileList = *enabledStreamProfileListPtr;
-    auto const count = enabledStreamProfileList.getCount();
-
-    viam::sdk::ProtoStruct sensors;
-    viam::sdk::ProtoStruct depth_sensor;
-    viam::sdk::ProtoStruct color_sensor;
-    for (int i = 0; i < count; i++) {
-        auto sp = enabledStreamProfileList.getProfile(i);
-        if (sp == nullptr) {
-            return {{"error", "failed to get stream profile"}};
-        }
-        if (sp->getType() != OB_STREAM_COLOR && sp->getType() != OB_STREAM_DEPTH) {
-            continue;
-        }
-        if (sp->getType() == OB_STREAM_DEPTH) {
-            depth_sensor["width"] = static_cast<int>(sp->as<ob::VideoStreamProfile>()->getWidth());
-            depth_sensor["height"] = static_cast<int>(sp->as<ob::VideoStreamProfile>()->getHeight());
-            depth_sensor["format"] = ob::TypeHelper::convertOBFormatTypeToString(sp->as<ob::VideoStreamProfile>()->getFormat());
-            sensors["depth"] = depth_sensor;
-
-        } else if (sp->getType() == OB_STREAM_COLOR) {
-            color_sensor["width"] = static_cast<int>(sp->as<ob::VideoStreamProfile>()->getWidth());
-            color_sensor["height"] = static_cast<int>(sp->as<ob::VideoStreamProfile>()->getHeight());
-            color_sensor["format"] = ob::TypeHelper::convertOBFormatTypeToString(sp->as<ob::VideoStreamProfile>()->getFormat());
-            sensors["color"] = color_sensor;
-        }
-    }
-
-    viam::sdk::ProtoStruct result;
-    result["serial_number"] = dev->serial_number;
-    result["sensors"] = sensors;
-    result["post_process_depth_filters"] =
-        device_control::getPostProcessDepthFilters(dev->postProcessDepthFilters, "create_module_config")["create_module_config"];
-    result["apply_post_process_depth_filters"] = dev->applyEnabledPostProcessDepthFilters;
-    result["device_properties"] = device_control::getDeviceProperties(device, "create_module_config");
-
-    return result;
-}
-
 vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
     try {
         constexpr char firmware_key[] = "update_firmware";
@@ -1526,9 +1411,9 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
                 } else if (key == "set_device_property") {
                     return device_control::setDeviceProperty(dev->device, value, key);
                 } else if (key == "get_camera_params") {
-                    return getCameraParams(dev->pipe);
+                    return device_control::getCameraParams<ob::Pipeline, ob::VideoStreamProfile>(dev->pipe);
                 } else if (key == "create_module_config") {
-                    return createModuleConfig(dev);
+                    return device_control::createModuleConfig<ViamOBDevice, ob::VideoStreamProfile>(dev);
                 }
             }
         }  // unlock devices_by_serial_mu_

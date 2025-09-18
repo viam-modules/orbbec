@@ -457,4 +457,121 @@ viam::sdk::ProtoStruct setDepthUnit(std::shared_ptr<DeviceT>& device, viam::sdk:
         return {{"error", error_ss.str()}};
     }
 }
+
+template <typename PipelineT, typename VideoStreamProfileT>
+viam::sdk::ProtoStruct getCameraParams(std::shared_ptr<PipelineT> pipe) {
+    if (pipe == nullptr) {
+        return {{"error", "pipe is null"}};
+    }
+    auto const config = pipe->getConfig();
+    if (!config) {
+        return {{"error", "failed to get pipeline config"}};
+    }
+
+    auto enabledStreamProfileListPtr = config->getEnabledStreamProfileList();
+
+    viam::sdk::ProtoStruct result;
+    if (enabledStreamProfileListPtr) {
+        auto const& enabledStreamProfileList = *enabledStreamProfileListPtr;
+        auto const count = enabledStreamProfileList.getCount();
+        for (int i = 0; i < count; i++) {
+            auto sp = enabledStreamProfileList.getProfile(i);
+            auto vsp = sp->template as<VideoStreamProfileT>();
+            std::string sensorName = ob::TypeHelper::convertOBStreamTypeToString(sp->getType());
+            viam::sdk::ProtoStruct profile;
+            profile["width"] = static_cast<int>(vsp->getWidth());
+            profile["height"] = static_cast<int>(vsp->getHeight());
+            profile["format"] = ob::TypeHelper::convertOBFormatTypeToString(vsp->getFormat());
+            profile["fps"] = static_cast<int>(vsp->getFps());
+
+            viam::sdk::ProtoStruct intrinsics_struct;
+            auto intrinsics = vsp->getIntrinsic();
+            intrinsics_struct["fx"] = static_cast<double>(intrinsics.fx);
+            intrinsics_struct["fy"] = static_cast<double>(intrinsics.fy);
+            intrinsics_struct["cx"] = static_cast<double>(intrinsics.cx);
+            intrinsics_struct["cy"] = static_cast<double>(intrinsics.cy);
+            intrinsics_struct["width"] = static_cast<double>(intrinsics.width);
+            intrinsics_struct["height"] = static_cast<double>(intrinsics.height);
+            profile["intrinsics"] = intrinsics_struct;
+
+            viam::sdk::ProtoStruct distortion_struct;
+            auto distortion = vsp->getDistortion();
+            distortion_struct["k1"] = static_cast<double>(distortion.k1);
+            distortion_struct["k2"] = static_cast<double>(distortion.k2);
+            distortion_struct["k3"] = static_cast<double>(distortion.k3);
+            distortion_struct["k4"] = static_cast<double>(distortion.k4);
+            distortion_struct["k5"] = static_cast<double>(distortion.k5);
+            distortion_struct["k6"] = static_cast<double>(distortion.k6);
+            distortion_struct["p1"] = static_cast<double>(distortion.p1);
+            distortion_struct["p2"] = static_cast<double>(distortion.p2);
+            profile["distortion"] = distortion_struct;
+
+            result[sensorName] = profile;
+        }
+    }
+
+    return result;
+}
+
+template <typename ViamDeviceT, typename VideoStreamProfileT>
+viam::sdk::ProtoStruct createModuleConfig(std::unique_ptr<ViamDeviceT>& dev) {
+    if (dev == nullptr) {
+        return {{"error", "device is null"}};
+    }
+    if (dev->pipe == nullptr) {
+        return {{"error", "pipe is null"}};
+    }
+    auto const config = dev->pipe->getConfig();
+    if (!config) {
+        return {{"error", "failed to get pipeline config"}};
+    }
+
+    auto const device = dev->device;
+    if (device == nullptr) {
+        return {{"error", "device is null"}};
+    }
+
+    auto enabledStreamProfileListPtr = config->getEnabledStreamProfileList();
+    if (!enabledStreamProfileListPtr) {
+        return {{"error", "failed to get enabled stream profile list"}};
+    }
+
+    auto const& enabledStreamProfileList = *enabledStreamProfileListPtr;
+    auto const count = enabledStreamProfileList.getCount();
+
+    viam::sdk::ProtoStruct sensors;
+    viam::sdk::ProtoStruct depth_sensor;
+    viam::sdk::ProtoStruct color_sensor;
+    for (int i = 0; i < count; i++) {
+        auto sp = enabledStreamProfileList.getProfile(i);
+        if (sp == nullptr) {
+            return {{"error", "failed to get stream profile"}};
+        }
+        if (sp->getType() != OB_STREAM_COLOR && sp->getType() != OB_STREAM_DEPTH) {
+            continue;
+        }
+        if (sp->getType() == OB_STREAM_DEPTH) {
+            depth_sensor["width"] = static_cast<int>(sp->template as<VideoStreamProfileT>()->getWidth());
+            depth_sensor["height"] = static_cast<int>(sp->template as<VideoStreamProfileT>()->getHeight());
+            depth_sensor["format"] = ob::TypeHelper::convertOBFormatTypeToString(sp->template as<VideoStreamProfileT>()->getFormat());
+            sensors["depth"] = depth_sensor;
+
+        } else if (sp->getType() == OB_STREAM_COLOR) {
+            color_sensor["width"] = static_cast<int>(sp->template as<VideoStreamProfileT>()->getWidth());
+            color_sensor["height"] = static_cast<int>(sp->template as<VideoStreamProfileT>()->getHeight());
+            color_sensor["format"] = ob::TypeHelper::convertOBFormatTypeToString(sp->template as<VideoStreamProfileT>()->getFormat());
+            sensors["color"] = color_sensor;
+        }
+    }
+
+    viam::sdk::ProtoStruct result;
+    result["serial_number"] = dev->serial_number;
+    result["sensors"] = sensors;
+    result["post_process_depth_filters"] =
+        getPostProcessDepthFilters(dev->postProcessDepthFilters, "create_module_config")["create_module_config"];
+    result["apply_post_process_depth_filters"] = dev->applyEnabledPostProcessDepthFilters;
+    result["device_properties"] = getDeviceProperties(device, "create_module_config");
+
+    return result;
+}
 }  // namespace device_control
