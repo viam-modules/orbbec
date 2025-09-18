@@ -1362,10 +1362,6 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
                 resp.emplace(firmware_key, std::string("firmware successfully updated, unplug and replug the device"));
 #endif
             }
-        } else if (kv.first == "get_images") {
-            VIAM_SDK_LOG(info) << "do_command get_images";
-            get_images({"color", "depth"}, viam::sdk::ProtoStruct{});
-            // resp.emplace("get_images", get_images({"color", "depth"}, viam::sdk::ProtoStruct{}).to_proto());
         }
     }
     return resp;
