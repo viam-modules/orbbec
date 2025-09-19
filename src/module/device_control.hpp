@@ -298,6 +298,20 @@ viam::sdk::ProtoStruct filterListToProtoStruct(std::vector<std::shared_ptr<Filte
     return recommendedFilters;
 }
 
+template <typename FilterT>
+std::string postProcessDepthFiltersToString(std::vector<std::shared_ptr<FilterT>> const& filters) {
+    std::ostringstream oss;
+    oss << "[";
+    for (size_t i = 0; i < filters.size(); i++) {
+        oss << filters[i]->getName() << "(" << (filters[i]->isEnabled() ? "enabled" : "disabled") << ")";
+        if (i != filters.size() - 1) {
+            oss << ", ";
+        }
+    }
+    oss << "]";
+    return oss.str();
+}
+
 template <typename DeviceT>
 viam::sdk::ProtoStruct getRecommendedPostProcessDepthFilters(std::shared_ptr<DeviceT>& device, bool const only_enabled_filters = false) {
     auto depthSensor = device->getSensor(OB_SENSOR_DEPTH);

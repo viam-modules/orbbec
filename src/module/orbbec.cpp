@@ -851,7 +851,8 @@ void applyExperimentalConfig(std::unique_ptr<ViamOBDevice>& my_dev, vsdk::ProtoS
         auto filters = config.at("post_process_depth_filters").get<vsdk::ProtoStruct>();
         if (filters) {
             device_control::setPostProcessDepthFilters(my_dev->postProcessDepthFilters, *filters, "Orbbec Constructor");
-            VIAM_SDK_LOG(info) << "[applyExperimentalConfig] postProcessDepthFilters size: " << my_dev->postProcessDepthFilters.size();
+            VIAM_SDK_LOG(info) << "[applyExperimentalConfig] postProcessDepthFilters:  "
+                               << device_control::postProcessDepthFiltersToString(my_dev->postProcessDepthFilters);
         }
     }
     if (config.count("apply_post_process_depth_filters") > 0) {
