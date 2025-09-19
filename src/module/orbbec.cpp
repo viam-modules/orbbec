@@ -1519,10 +1519,26 @@ vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const v
         // Write PCD to file if dumpPCLFiles is set
         if (my_dev->dumpPCLFiles) {
             auto timestamp = getNowUs();
+            // Get the path stored in the environment variable VIAM_MODULE_DATA
+            // If the environment variable is not set, use the current working directory
+            // to store the PCD file
             std::stringstream outfile_name;
-            outfile_name << "pointcloud_" << timestamp << ".pcd";
+            std::string viam_module_data = std::getenv("VIAM_MODULE_DATA");
+            if (!viam_module_data.empty()) {
+                std::filesystem::path dir_path(viam_module_data);
+                if (std::filesystem::exists(dir_path) && std::filesystem::is_directory(dir_path)) {
+                    outfile_name << viam_module_data << "/pointcloud_" << timestamp << ".pcd";
+                } else {
+                    VIAM_SDK_LOG(warn) << "VIAM_MODULE_DATA is set to " << viam_module_data << " but is not a valid directory, using current working directory to store PCD file";
+                    outfile_name << "pointcloud_" << timestamp << ".pcd";
+                }
+            } else {
+                VIAM_SDK_LOG(warn) << "VIAM_MODULE_DATA is not set, using current working directory to store PCD file";
+                outfile_name << "pointcloud_" << timestamp << ".pcd";
+            }
             std::ofstream outfile(outfile_name.str(), std::ios::out | std::ios::binary);
             outfile.write((const char*)&data[0], data.size());
+
             std::filesystem::path file_path(outfile_name.str());
             std::filesystem::path absolute_path = std::filesystem::absolute(file_path);
             std::string absolute_path_str = absolute_path.string();
