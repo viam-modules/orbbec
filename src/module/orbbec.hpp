@@ -96,6 +96,22 @@ struct ObResourceConfig {
     }
 };
 
+struct ViamOBDevice {
+    ~ViamOBDevice() {
+        std::cout << "deleting ViamOBDevice " << serial_number << "\n";
+    }
+    std::string serial_number{};
+    std::shared_ptr<ob::Device> device{};
+    bool started{};
+    std::shared_ptr<ob::Pipeline> pipe{};
+    std::shared_ptr<ob::PointCloudFilter> pointCloudFilter{};
+    std::shared_ptr<ob::Align> align{};
+    std::shared_ptr<ob::Config> config{};
+    std::vector<std::shared_ptr<ob::Filter>> postProcessDepthFilters{};
+    bool applyEnabledPostProcessDepthFilters{};
+    bool dumpPCLFiles{};
+};
+
 void startOrbbecSDK(ob::Context& ctx);
 void printDeviceInfo(const std::shared_ptr<ob::DeviceInfo> info);
 
@@ -132,15 +148,3 @@ class Orbbec final : public viam::sdk::Camera, public viam::sdk::Reconfigurable 
 };
 
 }  // namespace orbbec
-
-namespace std {
-template <>
-struct hash<orbbec::Resolution> {
-    std::size_t operator()(const orbbec::Resolution& res) const {
-        // Combine hash of width and height
-        std::size_t h1 = std::hash<uint32_t>{}(res.width);
-        std::size_t h2 = std::hash<uint32_t>{}(res.height);
-        return h1 ^ (h2 << 1);  // Simple hash combining
-    }
-};
-}  // namespace std

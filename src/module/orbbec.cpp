@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "orbbec.hpp"
+#include "device_control.hpp"
 #include "encoding.hpp"
 #ifdef _WIN32
 #include <windows.h>
@@ -25,8 +26,9 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
+#include <filesystem>
+#include <fstream>
 #include <iomanip>
-
 #include <iostream>
 #include <memory>
 #include <mutex>
@@ -88,20 +90,6 @@ struct PointXYZRGB {
     float x, y, z;
     std::uint32_t rgb;
 };
-
-struct ViamOBDevice {
-    ~ViamOBDevice() {
-        std::cout << "deleting ViamOBDevice " << serial_number << "\n";
-    }
-    std::string serial_number;
-    std::shared_ptr<ob::Device> device;
-    bool started;
-    std::shared_ptr<ob::Pipeline> pipe;
-    std::shared_ptr<ob::PointCloudFilter> pointCloudFilter;
-    std::shared_ptr<ob::Align> align;
-    std::shared_ptr<ob::Config> config;
-};
-
 // STRUCTS END
 
 // GLOBALS BEGIN
@@ -851,6 +839,32 @@ std::string getSerialNumber(const vsdk::ResourceConfig& cfg) {
     throw std::invalid_argument("serial_number is a required argument");
 }
 
+void applyExperimentalConfig(std::unique_ptr<ViamOBDevice>& my_dev, vsdk::ProtoStruct const& config) {
+    if (config.count("device_properties") > 0) {
+        auto device_properties = config.at("device_properties").get<vsdk::ProtoStruct>();
+        if (device_properties) {
+            device_control::setDeviceProperties(my_dev->device, *device_properties, "Orbbec Constructor");
+            VIAM_SDK_LOG(info) << "[applyExperimentalConfig] device_properties applied";
+        }
+    }
+    if (config.count("post_process_depth_filters") > 0) {
+        auto filters = config.at("post_process_depth_filters").get<vsdk::ProtoStruct>();
+        if (filters) {
+            device_control::setPostProcessDepthFilters(my_dev->postProcessDepthFilters, *filters, "Orbbec Constructor");
+            VIAM_SDK_LOG(info) << "[applyExperimentalConfig] postProcessDepthFilters:  "
+                               << device_control::postProcessDepthFiltersToString(my_dev->postProcessDepthFilters);
+        }
+    }
+    if (config.count("apply_post_process_depth_filters") > 0) {
+        auto apply_filters = config.at("apply_post_process_depth_filters").get<bool>();
+        if (apply_filters) {
+            device_control::applyPostProcessDepthFilters(my_dev, *apply_filters, "Orbbec Constructor");
+            VIAM_SDK_LOG(info) << "[applyExperimentalConfig] apply_post_process_depth_filters: "
+                               << my_dev->applyEnabledPostProcessDepthFilters;
+        }
+    }
+}
+
 Orbbec::Orbbec(vsdk::Dependencies deps, vsdk::ResourceConfig cfg, std::shared_ptr<ob::Context> ctx)
     : Camera(cfg.name()), serial_number_(getSerialNumber(cfg)), ob_ctx_(std::move(ctx)) {
     VIAM_SDK_LOG(info) << "Orbbec constructor start " << serial_number_;
@@ -860,6 +874,19 @@ Orbbec::Orbbec(vsdk::Dependencies deps, vsdk::ResourceConfig cfg, std::shared_pt
         config_by_serial().insert_or_assign(serial_number_, *config);
         VIAM_SDK_LOG(info) << "initial config_by_serial_: " << config_by_serial().at(serial_number_).to_string();
     }
+
+    {
+        std::lock_guard<std::mutex> lock(devices_by_serial_mu());
+        auto search = devices_by_serial().find(serial_number_);
+        if (search == devices_by_serial().end()) {
+            std::ostringstream buffer;
+            buffer << service_name << ": unable to start undetected device" << serial_number_;
+            throw std::invalid_argument(buffer.str());
+        }
+        std::unique_ptr<ViamOBDevice>& my_dev = search->second;
+        applyExperimentalConfig(my_dev, cfg.attributes());
+    }
+
     startDevice(serial_number_);
     {
         std::lock_guard<std::mutex> lock(serial_by_resource_mu());
@@ -943,13 +970,15 @@ void Orbbec::reconfigure(const vsdk::Dependencies& deps, const vsdk::ResourceCon
         serial_by_resource()[new_resource_name] = new_serial_number;
     }
 
-    // set firmware version member variable
+    // set firmware version member variable and apply experimental config
     {
         std::lock_guard<std::mutex> lock_serial(serial_number_mu_);
         std::lock_guard<std::mutex> lock(devices_by_serial_mu());
         auto search = devices_by_serial().find(serial_number_);
         if (search != devices_by_serial().end()) {
             firmware_version_ = search->second->device->getDeviceInfo()->firmwareVersion();
+            std::unique_ptr<ViamOBDevice>& my_dev = search->second;
+            applyExperimentalConfig(my_dev, cfg.attributes());
         }
     }
     VIAM_SDK_LOG(info) << "[reconfigure] Orbbec reconfigure end";
@@ -1313,58 +1342,96 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
 }
 
 vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
-    viam::sdk::ProtoStruct resp = viam::sdk::ProtoStruct{};
-    constexpr char firmware_key[] = "update_firmware";
-    for (const auto& kv : command) {
-        if (kv.first == firmware_key) {
-            std::string serial_number;
-            {
-                const std::lock_guard<std::mutex> lock(serial_number_mu_);
-                serial_number = serial_number_;
+    try {
+        constexpr char firmware_key[] = "update_firmware";
+        std::string serial_number;
+        {
+            const std::lock_guard<std::mutex> lock(serial_number_mu_);
+            serial_number = serial_number_;
+        }
+        {
+            // note: under lock for the entire firmware update to ensure device can't be destructed.
+            const std::lock_guard<std::mutex> lock(devices_by_serial_mu());
+            auto search = devices_by_serial().find(serial_number);
+            if (search == devices_by_serial().end()) {
+                throw std::invalid_argument("device is not connected");
             }
-            {
-                // note: under lock for the entire firmware update to ensure device can't be destructed.
-                const std::lock_guard<std::mutex> lock(devices_by_serial_mu());
-                auto search = devices_by_serial().find(serial_number);
-                if (search == devices_by_serial().end()) {
-                    throw std::invalid_argument("device is not connected");
-                }
 
-                std::unique_ptr<ViamOBDevice>& dev = search->second;
-                if (firmware_version_.find(minFirmwareVer) != std::string::npos) {
-                    std::ostringstream buffer;
-                    buffer << "device firmware already on version " << minFirmwareVer;
-                    resp.emplace(firmware_key, buffer.str());
-                    break;
-                }
-                if (dev->started) {
-                    dev->pipe->stop();
-                    dev->started = false;
-                }
+            std::unique_ptr<ViamOBDevice>& dev = search->second;
+            for (auto const& [key, value] : command) {
+                if (key == firmware_key) {
+                    vsdk::ProtoStruct resp = viam::sdk::ProtoStruct{};
+                    if (firmware_version_.find(minFirmwareVer) != std::string::npos) {
+                        std::ostringstream buffer;
+                        buffer << "device firmware already on version " << minFirmwareVer;
+                        resp.emplace(firmware_key, buffer.str());
+                        break;
+                    }
+                    if (dev->started) {
+                        dev->pipe->stop();
+                        dev->started = false;
+                    }
 
-                VIAM_SDK_LOG(info) << "Updating device firmware...";
-                try {
-                    updateFirmware(dev, ob_ctx_);
-                    firmware_version_ = minFirmwareVer;
-                } catch (const std::exception& e) {
-                    std::ostringstream buffer;
-                    buffer << "firmware update failed: " << e.what();
-                    VIAM_SDK_LOG(error) << buffer.str();
-                    resp.emplace(firmware_key, buffer.str());
-                    dev->pipe->start(dev->config, frameCallback(serial_number));
-                    dev->started = true;
-                }
+                    VIAM_SDK_LOG(info) << "Updating device firmware...";
+                    try {
+                        updateFirmware(dev, ob_ctx_);
+                        firmware_version_ = minFirmwareVer;
+                    } catch (const std::exception& e) {
+                        std::ostringstream buffer;
+                        buffer << "firmware update failed: " << e.what();
+                        VIAM_SDK_LOG(error) << buffer.str();
+                        resp.emplace(firmware_key, buffer.str());
+                        dev->pipe->start(dev->config, frameCallback(serial_number));
+                        dev->started = true;
+                    }
 // macOS has a bug where the device changed callback is not called on reboot, so user must manually reboot the device
 #if defined(__linux__)
-                dev->device->reboot();
-                resp.emplace(firmware_key, std::string("firmware successfully updated"));
+                    dev->device->reboot();
+                    resp.emplace(firmware_key, std::string("firmware successfully updated"));
 #else
-                resp.emplace(firmware_key, std::string("firmware successfully updated, unplug and replug the device"));
+                    resp.emplace(firmware_key, std::string("firmware successfully updated, unplug and replug the device"));
 #endif
+                    return resp;
+                } else if (key == "dump_pcl_files") {
+                    if (!value.is_a<bool>()) {
+                        VIAM_SDK_LOG(error) << "[do_command] dump_pcl_files: expected bool, got " << value.kind();
+                        return vsdk::ProtoStruct{{"error", "expected bool"}};
+                    }
+                    dev->dumpPCLFiles = value.get_unchecked<bool>();
+                    return {{"dump_pcl_files", dev->dumpPCLFiles}};
+                } else if (key == "apply_post_process_depth_filters") {
+                    return device_control::applyPostProcessDepthFilters(dev, value, key);
+                } else if (key == "get_recommended_post_process_depth_filters") {
+                    return device_control::getRecommendedPostProcessDepthFilters(dev->device);
+                } else if (key == "set_recommended_post_process_depth_filters") {
+                    return device_control::setRecommendedPostProcessDepthFilters(dev);
+                } else if (key == "get_post_process_depth_filters") {
+                    return device_control::getPostProcessDepthFilters(dev->postProcessDepthFilters, key);
+                } else if (key == "set_post_process_depth_filters") {
+                    return device_control::setPostProcessDepthFilters(dev->postProcessDepthFilters, value, key);
+                } else if (key == "get_depth_unit") {
+                    return device_control::getDepthUnit(dev->device, key);
+                } else if (key == "set_depth_unit") {
+                    return device_control::setDepthUnit(dev->device, value, key);
+                } else if (key == "get_device_properties") {
+                    return device_control::getDeviceProperties(dev->device, key);
+                } else if (key == "set_device_properties") {
+                    return device_control::setDeviceProperties(dev->device, value, key);
+                } else if (key == "get_device_property") {
+                    return device_control::getDeviceProperty(dev->device, value, key);
+                } else if (key == "set_device_property") {
+                    return device_control::setDeviceProperty(dev->device, value, key);
+                } else if (key == "get_camera_params") {
+                    return device_control::getCameraParams<ob::Pipeline, ob::VideoStreamProfile>(dev->pipe);
+                } else if (key == "create_module_config") {
+                    return device_control::createModuleConfig<ViamOBDevice, ob::VideoStreamProfile>(dev);
+                }
             }
-        }
+        }  // unlock devices_by_serial_mu_
+    } catch (const std::exception& e) {
+        VIAM_SDK_LOG(error) << service_name << ": exception caught: " << e.what();
     }
-    return resp;
+    return vsdk::ProtoStruct{};
 }
 
 vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const vsdk::ProtoStruct& extra) {
@@ -1439,8 +1506,47 @@ vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const v
             throw std::invalid_argument("device is not started");
         }
 
-        std::vector<std::uint8_t> data =
-            RGBPointsToPCD(my_dev->pointCloudFilter->process(my_dev->align->process(fs)), scale * mmToMeterMultiple);
+        // If we have any post process depth filters configured, apply them now
+        if (my_dev->applyEnabledPostProcessDepthFilters && my_dev->postProcessDepthFilters.size() > 0) {
+            for (auto& filter : my_dev->postProcessDepthFilters) {
+                depth = filter->process(depth);
+            }
+            fs->pushFrame(depth);
+        }
+
+        std::vector<unsigned char> data;
+        data = RGBPointsToPCD(my_dev->pointCloudFilter->process(my_dev->align->process(fs)), scale * mmToMeterMultiple);
+
+        // Write PCD to file if dumpPCLFiles is set
+        if (my_dev->dumpPCLFiles) {
+            auto timestamp = getNowUs();
+            // Get the path stored in the environment variable VIAM_MODULE_DATA
+            // If the environment variable is not set, use the current working directory
+            // to store the PCD file
+            std::stringstream outfile_name;
+            std::string viam_module_data = std::getenv("VIAM_MODULE_DATA");
+            if (!viam_module_data.empty()) {
+                std::filesystem::path dir_path(viam_module_data);
+                if (std::filesystem::exists(dir_path) && std::filesystem::is_directory(dir_path)) {
+                    outfile_name << viam_module_data << "/pointcloud_" << timestamp << ".pcd";
+                } else {
+                    VIAM_SDK_LOG(warn) << "VIAM_MODULE_DATA is set to " << viam_module_data
+                                       << " but is not a valid directory, using current working directory to store PCD file";
+                    outfile_name << "pointcloud_" << timestamp << ".pcd";
+                }
+            } else {
+                VIAM_SDK_LOG(warn) << "VIAM_MODULE_DATA is not set, using current working directory to store PCD file";
+                outfile_name << "pointcloud_" << timestamp << ".pcd";
+            }
+            std::ofstream outfile(outfile_name.str(), std::ios::out | std::ios::binary);
+            outfile.write((const char*)&data[0], data.size());
+
+            std::filesystem::path file_path(outfile_name.str());
+            std::filesystem::path absolute_path = std::filesystem::absolute(file_path);
+            std::string absolute_path_str = absolute_path.string();
+            outfile.close();
+            VIAM_SDK_LOG(info) << "[get_point_cloud] wrote PCD to location: " << absolute_path_str;
+        }
 
         VIAM_SDK_LOG(debug) << "[get_point_cloud] end";
         return vsdk::Camera::point_cloud{kPcdMimeType, data};
@@ -1500,12 +1606,6 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
                                "alignment.";
         return;
     }
-
-    std::shared_ptr<ob::PointCloudFilter> pointCloudFilter = std::make_shared<ob::PointCloudFilter>();
-    // NOTE: Swap this to depth if you want to align to depth
-    std::shared_ptr<ob::Align> align = std::make_shared<ob::Align>(OB_STREAM_COLOR);
-
-    pointCloudFilter->setCreatePointFormat(OB_FORMAT_RGB_POINT);
 
 #ifdef _WIN32
     // On windows, we must add a metadata value to the windows device registry for the device to work correctly.
@@ -1603,6 +1703,18 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
         throw std::runtime_error("failed to update windows device registry keys: " + std::string(e.what()));
     }
 #endif
+
+    auto depthSensor = dev->getSensor(OB_SENSOR_DEPTH);
+    if (depthSensor == nullptr) {
+        throw std::runtime_error("Current device does not have a depth sensor.");
+    }
+    auto depthFilterList = depthSensor->createRecommendedFilters();
+
+    // NOTE: Swap this to depth if you want to align to depth
+    std::shared_ptr<ob::Align> align = std::make_shared<ob::Align>(OB_STREAM_COLOR);
+
+    std::shared_ptr<ob::PointCloudFilter> pointCloudFilter = std::make_shared<ob::PointCloudFilter>();
+    pointCloudFilter->setCreatePointFormat(OB_FORMAT_RGB_POINT);
     {
         std::lock_guard<std::mutex> lock(devices_by_serial_mu());
         std::unique_ptr<ViamOBDevice> my_dev = std::make_unique<ViamOBDevice>();
@@ -1613,6 +1725,10 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
         my_dev->pointCloudFilter = pointCloudFilter;
         my_dev->align = align;
         my_dev->config = config;
+        my_dev->postProcessDepthFilters =
+            depthFilterList;  // We save the recommended post process filters as the default, user can modify later via do_command
+        my_dev->applyEnabledPostProcessDepthFilters =
+            false;  // We don't apply the post process filters by default, user can enable via `apply_post_process_depth_filters` do_command
 
         devices_by_serial()[serialNumber] = std::move(my_dev);
     }
