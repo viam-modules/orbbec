@@ -1529,7 +1529,8 @@ vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const v
                 if (std::filesystem::exists(dir_path) && std::filesystem::is_directory(dir_path)) {
                     outfile_name << viam_module_data << "/pointcloud_" << timestamp << ".pcd";
                 } else {
-                    VIAM_SDK_LOG(warn) << "VIAM_MODULE_DATA is set to " << viam_module_data << " but is not a valid directory, using current working directory to store PCD file";
+                    VIAM_SDK_LOG(warn) << "VIAM_MODULE_DATA is set to " << viam_module_data
+                                       << " but is not a valid directory, using current working directory to store PCD file";
                     outfile_name << "pointcloud_" << timestamp << ".pcd";
                 }
             } else {
