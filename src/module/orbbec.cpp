@@ -1244,11 +1244,13 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
             if (color->getFormat() == OB_FORMAT_MJPG) {
                 color_image.mime_type = kColorMimeTypeJPEG;
                 color_image.bytes.assign(colorData, colorData + colorDataSize);
+                response.images.emplace_back(std::move(color_image));
             } else if (color->getFormat() == OB_FORMAT_RGB) {
                 color_image.mime_type = kColorMimeTypePNG;
                 auto width = color->getStreamProfile()->as<ob::VideoStreamProfile>()->getWidth();
                 auto height = color->getStreamProfile()->as<ob::VideoStreamProfile>()->getHeight();
                 color_image.bytes = encoding::encode_to_png(colorData, width, height);
+                response.images.emplace_back(std::move(color_image));
             } else {
                 std::ostringstream buffer;
                 buffer << "[get_images] unsupported color format: " << ob::TypeHelper::convertOBFormatTypeToString(color->getFormat());
