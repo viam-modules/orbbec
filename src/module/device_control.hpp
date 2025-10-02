@@ -523,7 +523,7 @@ viam::sdk::ProtoStruct getCameraParams(std::shared_ptr<PipelineT> pipe) {
 }
 
 template <typename DeviceT>
-viam::sdk::ProtoStruct getCameraTemperature(std::shared_ptr<DeviceT>& device, std::string const& command) {
+viam::sdk::ProtoStruct getCameraTemperature(std::shared_ptr<DeviceT> device, std::string const& command) {
     if (!device) {
         return {{"error", "Device not found."}};
     }
@@ -542,7 +542,7 @@ viam::sdk::ProtoStruct getCameraTemperature(std::shared_ptr<DeviceT>& device, st
             temperatureStruct["chip_top_temp_c"] = obTemp.chipTopTemp;
             temperatureStruct["chip_bottom_temp_c"] = obTemp.chipBottomTemp;
 
-            return {{"temperature", temperatureStruct}};
+            return {{command, temperatureStruct}};
         } else {
             return {{"error", "Device temperature property is not supported."}};
         }
