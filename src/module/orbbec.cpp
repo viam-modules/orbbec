@@ -1425,6 +1425,8 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
                     return device_control::setDeviceProperty(dev->device, value, key);
                 } else if (key == "get_camera_params") {
                     return device_control::getCameraParams<ob::Pipeline, ob::VideoStreamProfile>(dev->pipe);
+                } else if (key == "get_camera_temperature") {
+                    return device_control::getCameraTemperature(dev->device, key);
                 } else if (key == "create_module_config") {
                     return device_control::createModuleConfig<ViamOBDevice, ob::VideoStreamProfile>(dev);
                 }

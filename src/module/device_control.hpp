@@ -522,6 +522,36 @@ viam::sdk::ProtoStruct getCameraParams(std::shared_ptr<PipelineT> pipe) {
     return result;
 }
 
+template <typename DeviceT>
+viam::sdk::ProtoStruct getCameraTemperature(std::shared_ptr<DeviceT>& device, std::string const& command) {
+    if (!device) {
+        return {{"error", "Device not found."}};
+    }
+    try {
+        if (device->isPropertySupported(OB_STRUCT_DEVICE_TEMPERATURE, OB_PERMISSION_READ)) {
+            OBDeviceTemperature obTemp;
+            uint32_t dataSize = sizeof(OBDeviceTemperature);
+            device->getStructuredData(OB_STRUCT_DEVICE_TEMPERATURE, reinterpret_cast<uint8_t*>(&obTemp), &dataSize);
+
+            viam::sdk::ProtoStruct temperatureStruct;
+            temperatureStruct["main_board_temp_c"] = obTemp.mainBoardTemp;
+            temperatureStruct["cpu_temp_c"] = obTemp.cpuTemp;
+            temperatureStruct["rgb_temp_c"] = obTemp.rgbTemp;
+            temperatureStruct["ir_left_temp_c"] = obTemp.irLeftTemp;
+            temperatureStruct["ir_right_temp_c"] = obTemp.irRightTemp;
+            temperatureStruct["chip_top_temp_c"] = obTemp.chipTopTemp;
+            temperatureStruct["chip_bottom_temp_c"] = obTemp.chipBottomTemp;
+
+            return {{"temperature", temperatureStruct}};
+        } else {
+            return {{"error", "Device temperature property is not supported."}};
+        }
+    } catch (const std::exception& e) {
+        VIAM_SDK_LOG(error) << "[getCameraTemperature] " << e.what();
+        return viam::sdk::ProtoStruct{{"error", e.what()}};
+    }
+}
+
 template <typename ViamDeviceT, typename VideoStreamProfileT>
 viam::sdk::ProtoStruct createModuleConfig(std::unique_ptr<ViamDeviceT>& dev) {
     if (dev == nullptr) {
