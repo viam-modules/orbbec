@@ -1089,7 +1089,7 @@ vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::Pro
 
 vsdk::Camera::properties Orbbec::get_properties() {
     try {
-        VIAM_SDK_LOG(debug) << "[get_properties] start";
+        VIAM_SDK_LOG(info) << "[get_properties] start";
 
         std::string serial_number;
         {
@@ -1100,7 +1100,8 @@ vsdk::Camera::properties Orbbec::get_properties() {
             serial_number = serial_number_;
         }
 
-        OBCameraIntrinsic props;
+        OBCameraIntrinsic intrinsic_props;
+        OBCameraDistortion distortion_props;
         {
             const std::lock_guard<std::mutex> lock(devices_by_serial_mu());
             auto search = devices_by_serial().find(serial_number);
@@ -1116,20 +1117,53 @@ vsdk::Camera::properties Orbbec::get_properties() {
                 buffer << service_name << ": device with serial number " << serial_number << " is not started";
                 throw std::invalid_argument(buffer.str());
             }
-            props = my_dev->pipe->getCameraParam().rgbIntrinsic;
+            auto const camera_params = my_dev->pipe->getCameraParam();
+            intrinsic_props = camera_params.rgbIntrinsic;
+            distortion_props = camera_params.rgbDistortion;
         }
 
         vsdk::Camera::properties p{};
         p.supports_pcd = true;
-        p.intrinsic_parameters.width_px = props.width;
-        p.intrinsic_parameters.height_px = props.height;
-        p.intrinsic_parameters.focal_x_px = props.fx;
-        p.intrinsic_parameters.focal_y_px = props.fy;
-        p.intrinsic_parameters.center_x_px = props.cx;
-        p.intrinsic_parameters.center_y_px = props.cy;
-        // TODO: Set distortion parameters
+        p.intrinsic_parameters.width_px = intrinsic_props.width;
+        p.intrinsic_parameters.height_px = intrinsic_props.height;
+        p.intrinsic_parameters.focal_x_px = intrinsic_props.fx;
+        p.intrinsic_parameters.focal_y_px = intrinsic_props.fy;
+        p.intrinsic_parameters.center_x_px = intrinsic_props.cx;
+        p.intrinsic_parameters.center_y_px = intrinsic_props.cy;
 
-        VIAM_SDK_LOG(debug) << "[get_properties] end";
+        switch (distortion_props.model) {
+            case OB_DISTORTION_NONE:
+                p.distortion_parameters.model = "NONE";
+                break;
+            case OB_DISTORTION_MODIFIED_BROWN_CONRADY:
+                p.distortion_parameters.model = "MODIFIED_BROWN_CONRADY";
+                break;
+            case OB_DISTORTION_INVERSE_BROWN_CONRADY:
+                p.distortion_parameters.model = "INVERSE_BROWN_CONRADY";
+                break;
+            case OB_DISTORTION_BROWN_CONRADY:
+                p.distortion_parameters.model = "BROWN_CONRADY";
+                break;
+            case OB_DISTORTION_BROWN_CONRADY_K6:
+                p.distortion_parameters.model = "BROWN_CONRADY_K6";
+                break;
+            case OB_DISTORTION_KANNALA_BRANDT4:
+                p.distortion_parameters.model = "KANNALA_BRANDT4";
+                break;
+            default:
+                p.distortion_parameters.model = "Unknown";
+                break;
+        }
+        p.distortion_parameters.parameters = std::vector<double>{distortion_props.k1,
+                                                                 distortion_props.k2,
+                                                                 distortion_props.k3,
+                                                                 distortion_props.k4,
+                                                                 distortion_props.k5,
+                                                                 distortion_props.k6,
+                                                                 distortion_props.p1,
+                                                                 distortion_props.p2};
+
+        VIAM_SDK_LOG(info) << "[get_properties] end";
         return p;
     } catch (const std::exception& e) {
         VIAM_SDK_LOG(error) << "[get_properties] error: " << e.what();
@@ -1344,6 +1378,7 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
 }
 
 vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
+    bool call_get_properties = false;
     try {
         constexpr char firmware_key[] = "update_firmware";
         std::string serial_number;
@@ -1427,9 +1462,34 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
                     return device_control::getCameraParams<ob::Pipeline, ob::VideoStreamProfile>(dev->pipe);
                 } else if (key == "create_module_config") {
                     return device_control::createModuleConfig<ViamOBDevice, ob::VideoStreamProfile>(dev);
+                } else if (key == "call_get_properties") {
+                    call_get_properties = true;
                 }
             }
         }  // unlock devices_by_serial_mu_
+        if (call_get_properties) {
+            VIAM_SDK_LOG(info) << "[do_command] calling get_properties";
+            auto const props = get_properties();
+            VIAM_SDK_LOG(info) << "[do_command] get_properties called";
+            vsdk::ProtoStruct resp;
+            resp["supports_pcd"] = props.supports_pcd;
+            resp["intrinsic_parameters"] = vsdk::ProtoStruct{{"width_px", props.intrinsic_parameters.width_px},
+                                                             {"height_px", props.intrinsic_parameters.height_px},
+                                                             {"focal_x_px", props.intrinsic_parameters.focal_x_px},
+                                                             {"focal_y_px", props.intrinsic_parameters.focal_y_px},
+                                                             {"center_x_px", props.intrinsic_parameters.center_x_px},
+                                                             {"center_y_px", props.intrinsic_parameters.center_y_px}};
+            vsdk::ProtoStruct distortion_params;
+            distortion_params["model"] = props.distortion_parameters.model;
+            std::vector<viam::sdk::ProtoValue> proto_params;
+            for (const auto& val : props.distortion_parameters.parameters) {
+                proto_params.emplace_back(val);  // Each double becomes a ProtoValue
+            }
+            distortion_params["parameters"] = viam::sdk::ProtoValue(proto_params);
+            resp["distortion_parameters"] = distortion_params;
+            VIAM_SDK_LOG(info) << "[do_command] get_properties returning";
+            return resp;
+        }
     } catch (const std::exception& e) {
         VIAM_SDK_LOG(error) << service_name << ": exception caught: " << e.what();
     }
