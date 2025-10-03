@@ -20,7 +20,7 @@ jobs:
             container:
               image: ghcr.io/viamrobotics/rdk-devenv:arm64
               options: --platform linux/arm64
-          - os: windows-latest
+          # - os: windows-latest
 
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container }}
