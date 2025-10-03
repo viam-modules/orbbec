@@ -67,6 +67,22 @@ The following attributes are available for this model:
 | `640X360` | `800X600`, `400X300` | 
 
 
+### Attributes
+A call to get_attributes will return the camera attributes in [this struct](https://github.com/viamrobotics/viam-cpp-sdk/blob/43deea420f572e6b61b6fbd519e09b2520f05676/src/viam/sdk/components/camera.hpp#L58)
+
+Bear in mind that the distortion parameters contained in that struct are not named, i.e. they are contained in a vector of doubles. So they must be parsed following the order in which they are being stored, which is as follows:
+
+|index|parameter|
+|-----|---------|
+|  0  |   p1    |
+|  1  |   p2    |
+|  2  |   k1    |
+|  3  |   k2    |
+|  4  |   k3    |
+|  5  |   k4    |
+|  6  |   k5    |
+|  7  |   k6    |
+
 ### DoCommand
 You can use DoCommand to upgrade the firmware of your device to the required version.
 
