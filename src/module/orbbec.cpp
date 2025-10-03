@@ -1154,14 +1154,16 @@ vsdk::Camera::properties Orbbec::get_properties() {
                 p.distortion_parameters.model = "Unknown";
                 break;
         }
-        p.distortion_parameters.parameters = std::vector<double>{distortion_props.k1,
+        // TODO: These should be named parameters in the struct, not relying on order
+        // If this is ever changed, make sure to update the README
+        p.distortion_parameters.parameters = std::vector<double>{distortion_props.p1,
+                                                                 distortion_props.p2,
+                                                                 distortion_props.k1,
                                                                  distortion_props.k2,
                                                                  distortion_props.k3,
                                                                  distortion_props.k4,
                                                                  distortion_props.k5,
-                                                                 distortion_props.k6,
-                                                                 distortion_props.p1,
-                                                                 distortion_props.p2};
+                                                                 distortion_props.k6};
 
         VIAM_SDK_LOG(debug) << "[get_properties] end";
         return p;
