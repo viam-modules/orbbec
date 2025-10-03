@@ -1151,7 +1151,7 @@ vsdk::Camera::properties Orbbec::get_properties() {
                 p.distortion_parameters.model = "KANNALA_BRANDT4";
                 break;
             default:
-                p.distortion_parameters.model = "Unknown";
+                p.distortion_parameters.model = "UNKNOWN";
                 break;
         }
         // TODO: These should be named parameters in the struct, not relying on order
@@ -1460,6 +1460,10 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
                     return device_control::getDeviceProperty(dev->device, value, key);
                 } else if (key == "set_device_property") {
                     return device_control::setDeviceProperty(dev->device, value, key);
+                } else if (key == "get_device_info") {
+                    return device_control::getDeviceInfo(dev->device, key);
+                } else if (key == "get_orbbec_sdk_version") {
+                    return device_control::getOrbbecSDKVersion(key);
                 } else if (key == "get_camera_params") {
                     return device_control::getCameraParams<ob::Pipeline, ob::VideoStreamProfile>(dev->pipe);
                 } else if (key == "create_module_config") {

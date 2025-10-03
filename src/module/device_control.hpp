@@ -84,6 +84,32 @@ inline std::string propertyTypeToString(OBPropertyType type) {
     }
 }
 
+viam::sdk::ProtoStruct getOrbbecSDKVersion(std::string const& command) {
+    viam::sdk::ProtoStruct resp;
+    std::stringstream ss;
+    ss << ob::Version::getMajor() << "." << ob::Version::getMinor() << "." << ob::Version::getPatch();
+    resp["version"] = ss.str();
+    resp["stage_version"] = ob::Version::getStageVersion();
+    return resp;
+}
+
+template <typename DeviceT>
+viam::sdk::ProtoStruct getDeviceInfo(std::shared_ptr<DeviceT>& device, std::string const& command) {
+    std::shared_ptr<ob::DeviceInfo> info = device->getDeviceInfo();
+    viam::sdk::ProtoStruct info_struct;
+    info_struct["pid"] = info->getPid();
+    info_struct["vid"] = info->getVid();
+    info_struct["name"] = info->getName();
+    info_struct["uid"] = info->getUid();
+    info_struct["serial_number"] = info->getSerialNumber();
+    info_struct["firmware_version"] = info->getFirmwareVersion();
+    info_struct["connection_type"] = info->getConnectionType();
+    info_struct["hardware_version"] = info->getHardwareVersion();
+    info_struct["supported_min_sdk_version"] = info->getSupportedMinSdkVersion();
+    info_struct["asic_name"] = info->getAsicName();
+    return info_struct;
+}
+
 template <typename DeviceT>
 viam::sdk::ProtoStruct getDeviceProperty(std::shared_ptr<DeviceT> device, viam::sdk::ProtoValue const& value, std::string const& command) {
     if (!value.template is_a<std::string>()) {
