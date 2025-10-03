@@ -1089,7 +1089,7 @@ vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::Pro
 
 vsdk::Camera::properties Orbbec::get_properties() {
     try {
-        VIAM_SDK_LOG(info) << "[get_properties] start";
+        VIAM_SDK_LOG(debug) << "[get_properties] start";
 
         std::string serial_number;
         {
@@ -1163,7 +1163,7 @@ vsdk::Camera::properties Orbbec::get_properties() {
                                                                  distortion_props.p1,
                                                                  distortion_props.p2};
 
-        VIAM_SDK_LOG(info) << "[get_properties] end";
+        VIAM_SDK_LOG(debug) << "[get_properties] end";
         return p;
     } catch (const std::exception& e) {
         VIAM_SDK_LOG(error) << "[get_properties] error: " << e.what();
