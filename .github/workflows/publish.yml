@@ -24,9 +24,9 @@ jobs:
             container:
               image: ghcr.io/viam-modules/orbbec/viam-cpp-base-orin:0.0.1
             artifact-name: module-linux-arm64
-          # - platform: windows/amd64
-          #   os: windows-latest
-          #   artifact-name: module-windows-amd64
+          - platform: windows/amd64
+            os: windows-latest
+            artifact-name: module-windows-amd64
 
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container }}
