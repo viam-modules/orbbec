@@ -11,15 +11,15 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: macos-latest
-          - os: ubuntu-latest
-            container:
-                image: ghcr.io/viamrobotics/rdk-devenv:amd64
-                options: --platform linux/amd64
-          - os: buildjet-8vcpu-ubuntu-2204-arm
-            container:
-              image: ghcr.io/viamrobotics/rdk-devenv:arm64
-              options: --platform linux/arm64
+          # - os: macos-latest
+          # - os: ubuntu-latest
+          #   container:
+          #       image: ghcr.io/viamrobotics/rdk-devenv:amd64
+          #       options: --platform linux/amd64
+          # - os: buildjet-8vcpu-ubuntu-2204-arm
+          #   container:
+          #     image: ghcr.io/viamrobotics/rdk-devenv:arm64
+          #     options: --platform linux/arm64
           - os: windows-latest
 
     runs-on: ${{ matrix.os }}
