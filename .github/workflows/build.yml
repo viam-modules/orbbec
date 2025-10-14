@@ -55,4 +55,4 @@ jobs:
       - name: Build package and module
         run: |
           . ./venv/bin/activate
-          conan create . -o:a "viam-cpp-sdk/*:shared=False" -s:a build_type=Release -s:a compiler.cppstd=17 --build=missing
+          conan graph explain . -o:a "viam-cpp-sdk/*:shared=False" -s:a build_type=Release -s:a compiler.cppstd=17 --build=missing
