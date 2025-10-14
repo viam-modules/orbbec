@@ -12,15 +12,15 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-          - os: ubuntu-latest
-            container:
-                image: ghcr.io/viamrobotics/rdk-devenv:amd64
-                options: --platform linux/amd64
+          # - os: ubuntu-latest
+          #   container:
+          #       image: ghcr.io/viamrobotics/rdk-devenv:amd64
+          #       options: --platform linux/amd64
           - os: buildjet-8vcpu-ubuntu-2204-arm
             container:
               image: ghcr.io/viamrobotics/rdk-devenv:arm64
               options: --platform linux/arm64
-          - os: windows-latest
+          # - os: windows-latest
 
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container }}
@@ -29,10 +29,30 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up build environment
-        run: |
-          make setup
+      - name: Install deps (mac)
+        if: startsWith(matrix.os, 'macos')
+        run: brew install python@3.11
 
-      - name: Make module.tar.gz
+      - name: Install deps (linux)
+        if: startsWith(matrix.os, 'ubuntu')
         run: |
-          make module.tar.gz
+          sudo apt update -y
+          apt upgrade
+          apt install -y cmake python3.11 python3.11-venv wget
+
+      - name: Set up python/conan
+        env:
+          CONAN_REMOTE_URL: ${{ secrets.conanRemote }}
+          CONAN_LOGIN_USERNAME_VIAMCONAN: ${{ secrets.conanUsername}}
+          CONAN_PASSWORD_VIAMCONAN: ${{ secrets.conanPassword }}
+        run: |
+          python3 -m venv venv && . ./venv/bin/activate
+          python3 -m pip install conan
+          conan profile detect
+          conan remote add viamconan $CONAN_REMOTE_URL
+          conan remote auth -cc core:non_interactive=True viamconan
+
+      - name: Build package and module
+        run: |
+          . ./venv/bin/activate
+          conan create . -o:a "viam-cpp-sdk/*:shared=False" -s:a build_type=Release -s:a compiler.cppstd=17 --build=missing
