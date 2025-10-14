@@ -37,7 +37,7 @@ jobs:
         if: startsWith(matrix.os, 'ubuntu')
         run: |
           sudo apt update -y
-          apt upgrade
+          apt upgrade -y
           apt install -y cmake python3.11 python3.11-venv wget
 
       - name: Set up python/conan
