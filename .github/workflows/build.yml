@@ -56,4 +56,4 @@ jobs:
         run: |
           . ./venv/bin/activate
           conan graph explain --requires "viam-cpp-sdk/0.20.1"
-          conan graph explain . -o:a "viam-cpp-sdk/*:shared=False" -s:a build_type=Release -s:a compiler.cppstd=17 --build=missing
+          conan create . -o:a "viam-cpp-sdk/*:shared=False" -s:a build_type=Release -s:a compiler.cppstd=17 --build=missing
