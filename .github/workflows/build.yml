@@ -11,7 +11,7 @@ jobs:
     strategy:
       matrix:
         include:
-          # - os: macos-latest
+          - os: macos-14
           # - os: ubuntu-22.04
           #   container:
           #       image: ghcr.io/viamrobotics/rdk-devenv:amd64
@@ -55,5 +55,4 @@ jobs:
       - name: Build package and module
         run: |
           . ./venv/bin/activate
-          conan graph explain --requires "viam-cpp-sdk/0.20.1"
           conan create . -o:a "viam-cpp-sdk/*:shared=False" -s:a build_type=Release -s:a compiler.cppstd=17 --build=missing
