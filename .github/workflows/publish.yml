@@ -69,6 +69,9 @@ jobs:
           - platform: linux/arm64
             artifact-name: module-linux-arm64
             artifact-path: ./artifacts/linux-arm64/
+          - platform: windows/amd64
+            artifact-name: module-windows-amd64
+            artifact-path: ./artifacts/windows-amd64/
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
