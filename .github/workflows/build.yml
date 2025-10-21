@@ -49,51 +49,51 @@ jobs:
           CONAN_USER_HOME: c:/cache
           CONAN_USER_HOME_SHORT: c:/cache/conan_shortpaths
 
-  # build-module-nix:
-  #   strategy:
-  #     matrix:
-  #       include:
-  #         - os: macos-latest
-  #         - os: ubuntu-22.04
-  #           container:
-  #               image: ghcr.io/viamrobotics/rdk-devenv:amd64
-  #               options: --platform linux/amd64
-  #         - os: ubuntu-22.04-arm
-  #           container:
-  #             image: ghcr.io/viamrobotics/rdk-devenv:arm64
-  #             options: --platform linux/arm64
+  build-module-nix:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+          - os: ubuntu-22.04
+            container:
+                image: ghcr.io/viamrobotics/rdk-devenv:amd64
+                options: --platform linux/amd64
+          - os: ubuntu-22.04-arm
+            container:
+              image: ghcr.io/viamrobotics/rdk-devenv:arm64
+              options: --platform linux/arm64
 
-  #   runs-on: ${{ matrix.os }}
-  #   container: ${{ matrix.container }}
+    runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
 
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v4
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-  #     - name: Install deps (mac)
-  #       if: matrix.os == 'macos-latest'
-  #       run: brew install python@3.11
+      - name: Install deps (mac)
+        if: matrix.os == 'macos-latest'
+        run: brew install python@3.11
 
-  #     - name: Install deps (linux)
-  #       if: startsWith(matrix.os, 'ubuntu')
-  #       run: |
-  #         sudo apt update -y
-  #         apt upgrade -y
-  #         apt install -y cmake python3.11 python3.11-venv wget
+      - name: Install deps (linux)
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt update -y
+          apt upgrade -y
+          apt install -y cmake python3.11 python3.11-venv wget
 
-  #     - name: Set up python/conan
-  #       env:
-  #         CONAN_REMOTE_URL: ${{ secrets.conanRemote }}
-  #         CONAN_LOGIN_USERNAME_VIAMCONAN: ${{ secrets.conanUsername}}
-  #         CONAN_PASSWORD_VIAMCONAN: ${{ secrets.conanPassword }}
-  #       run: |
-  #         python3 -m venv venv && . ./venv/bin/activate
-  #         python3 -m pip install conan
-  #         conan profile detect
-  #         conan remote add viamconan $CONAN_REMOTE_URL
-  #         conan remote auth -cc core:non_interactive=True viamconan
+      - name: Set up python/conan
+        env:
+          CONAN_REMOTE_URL: ${{ secrets.conanRemote }}
+          CONAN_LOGIN_USERNAME_VIAMCONAN: ${{ secrets.conanUsername}}
+          CONAN_PASSWORD_VIAMCONAN: ${{ secrets.conanPassword }}
+        run: |
+          python3 -m venv venv && . ./venv/bin/activate
+          python3 -m pip install conan
+          conan profile detect
+          conan remote add viamconan $CONAN_REMOTE_URL
+          conan remote auth -cc core:non_interactive=True viamconan
 
-  #     - name: Build package and module
-  #       run: |
-  #         . ./venv/bin/activate
-  #         conan create . -o:a "viam-cpp-sdk/*:shared=False" -s:a build_type=Release -s:a compiler.cppstd=17 --build=missing
+      - name: Build package and module
+        run: |
+          . ./venv/bin/activate
+          conan create . -o:a "viam-cpp-sdk/*:shared=False" -s:a build_type=Release -s:a compiler.cppstd=17 --build=missing
