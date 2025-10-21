@@ -7,7 +7,49 @@ on:
   pull_request:
 
 jobs:
-  build-module:
+  build-module-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install deps
+        run: choco install -y conan git
+
+      - name: Set up python/conan
+        shell: powershell
+        # Powershell will not exit on error without the line below...highly vexing.
+        # I would love to find out that there is a better way to do this.
+        run: |
+          $ErrorActionPreference = "Stop"
+          Import-Module $env:ChocolateyInstall\helpers\chocolateyProfile.psm1
+          refreshenv
+
+          conan profile detect
+
+          conan remote add viamconan $env:CONAN_REMOTE_URL
+          conan remote auth -cc core:non_interactive=True viamconan
+        env:
+          CONAN_REMOTE_URL: ${{ secrets.conanRemote }}
+          CONAN_LOGIN_USERNAME_VIAMCONAN: ${{ secrets.conanUsername}}
+          CONAN_PASSWORD_VIAMCONAN: ${{ secrets.conanPassword }}
+          CONAN_USER_HOME: c:/cache
+          CONAN_USER_HOME_SHORT: c:/cache/conan_shortpaths
+
+      - name: Build package and module
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          Import-Module $env:ChocolateyInstall\helpers\chocolateyProfile.psm1
+          refreshenv
+
+          conan create . -o:a "viam-cpp-sdk/*:shared=False" -s:a build_type=Release -s:a compiler.cppstd=17 --build=missing
+        env:
+          CONAN_USER_HOME: c:/cache
+          CONAN_USER_HOME_SHORT: c:/cache/conan_shortpaths
+
+  build-module-nix:
     strategy:
       matrix:
         include:
@@ -20,7 +62,6 @@ jobs:
             container:
               image: ghcr.io/viamrobotics/rdk-devenv:arm64
               options: --platform linux/arm64
-          # - os: windows-latest
 
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container }}
