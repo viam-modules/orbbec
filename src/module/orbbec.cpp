@@ -867,12 +867,12 @@ void applyExperimentalConfig(std::unique_ptr<ViamOBDevice>& my_dev, vsdk::ProtoS
 
 Orbbec::Orbbec(vsdk::Dependencies deps, vsdk::ResourceConfig cfg, std::shared_ptr<ob::Context> ctx)
     : Camera(cfg.name()), serial_number_(getSerialNumber(cfg)), ob_ctx_(std::move(ctx)) {
-    VIAM_SDK_LOG(info) << "Orbbec constructor start " << serial_number_;
+    VIAM_RESOURCE_LOG(info) << "Orbbec constructor start " << serial_number_;
     auto config = configure(deps, cfg);
     {
         std::lock_guard<std::mutex> lock(config_by_serial_mu());
         config_by_serial().insert_or_assign(serial_number_, *config);
-        VIAM_SDK_LOG(info) << "initial config_by_serial_: " << config_by_serial().at(serial_number_).to_string();
+        VIAM_RESOURCE_LOG(info) << "initial config_by_serial_: " << config_by_serial().at(serial_number_).to_string();
     }
 
     {
@@ -902,17 +902,17 @@ Orbbec::Orbbec(vsdk::Dependencies deps, vsdk::ResourceConfig cfg, std::shared_pt
         }
     }
 
-    VIAM_SDK_LOG(info) << "Orbbec constructor end " << serial_number_;
+    VIAM_RESOURCE_LOG(info) << "Orbbec constructor end " << serial_number_;
 }
 
 Orbbec::~Orbbec() {
-    VIAM_SDK_LOG(info) << "Orbbec destructor start " << serial_number_;
+    VIAM_RESOURCE_LOG(info) << "Orbbec destructor start " << serial_number_;
     std::string prev_serial_number;
     std::string prev_resource_name;
     {
         const std::lock_guard<std::mutex> lock(config_by_serial_mu());
         if (config_by_serial().count(serial_number_) == 0) {
-            VIAM_SDK_LOG(error) << "Orbbec destructor: device with serial number " << serial_number_
+            VIAM_RESOURCE_LOG(error) << "Orbbec destructor: device with serial number " << serial_number_
                                 << " is not in config_by_serial, skipping erase";
         } else {
             prev_serial_number = config_by_serial().at(serial_number_).serial_number;
@@ -920,11 +920,11 @@ Orbbec::~Orbbec() {
         }
     }
     stopDevice(prev_serial_number, prev_resource_name);
-    VIAM_SDK_LOG(info) << "Orbbec destructor end " << serial_number_;
+    VIAM_RESOURCE_LOG(info) << "Orbbec destructor end " << serial_number_;
 }
 
 void Orbbec::reconfigure(const vsdk::Dependencies& deps, const vsdk::ResourceConfig& cfg) {
-    VIAM_SDK_LOG(info) << "[reconfigure] Orbbec reconfigure start";
+    VIAM_RESOURCE_LOG(info) << "[reconfigure] Orbbec reconfigure start";
     std::string prev_serial_number;
     std::string prev_resource_name;
     {
@@ -933,7 +933,7 @@ void Orbbec::reconfigure(const vsdk::Dependencies& deps, const vsdk::ResourceCon
         if (config_by_serial().count(serial_number_) == 0) {
             std::ostringstream buffer;
             buffer << "[reconfigure] device with serial number " << serial_number_ << " is not in config_by_serial, skipping reconfigure";
-            VIAM_SDK_LOG(error) << buffer.str();
+            VIAM_RESOURCE_LOG(error) << buffer.str();
             throw std::runtime_error(buffer.str());
         } else {
             prev_serial_number = config_by_serial().at(serial_number_).serial_number;
@@ -956,7 +956,7 @@ void Orbbec::reconfigure(const vsdk::Dependencies& deps, const vsdk::ResourceCon
         }
         new_serial_number = config->serial_number;
         new_resource_name = config->resource_name;
-        VIAM_SDK_LOG(info) << "[reconfigure] updated config_by_serial_: " << config_by_serial().at(new_serial_number).to_string();
+        VIAM_RESOURCE_LOG(info) << "[reconfigure] updated config_by_serial_: " << config_by_serial().at(new_serial_number).to_string();
     }
 
     {
@@ -981,12 +981,12 @@ void Orbbec::reconfigure(const vsdk::Dependencies& deps, const vsdk::ResourceCon
             applyExperimentalConfig(my_dev, cfg.attributes());
         }
     }
-    VIAM_SDK_LOG(info) << "[reconfigure] Orbbec reconfigure end";
+    VIAM_RESOURCE_LOG(info) << "[reconfigure] Orbbec reconfigure end";
 }
 
 vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::ProtoStruct& extra) {
     try {
-        VIAM_SDK_LOG(debug) << "[get_image] start";
+        VIAM_RESOURCE_LOG(debug) << "[get_image] start";
         std::string serial_number;
         {
             const std::lock_guard<std::mutex> lock(serial_number_mu_);
@@ -1016,7 +1016,7 @@ vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::Pro
             for (const auto& fmt : supported_color_formats) {
                 buffer << fmt << " ";
             }
-            VIAM_SDK_LOG(error) << buffer.str();
+            VIAM_RESOURCE_LOG(error) << buffer.str();
             throw std::invalid_argument(buffer.str());
         }
 
@@ -1035,14 +1035,14 @@ vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::Pro
                 std::ostringstream buffer;
                 buffer << "color frame format " << ob::TypeHelper::convertOBFormatTypeToString(color->getFormat())
                        << " does not match configured color format " << res_format_opt->color_format.value();
-                VIAM_SDK_LOG(error) << buffer.str();
+                VIAM_RESOURCE_LOG(error) << buffer.str();
                 throw std::invalid_argument(buffer.str());
             }
         } else if (ob::TypeHelper::convertOBFormatTypeToString(color->getFormat()) != Orbbec::default_color_format) {
             std::ostringstream buffer;
             buffer << "color frame format " << ob::TypeHelper::convertOBFormatTypeToString(color->getFormat())
                    << " does not match default color format " << Orbbec::default_color_format;
-            VIAM_SDK_LOG(error) << buffer.str();
+            VIAM_RESOURCE_LOG(error) << buffer.str();
             throw std::invalid_argument(buffer.str());
         }
 
@@ -1076,20 +1076,20 @@ vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::Pro
         } else {
             std::ostringstream buffer;
             buffer << "[get_image] unsupported color format: " << ob::TypeHelper::convertOBFormatTypeToString(color->getFormat());
-            VIAM_SDK_LOG(error) << buffer.str();
+            VIAM_RESOURCE_LOG(error) << buffer.str();
             throw std::invalid_argument(buffer.str());
         }
-        VIAM_SDK_LOG(debug) << "[get_image] end";
+        VIAM_RESOURCE_LOG(debug) << "[get_image] end";
         return response;
     } catch (const std::exception& e) {
-        VIAM_SDK_LOG(error) << "[get_image] error: " << e.what();
+        VIAM_RESOURCE_LOG(error) << "[get_image] error: " << e.what();
         throw std::runtime_error("failed to create image: " + std::string(e.what()));
     }
 }
 
 vsdk::Camera::properties Orbbec::get_properties() {
     try {
-        VIAM_SDK_LOG(debug) << "[get_properties] start";
+        VIAM_RESOURCE_LOG(debug) << "[get_properties] start";
 
         std::string serial_number;
         {
@@ -1165,17 +1165,17 @@ vsdk::Camera::properties Orbbec::get_properties() {
                                                                  distortion_props.k5,
                                                                  distortion_props.k6};
 
-        VIAM_SDK_LOG(debug) << "[get_properties] end";
+        VIAM_RESOURCE_LOG(debug) << "[get_properties] end";
         return p;
     } catch (const std::exception& e) {
-        VIAM_SDK_LOG(error) << "[get_properties] error: " << e.what();
+        VIAM_RESOURCE_LOG(error) << "[get_properties] error: " << e.what();
         throw std::runtime_error("failed to create properties: " + std::string(e.what()));
     }
 }
 
 vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filter_source_names, const vsdk::ProtoStruct& extra) {
     try {
-        VIAM_SDK_LOG(debug) << "[get_images] start";
+        VIAM_RESOURCE_LOG(debug) << "[get_images] start";
         std::string serial_number;
         {
             const std::lock_guard<std::mutex> lock(serial_number_mu_);
@@ -1240,7 +1240,7 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
                     buffer << format << " ";
                 }
 
-                VIAM_SDK_LOG(error) << buffer.str();
+                VIAM_RESOURCE_LOG(error) << buffer.str();
                 throw std::runtime_error(buffer.str());
             }
 
@@ -1290,7 +1290,7 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
             } else {
                 std::ostringstream buffer;
                 buffer << "[get_images] unsupported color format: " << ob::TypeHelper::convertOBFormatTypeToString(color->getFormat());
-                VIAM_SDK_LOG(error) << buffer.str();
+                VIAM_RESOURCE_LOG(error) << buffer.str();
                 throw std::runtime_error(buffer.str());
             }
         }
@@ -1307,7 +1307,7 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
                 for (const auto& format : supported_depth_formats) {
                     buffer << format << " ";
                 }
-                VIAM_SDK_LOG(error) << buffer.str();
+                VIAM_RESOURCE_LOG(error) << buffer.str();
                 throw std::runtime_error(buffer.str());
             }
 
@@ -1347,7 +1347,7 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
         }
 
         if (response.images.empty()) {
-            VIAM_SDK_LOG(error) << "[get_images] error: no camera sources matched the filter";
+            VIAM_RESOURCE_LOG(error) << "[get_images] error: no camera sources matched the filter";
             return response;
         }
 
@@ -1357,7 +1357,7 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
 
         if (colorTS > 0 && depthTS > 0) {
             if (colorTS != depthTS) {
-                VIAM_SDK_LOG(info) << "color and depth timestamps differ, defaulting to "
+                VIAM_RESOURCE_LOG(info) << "color and depth timestamps differ, defaulting to "
                                       "older of the two"
                                    << "color timestamp was " << colorTS << " depth timestamp was " << depthTS;
             }
@@ -1371,10 +1371,10 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
 
         std::chrono::microseconds latestTimestamp(timestamp);
         response.metadata.captured_at = vsdk::time_pt{std::chrono::duration_cast<std::chrono::nanoseconds>(latestTimestamp)};
-        VIAM_SDK_LOG(debug) << "[get_images] end";
+        VIAM_RESOURCE_LOG(debug) << "[get_images] end";
         return response;
     } catch (const std::exception& e) {
-        VIAM_SDK_LOG(error) << "[get_images] error: " << e.what();
+        VIAM_RESOURCE_LOG(error) << "[get_images] error: " << e.what();
         throw std::runtime_error("failed to create images: " + std::string(e.what()));
     }
 }
@@ -1411,14 +1411,14 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
                         dev->started = false;
                     }
 
-                    VIAM_SDK_LOG(info) << "Updating device firmware...";
+                    VIAM_RESOURCE_LOG(info) << "Updating device firmware...";
                     try {
                         updateFirmware(dev, ob_ctx_);
                         firmware_version_ = minFirmwareVer;
                     } catch (const std::exception& e) {
                         std::ostringstream buffer;
                         buffer << "firmware update failed: " << e.what();
-                        VIAM_SDK_LOG(error) << buffer.str();
+                        VIAM_RESOURCE_LOG(error) << buffer.str();
                         resp.emplace(firmware_key, buffer.str());
                         dev->pipe->start(dev->config, frameCallback(serial_number));
                         dev->started = true;
@@ -1433,7 +1433,7 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
                     return resp;
                 } else if (key == "dump_pcl_files") {
                     if (!value.is_a<bool>()) {
-                        VIAM_SDK_LOG(error) << "[do_command] dump_pcl_files: expected bool, got " << value.kind();
+                        VIAM_RESOURCE_LOG(error) << "[do_command] dump_pcl_files: expected bool, got " << value.kind();
                         return vsdk::ProtoStruct{{"error", "expected bool"}};
                     }
                     dev->dumpPCLFiles = value.get_unchecked<bool>();
@@ -1476,9 +1476,9 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
             }
         }  // unlock devices_by_serial_mu_
         if (call_get_properties) {
-            VIAM_SDK_LOG(info) << "[do_command] calling get_properties";
+            VIAM_RESOURCE_LOG(info) << "[do_command] calling get_properties";
             auto const props = get_properties();
-            VIAM_SDK_LOG(info) << "[do_command] get_properties called";
+            VIAM_RESOURCE_LOG(info) << "[do_command] get_properties called";
             vsdk::ProtoStruct resp;
             resp["supports_pcd"] = props.supports_pcd;
             resp["intrinsic_parameters"] = vsdk::ProtoStruct{{"width_px", props.intrinsic_parameters.width_px},
@@ -1495,18 +1495,18 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
             }
             distortion_params["parameters"] = viam::sdk::ProtoValue(proto_params);
             resp["distortion_parameters"] = distortion_params;
-            VIAM_SDK_LOG(info) << "[do_command] get_properties returning";
+            VIAM_RESOURCE_LOG(info) << "[do_command] get_properties returning";
             return resp;
         }
     } catch (const std::exception& e) {
-        VIAM_SDK_LOG(error) << service_name << ": exception caught: " << e.what();
+        VIAM_RESOURCE_LOG(error) << service_name << ": exception caught: " << e.what();
     }
     return vsdk::ProtoStruct{};
 }
 
 vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const vsdk::ProtoStruct& extra) {
     try {
-        VIAM_SDK_LOG(debug) << "[get_point_cloud] start";
+        VIAM_RESOURCE_LOG(debug) << "[get_point_cloud] start";
         std::string serial_number;
         {
             const std::lock_guard<std::mutex> lock(serial_number_mu_);
@@ -1600,12 +1600,12 @@ vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const v
                 if (std::filesystem::exists(dir_path) && std::filesystem::is_directory(dir_path)) {
                     outfile_name << viam_module_data << "/pointcloud_" << timestamp << ".pcd";
                 } else {
-                    VIAM_SDK_LOG(warn) << "VIAM_MODULE_DATA is set to " << viam_module_data
+                    VIAM_RESOURCE_LOG(warn) << "VIAM_MODULE_DATA is set to " << viam_module_data
                                        << " but is not a valid directory, using current working directory to store PCD file";
                     outfile_name << "pointcloud_" << timestamp << ".pcd";
                 }
             } else {
-                VIAM_SDK_LOG(warn) << "VIAM_MODULE_DATA is not set, using current working directory to store PCD file";
+                VIAM_RESOURCE_LOG(warn) << "VIAM_MODULE_DATA is not set, using current working directory to store PCD file";
                 outfile_name << "pointcloud_" << timestamp << ".pcd";
             }
             std::ofstream outfile(outfile_name.str(), std::ios::out | std::ios::binary);
@@ -1615,13 +1615,13 @@ vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const v
             std::filesystem::path absolute_path = std::filesystem::absolute(file_path);
             std::string absolute_path_str = absolute_path.string();
             outfile.close();
-            VIAM_SDK_LOG(info) << "[get_point_cloud] wrote PCD to location: " << absolute_path_str;
+            VIAM_RESOURCE_LOG(info) << "[get_point_cloud] wrote PCD to location: " << absolute_path_str;
         }
 
-        VIAM_SDK_LOG(debug) << "[get_point_cloud] end";
+        VIAM_RESOURCE_LOG(debug) << "[get_point_cloud] end";
         return vsdk::Camera::point_cloud{kPcdMimeType, data};
     } catch (const std::exception& e) {
-        VIAM_SDK_LOG(error) << "[get_point_cloud] error: " << e.what();
+        VIAM_RESOURCE_LOG(error) << "[get_point_cloud] error: " << e.what();
         throw std::runtime_error("failed to create pointcloud: " + std::string(e.what()));
     }
 }
@@ -1844,7 +1844,7 @@ void deviceChangedCallback(const std::shared_ptr<ob::DeviceList> removedList, co
             }
         }
     } catch (ob::Error& e) {
-        std::cerr << "setDeviceChangedCallback\n"
+        VIAM_SDK_LOG(error) << "setDeviceChangedCallback\n"
                   << "function:" << e.getFunction() << "\nargs:" << e.getArgs() << "\nname:" << e.getName() << "\nmessage:" << e.what()
                   << "\ntype:" << e.getExceptionType() << std::endl;
     }
@@ -1853,16 +1853,70 @@ void deviceChangedCallback(const std::shared_ptr<ob::DeviceList> removedList, co
 void startOrbbecSDK(ob::Context& ctx) {
     ctx.setDeviceChangedCallback(deviceChangedCallback);
 
-    std::shared_ptr<ob::DeviceList> devList = ctx.queryDeviceList();
-    int devCount = devList->getCount();
-    for (size_t i = 0; i < devCount; i++) {
-        if (i == 0) {
-            VIAM_SDK_LOG(info) << "devCount: " << devCount << "\n";
+    // Enable network device enumeration for Ethernet cameras (like Gemini 335Le)
+    try {
+        ctx.enableNetDeviceEnumeration(true);
+        VIAM_SDK_LOG(info) << "Enabled network device enumeration for Ethernet cameras";
+    } catch (ob::Error& e) {
+        VIAM_SDK_LOG(warn) << "Failed to enable network device enumeration: " << e.what();
+    } catch (const std::exception& e) {
+        VIAM_SDK_LOG(warn) << "Failed to enable network device enumeration: " << e.what();
+    }
+
+    try {
+        // Use SDK's native device discovery (works for both USB and network devices)
+        std::shared_ptr<ob::DeviceList> devList = ctx.queryDeviceList();
+        int devCount = devList->getCount();
+        
+        if (devCount == 0) {
+            VIAM_SDK_LOG(warn) << "No Orbbec devices found";
+            return;
         }
-        std::shared_ptr<ob::Device> dev = devList->getDevice(i);
-        std::shared_ptr<ob::DeviceInfo> info = dev->getDeviceInfo();
-        printDeviceInfo(info);
-        registerDevice(info->getSerialNumber(), dev);
+        
+        VIAM_SDK_LOG(info) << "Found " << devCount << " Orbbec devices";
+        
+        for (size_t i = 0; i < devCount; i++) {
+            try {
+                // Get device information from DeviceList without triggering USB control transfers
+                std::string deviceName = devList->name(i);
+                std::string serialNumber = devList->serialNumber(i);
+                std::string connectionType = devList->connectionType(i);
+                std::string ipAddress = devList->ipAddress(i);
+
+                std::stringstream deviceInfoString;
+                deviceInfoString << "Device " << (i + 1) << " - Name: " << deviceName 
+                                 << ", Serial: " << serialNumber 
+                                 << ", Connection: " << connectionType;
+                if(!ipAddress.empty()) {
+                    deviceInfoString << ", IP: " << ipAddress;
+                }
+                VIAM_SDK_LOG(info) << deviceInfoString.str();
+                
+                // Only create device if we can get the serial number
+                if (!serialNumber.empty()) {
+                    std::shared_ptr<ob::Device> dev = devList->getDevice(i);
+                    registerDevice(serialNumber, dev);
+                } else {
+                    VIAM_SDK_LOG(warn) << "Skipping device " << (i + 1) << " - no serial number available";
+                }
+            } catch (ob::Error& deviceError) {
+                VIAM_SDK_LOG(warn) << "Failed to process device " << (i + 1) << ": " << deviceError.what();
+                // Continue with other devices even if one fails
+            }
+        }
+    } catch (ob::Error& e) {
+        VIAM_SDK_LOG(error) << "Failed to query Orbbec devices: " << e.what() 
+                           << " (function: " << e.getFunction() 
+                           << ", args: " << e.getArgs() 
+                           << ", name: " << e.getName() 
+                           << ", type: " << e.getExceptionType() << ")";
+        VIAM_SDK_LOG(warn) << "Continuing without Orbbec devices - check network connectivity for Ethernet cameras or USB connection for USB cameras";
+    } catch (const std::exception& e) {
+        VIAM_SDK_LOG(error) << "Failed to query Orbbec devices: " << e.what();
+        VIAM_SDK_LOG(warn) << "Continuing without Orbbec devices - check network connectivity for Ethernet cameras or USB connection for USB cameras";
+    } catch (...) {
+        VIAM_SDK_LOG(error) << "Failed to query Orbbec devices: unknown error";
+        VIAM_SDK_LOG(warn) << "Continuing without Orbbec devices - check network connectivity for Ethernet cameras or USB connection for USB cameras";
     }
 }
 // ORBBEC SDK DEVICE REGISTRY END
