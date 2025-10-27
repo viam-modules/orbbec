@@ -57,8 +57,20 @@ std::vector<vsdk::ResourceConfig> OrbbecDiscovery::discover_resources(const vsdk
                 vsdk::ProtoStruct attributes;
                 attributes.emplace("serial_number", serialNumber);
 
+                // Detect model and create appropriate resource
+                std::string viamModelSuffix;
+                try {
+                    const auto& modelConfig = orbbec::OrbbecModelConfig::forDevice(deviceName);
+                    viamModelSuffix = modelConfig.viam_model_suffix;
+                } catch (const std::runtime_error& e) {
+                    VIAM_RESOURCE_LOG(warn) << "Skipping unsupported camera: " << deviceName;
+                    continue;
+                }
+
                 vsdk::ResourceConfig config(
-                    "camera", std::move(name.str()), "viam", attributes, "rdk:component:camera", orbbec::Orbbec::model, vsdk::log_level::info);
+                    "camera", std::move(name.str()), "viam", attributes, "rdk:component:camera", 
+                    vsdk::Model("viam", "orbbec", viamModelSuffix),
+                    vsdk::log_level::info);
                 configs.push_back(config);
                 
                 VIAM_RESOURCE_LOG(info) << "Successfully configured device " << (i + 1) << " with serial: " << serialNumber;

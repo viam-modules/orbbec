@@ -96,6 +96,20 @@ struct ObResourceConfig {
     }
 };
 
+struct OrbbecModelConfig {
+    std::string model_name;              // "Astra 2" or "Gemini 335Le"
+    std::string viam_model_suffix;       // "astra2" or "gemini_335le"
+    Resolution default_color_resolution;
+    Resolution default_depth_resolution;
+    std::optional<std::string> firmware_url;
+    std::string min_firmware_version;
+    bool is_ethernet;
+    std::map<Resolution, std::set<Resolution, std::greater<Resolution>>, std::greater<Resolution>> color_to_depth_supported_resolutions;
+    
+    // Get config for a device name
+    static const OrbbecModelConfig& forDevice(const std::string& device_name);
+};
+
 struct ViamOBDevice {
     ~ViamOBDevice() {
         std::cout << "deleting ViamOBDevice " << serial_number << "\n";
@@ -126,23 +140,22 @@ class Orbbec final : public viam::sdk::Camera, public viam::sdk::Reconfigurable 
     point_cloud get_point_cloud(std::string mime_type, const viam::sdk::ProtoStruct& extra) override;
     properties get_properties() override;
     std::vector<viam::sdk::GeometryConfig> get_geometries(const viam::sdk::ProtoStruct& extra) override;
-    static std::vector<std::string> validate(viam::sdk::ResourceConfig cfg);
+    static std::vector<std::string> validateAstra2(viam::sdk::ResourceConfig cfg);
+    static std::vector<std::string> validateGemini335Le(viam::sdk::ResourceConfig cfg);
     static viam::sdk::GeometryConfig geometry;
-    static viam::sdk::Model model;
+    static viam::sdk::Model model_astra2;
+    static viam::sdk::Model model_gemini_335le;
     static const std::unordered_set<std::string> supported_color_formats;
     static const std::unordered_set<std::string> supported_depth_formats;
     static const std::string default_color_format;
     static const std::string default_depth_format;
-    static const Resolution default_color_resolution;
-    static const Resolution default_depth_resolution;
-    static const std::map<Resolution, std::set<Resolution, std::greater<Resolution>>, std::greater<Resolution>>
-        color_to_depth_supported_resolutions;
 
    private:
     std::shared_ptr<ob::Context> ob_ctx_;
     std::string firmware_version_;
     std::mutex serial_number_mu_;
     std::string serial_number_;
+    const OrbbecModelConfig* model_config_;
     static std::unique_ptr<ObResourceConfig> configure(viam::sdk::Dependencies deps, viam::sdk::ResourceConfig cfg);
     static void validate_sensor(std::pair<std::string, viam::sdk::ProtoValue> const& sensor_pair);
 };
