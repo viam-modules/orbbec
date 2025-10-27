@@ -68,6 +68,7 @@ const float mmToMeterMultiple = 0.001;
 const uint64_t maxFrameAgeUs = 1e6;  // time until a frame is considered stale, in microseconds (equal to 1 sec)
 
 
+//TODO: add supported_color_formats and supported_depth_formats to each model config, default_color_format and default_depth_format to each model config.
 // Model configurations
 namespace {
     const OrbbecModelConfig ASTRA2_CONFIG{
@@ -89,11 +90,14 @@ namespace {
         .model_name = "Gemini 335Le",
         .viam_model_suffix = "gemini_335le",
         .default_color_resolution = {1280, 800},
-        .default_depth_resolution = {848, 530},
+        .default_depth_resolution = {1280, 800},
         .firmware_url = "https://orbbec-debian-repos-aws.s3.amazonaws.com/product/Gemini330_Release_1.6.00.zip",
         .min_firmware_version = "1.5.31",
-        .color_to_depth_supported_resolutions = {{{1280, 800}, {{848, 530}, {424, 265}}},
-                                                 {{640, 400}, {{848, 530}, {424, 265}}}}
+        .color_to_depth_supported_resolutions = {{{1280, 800}, {{1280, 800}, {848, 530}, {640, 400}, {424, 266}, {320, 200}}}, // 16:10 aspect ratio
+                                                 {{848, 530}, {{848, 530}, {640, 400}, {424, 266}, {320, 200}}}, // 16:10 aspect ratio
+                                                 {{640, 400}, {{640, 400}, {424, 266}, {320, 200}}}, // 16:10 aspect ratio
+                                                 {{1280, 720}, {{}}}, // 16:9 aspect ratio
+                                                 {{640, 480}, {{640, 480}}}} // 4:3 aspect ratio
     };
 }
 
@@ -628,13 +632,105 @@ void startDevice(std::string serialNumber, const OrbbecModelConfig* modelConfig)
             // Create the pipeline
             auto config = createHwD2CAlignConfig(search->second->pipe, resolution_opt, format_opt, modelConfig);
             if (config == nullptr) {
-                std::ostringstream buffer;
-                buffer << service_name << ": device with serial number " << serialNumber
-                       << " does not support hardware depth-to-color alignment with the requested parameters: resolution "
-                       << (resolution_opt.has_value() ? resolution_opt->to_string() : "none") << ", "
-                       << (format_opt.has_value() ? format_opt->to_string() : "none") << "\n";
-                VIAM_SDK_LOG(error) << buffer.str();
-                throw std::runtime_error(buffer.str());
+                VIAM_SDK_LOG(warn) << "Device " << serialNumber << " does not support hardware depth-to-color alignment, trying software alignment";
+                
+                // Try to create a config with software alignment that respects user's requested resolution/format
+                try {
+                    auto colorStreamProfiles = search->second->pipe->getStreamProfileList(OB_SENSOR_COLOR);
+                    auto depthStreamProfiles = search->second->pipe->getStreamProfileList(OB_SENSOR_DEPTH);
+                    
+                    if (colorStreamProfiles->getCount() > 0 && depthStreamProfiles->getCount() > 0) {
+                        config = std::make_shared<ob::Config>();
+                        
+                        // Find profiles that match the user's requested resolution and format
+                        auto colorSpCount = colorStreamProfiles->getCount();
+                        auto depthSpCount = depthStreamProfiles->getCount();
+                        
+                        std::shared_ptr<ob::StreamProfile> colorProfile = nullptr;
+                        std::shared_ptr<ob::StreamProfile> depthProfile = nullptr;
+                        
+                        // Look for matching color profile
+                        for (uint32_t i = 0; i < colorSpCount; i++) {
+                            auto profile = colorStreamProfiles->getProfile(i);
+                            auto vsp = profile->as<ob::VideoStreamProfile>();
+                            
+                            bool resolutionMatch = true;
+                            bool formatMatch = true;
+                            
+                            // Check resolution if specified
+                            if (resolution_opt.has_value() && resolution_opt->color_resolution.has_value()) {
+                                resolutionMatch = (vsp->getWidth() == resolution_opt->color_resolution->width &&
+                                                 vsp->getHeight() == resolution_opt->color_resolution->height);
+                            }
+                            
+                            // Check format if specified
+                            if (format_opt.has_value() && format_opt->color_format.has_value()) {
+                                formatMatch = (ob::TypeHelper::convertOBFormatTypeToString(vsp->getFormat()) == format_opt->color_format.value());
+                            }
+                            
+                            if (resolutionMatch && formatMatch) {
+                                colorProfile = profile;
+                                break;
+                            }
+                        }
+                        
+                        // Look for matching depth profile
+                        for (uint32_t i = 0; i < depthSpCount; i++) {
+                            auto profile = depthStreamProfiles->getProfile(i);
+                            auto vsp = profile->as<ob::VideoStreamProfile>();
+                            
+                            bool resolutionMatch = true;
+                            bool formatMatch = true;
+                            
+                            // Check resolution if specified
+                            if (resolution_opt.has_value() && resolution_opt->depth_resolution.has_value()) {
+                                resolutionMatch = (vsp->getWidth() == resolution_opt->depth_resolution->width &&
+                                                 vsp->getHeight() == resolution_opt->depth_resolution->height);
+                            }
+                            
+                            // Check format if specified
+                            if (format_opt.has_value() && format_opt->depth_format.has_value()) {
+                                formatMatch = (ob::TypeHelper::convertOBFormatTypeToString(vsp->getFormat()) == format_opt->depth_format.value());
+                            }
+                            
+                            if (resolutionMatch && formatMatch) {
+                                depthProfile = profile;
+                                break;
+                            }
+                        }
+                        
+                        // If no exact match found, fall back to default profiles
+                        if (!colorProfile) {
+                            colorProfile = colorStreamProfiles->getProfile(0);
+                            VIAM_SDK_LOG(warn) << "No exact color profile match found, using default profile";
+                        }
+                        if (!depthProfile) {
+                            depthProfile = depthStreamProfiles->getProfile(0);
+                            VIAM_SDK_LOG(warn) << "No exact depth profile match found, using default profile";
+                        }
+                        
+                        config->enableStream(colorProfile);
+                        config->enableStream(depthProfile);
+                        config->setAlignMode(ALIGN_D2C_SW_MODE);  // Use software alignment
+                        config->setFrameAggregateOutputMode(OB_FRAME_AGGREGATE_OUTPUT_ALL_TYPE_FRAME_REQUIRE);
+                        
+                        auto colorVsp = colorProfile->as<ob::VideoStreamProfile>();
+                        auto depthVsp = depthProfile->as<ob::VideoStreamProfile>();
+                        VIAM_SDK_LOG(info) << "Using software depth-to-color alignment for device " << serialNumber
+                                          << " with color " << colorVsp->getWidth() << "x" << colorVsp->getHeight()
+                                          << " and depth " << depthVsp->getWidth() << "x" << depthVsp->getHeight();
+                    } else {
+                        throw std::runtime_error("No stream profiles available");
+                    }
+                } catch (const std::exception& e) {
+                    std::ostringstream buffer;
+                    buffer << service_name << ": device with serial number " << serialNumber
+                           << " does not support hardware depth-to-color alignment with the requested parameters: resolution "
+                           << (resolution_opt.has_value() ? resolution_opt->to_string() : "none") << ", "
+                           << (format_opt.has_value() ? format_opt->to_string() : "none") << "\n";
+                    VIAM_SDK_LOG(error) << buffer.str();
+                    throw std::runtime_error(buffer.str());
+                }
             }
             my_dev->config = config;
         }
