@@ -103,8 +103,11 @@ struct OrbbecModelConfig {
     Resolution default_depth_resolution;
     std::optional<std::string> firmware_url;
     std::string min_firmware_version;
-    bool is_ethernet;
     std::map<Resolution, std::set<Resolution, std::greater<Resolution>>, std::greater<Resolution>> color_to_depth_supported_resolutions;
+    std::unordered_set<std::string> supported_color_formats;
+    std::unordered_set<std::string> supported_depth_formats;
+    std::string default_color_format;
+    std::string default_depth_format;
     
     // Get config for a device name
     static const OrbbecModelConfig& forDevice(const std::string& device_name);
@@ -148,10 +151,6 @@ class Orbbec final : public viam::sdk::Camera, public viam::sdk::Reconfigurable 
     static viam::sdk::GeometryConfig geometry;
     static viam::sdk::Model model_astra2;
     static viam::sdk::Model model_gemini_335le;
-    static const std::unordered_set<std::string> supported_color_formats;
-    static const std::unordered_set<std::string> supported_depth_formats;
-    static const std::string default_color_format;
-    static const std::string default_depth_format;
 
    private:
     std::shared_ptr<ob::Context> ob_ctx_;
@@ -160,7 +159,13 @@ class Orbbec final : public viam::sdk::Camera, public viam::sdk::Reconfigurable 
     std::string serial_number_;
     const OrbbecModelConfig* model_config_;
     static std::unique_ptr<ObResourceConfig> configure(viam::sdk::Dependencies deps, viam::sdk::ResourceConfig cfg);
-    static void validate_sensor(std::pair<std::string, viam::sdk::ProtoValue> const& sensor_pair);
+    static void validate_sensor(std::pair<std::string, viam::sdk::ProtoValue> const& sensor_pair, const OrbbecModelConfig& modelConfig);
+    
+    // Create a config for hardware depth-to-color alignment
+    static std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline> pipe,
+                                                              std::optional<DeviceResolution> deviceRes,
+                                                              std::optional<DeviceFormat> deviceFormat,
+                                                              const OrbbecModelConfig& modelConfig);
 };
 
 }  // namespace orbbec

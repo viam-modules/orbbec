@@ -50,10 +50,6 @@ namespace vsdk = ::viam::sdk;
 
 vsdk::Model Orbbec::model_astra2("viam", "orbbec", "astra2");
 vsdk::Model Orbbec::model_gemini_335le("viam", "orbbec", "gemini_335le");
-std::unordered_set<std::string> const Orbbec::supported_color_formats{"RGB", "MJPG"};
-std::unordered_set<std::string> const Orbbec::supported_depth_formats{"Y16"};
-std::string const Orbbec::default_color_format = "MJPG";
-std::string const Orbbec::default_depth_format = "Y16";
 
 // CONSTANTS BEGIN
 const std::string kColorSourceName = "color";
@@ -68,7 +64,6 @@ const float mmToMeterMultiple = 0.001;
 const uint64_t maxFrameAgeUs = 1e6;  // time until a frame is considered stale, in microseconds (equal to 1 sec)
 
 
-//TODO: add supported_color_formats and supported_depth_formats to each model config, default_color_format and default_depth_format to each model config.
 // Model configurations
 namespace {
     const OrbbecModelConfig ASTRA2_CONFIG{
@@ -83,7 +78,11 @@ namespace {
                                                  {{1280, 720}, {{1600, 1200}, {800, 600}, {400, 300}}},
                                                  {{800, 600}, {{800, 600}, {400, 300}}},
                                                  {{640, 480}, {{800, 600}, {400, 300}}},
-                                                 {{640, 360}, {{800, 600}, {400, 300}}}}
+                                                 {{640, 360}, {{800, 600}, {400, 300}}}},
+        .supported_color_formats = {"RGB", "MJPG"},
+        .supported_depth_formats = {"Y16"},
+        .default_color_format = "MJPG",
+        .default_depth_format = "Y16"
     };
     
     const OrbbecModelConfig GEMINI_335LE_CONFIG{
@@ -96,7 +95,11 @@ namespace {
         .color_to_depth_supported_resolutions = {{{1280, 800}, {{1280, 800}, {848, 530}, {640, 400}, {424, 266}, {320, 200}}}, // 16:10 aspect ratio
                                                  {{848, 530}, {{848, 530}, {640, 400}, {424, 266}, {320, 200}}}, // 16:10 aspect ratio
                                                  {{640, 400}, {{640, 400}, {424, 266}, {320, 200}}}, // 16:10 aspect ratio
-                                                 {{640, 480}, {{640, 480}}}} // 4:3 aspect ratio
+                                                 {{640, 480}, {{640, 480}}}}, // 4:3 aspect ratio
+        .supported_color_formats = {"MJPG"},
+        .supported_depth_formats = {"Y16"},
+        .default_color_format = "MJPG",
+        .default_depth_format = "Y16"
     };
 }
 
@@ -207,17 +210,18 @@ std::string formatError(Args&&... args) {
 
 // Validate color frame format and timestamp
 void validateColorFrame(std::shared_ptr<ob::Frame> color, 
-                       const std::optional<DeviceFormat>& device_format_opt) {
+                       const std::optional<DeviceFormat>& device_format_opt,
+                       const OrbbecModelConfig& modelConfig) {
     if (color == nullptr) {
         throw std::runtime_error("no color frame");
     }
     
     // Format validation
     std::string frameFormat = ob::TypeHelper::convertOBFormatTypeToString(color->getFormat());
-    if (Orbbec::supported_color_formats.count(frameFormat) == 0) {
+    if (modelConfig.supported_color_formats.count(frameFormat) == 0) {
         std::ostringstream buffer;
         buffer << "unsupported color format: " << frameFormat << ", supported: ";
-        for (const auto& fmt : Orbbec::supported_color_formats) {
+        for (const auto& fmt : modelConfig.supported_color_formats) {
             buffer << fmt << " ";
         }
         throw std::runtime_error(buffer.str());
@@ -237,25 +241,26 @@ void validateColorFrame(std::shared_ptr<ob::Frame> color,
                                                 device_format_opt->color_format.value(), 
                                                 " got ", frameFormat));
         }
-    } else if (frameFormat != Orbbec::default_color_format) {
+    } else if (frameFormat != modelConfig.default_color_format) {
         throw std::runtime_error(formatError("color format mismatch, expected ", 
-                                            Orbbec::default_color_format, " got ", frameFormat));
+                                            modelConfig.default_color_format, " got ", frameFormat));
     }
 }
 
 // Validate depth frame format and timestamp
 void validateDepthFrame(std::shared_ptr<ob::Frame> depth,
-                       const std::optional<DeviceFormat>& device_format_opt) {
+                       const std::optional<DeviceFormat>& device_format_opt,
+                       const OrbbecModelConfig& modelConfig) {
     if (depth == nullptr) {
         throw std::runtime_error("no depth frame");
     }
     
     // Format validation
     std::string frameFormat = ob::TypeHelper::convertOBFormatTypeToString(depth->getFormat());
-    if (Orbbec::supported_depth_formats.count(frameFormat) == 0) {
+    if (modelConfig.supported_depth_formats.count(frameFormat) == 0) {
         std::ostringstream buffer;
         buffer << "unsupported depth format: " << frameFormat << ", supported: ";
-        for (const auto& fmt : Orbbec::supported_depth_formats) {
+        for (const auto& fmt : modelConfig.supported_depth_formats) {
             buffer << fmt << " ";
         }
         throw std::runtime_error(buffer.str());
@@ -275,9 +280,9 @@ void validateDepthFrame(std::shared_ptr<ob::Frame> depth,
                                                 device_format_opt->depth_format.value(), 
                                                 " got ", frameFormat));
         }
-    } else if (frameFormat != Orbbec::default_depth_format) {
+    } else if (frameFormat != modelConfig.default_depth_format) {
         throw std::runtime_error(formatError("depth format mismatch, expected ", 
-                                            Orbbec::default_depth_format, " got ", frameFormat));
+                                            modelConfig.default_depth_format, " got ", frameFormat));
     }
 }
 
@@ -433,7 +438,7 @@ bool checkIfSupportHWD2CAlign(std::shared_ptr<ob::Pipeline> pipe,
 std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline> pipe,
                                                    std::optional<DeviceResolution> deviceRes,
                                                    std::optional<DeviceFormat> deviceFormat,
-                                                   const OrbbecModelConfig* modelConfig) {
+                                                   const OrbbecModelConfig& modelConfig) {
     auto colorStreamProfiles = pipe->getStreamProfileList(OB_SENSOR_COLOR);
     auto depthStreamProfiles = pipe->getStreamProfileList(OB_SENSOR_DEPTH);
     if (deviceRes.has_value()) {
@@ -455,7 +460,7 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
             if (ob::TypeHelper::convertOBFormatTypeToString(colorVsp->getFormat()) != deviceFormat->color_format.value()) {
                 continue;
             }
-        } else if (ob::TypeHelper::convertOBFormatTypeToString(colorVsp->getFormat()) != Orbbec::default_color_format) {
+        } else if (ob::TypeHelper::convertOBFormatTypeToString(colorVsp->getFormat()) != modelConfig.default_color_format) {
             continue;
         }
 
@@ -464,8 +469,8 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
                 colorVsp->getHeight() != deviceRes->color_resolution->height) {
                 continue;
             }
-        } else if (colorVsp->getWidth() != modelConfig->default_color_resolution.width ||
-                   colorVsp->getHeight() != modelConfig->default_color_resolution.height) {
+        } else if (colorVsp->getWidth() != modelConfig.default_color_resolution.width ||
+                   colorVsp->getHeight() != modelConfig.default_color_resolution.height) {
             continue;
         }
 
@@ -483,7 +488,7 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
                 if (ob::TypeHelper::convertOBFormatTypeToString(depthVsp->getFormat()) != deviceFormat->depth_format.value()) {
                     continue;
                 }
-            } else if (ob::TypeHelper::convertOBFormatTypeToString(depthVsp->getFormat()) != Orbbec::default_depth_format) {
+            } else if (ob::TypeHelper::convertOBFormatTypeToString(depthVsp->getFormat()) != modelConfig.default_depth_format) {
                 continue;
             }
 
@@ -492,8 +497,8 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
                     depthVsp->getHeight() != deviceRes->depth_resolution->height) {
                     continue;
                 }
-            } else if (depthVsp->getWidth() != modelConfig->default_depth_resolution.width ||
-                       depthVsp->getHeight() != modelConfig->default_depth_resolution.height) {
+            } else if (depthVsp->getWidth() != modelConfig.default_depth_resolution.width ||
+                       depthVsp->getHeight() != modelConfig.default_depth_resolution.height) {
                 continue;
             }
 
@@ -629,7 +634,7 @@ void startDevice(std::string serialNumber, const OrbbecModelConfig* modelConfig)
                            << (format_opt.has_value() ? format_opt->to_string() : "not specifed");
         if (resolution_opt.has_value() || format_opt.has_value()) {
             // Create the pipeline
-            auto config = createHwD2CAlignConfig(search->second->pipe, resolution_opt, format_opt, modelConfig);
+            auto config = createHwD2CAlignConfig(search->second->pipe, resolution_opt, format_opt, *modelConfig);
             if (config == nullptr) {
                 VIAM_SDK_LOG(warn) << "Device " << serialNumber << " does not support hardware depth-to-color alignment, trying software alignment";
                 
@@ -811,7 +816,7 @@ void stopDevice(std::string serialNumber, std::string resourceName) {
 // HELPERS END
 
 // RESOURCE BEGIN
-void Orbbec::validate_sensor(std::pair<std::string, viam::sdk::ProtoValue> const& sensor_pair) {
+void Orbbec::validate_sensor(std::pair<std::string, viam::sdk::ProtoValue> const& sensor_pair, const OrbbecModelConfig& modelConfig) {
     auto const& sensor_type = sensor_pair.first;
     auto const& sensor = sensor_pair.second.get<viam::sdk::ProtoStruct>();
     if (!sensor) {
@@ -842,10 +847,10 @@ void Orbbec::validate_sensor(std::pair<std::string, viam::sdk::ProtoValue> const
         throw std::invalid_argument("sensor format must be a string");
     }
     if (sensor_type == "color") {
-        if (!supported_color_formats.count(*format)) {
+        if (!modelConfig.supported_color_formats.count(*format)) {
             std::ostringstream buffer;
             buffer << "color sensor format must be one of: ";
-            for (const auto& type : supported_color_formats) {
+            for (const auto& type : modelConfig.supported_color_formats) {
                 buffer << type << " ";
             }
             VIAM_SDK_LOG(error) << buffer.str();
@@ -853,10 +858,10 @@ void Orbbec::validate_sensor(std::pair<std::string, viam::sdk::ProtoValue> const
         }
 
     } else if (sensor_type == "depth") {
-        if (!supported_depth_formats.count(*format)) {
+        if (!modelConfig.supported_depth_formats.count(*format)) {
             std::ostringstream buffer;
             buffer << "depth sensor format must be one of: ";
-            for (const auto& type : supported_depth_formats) {
+            for (const auto& type : modelConfig.supported_depth_formats) {
                 buffer << type << " ";
             }
             VIAM_SDK_LOG(error) << buffer.str();
@@ -891,7 +896,7 @@ std::vector<std::string> Orbbec::validateAstra2(vsdk::ResourceConfig cfg) {
         }
         if (sensors) {
             for (auto const& sensor_pair : *sensors) {
-                validate_sensor(sensor_pair);
+                validate_sensor(sensor_pair, ASTRA2_CONFIG);
             }
         }
         auto color_width_uint32 =
@@ -951,7 +956,7 @@ std::vector<std::string> Orbbec::validateGemini335Le(vsdk::ResourceConfig cfg) {
         }
         if (sensors) {
             for (auto const& sensor_pair : *sensors) {
-                validate_sensor(sensor_pair);
+                validate_sensor(sensor_pair, GEMINI_335LE_CONFIG);
             }
         }
         auto color_width_uint32 =
@@ -1180,7 +1185,7 @@ vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::Pro
             res_format_opt = config_by_serial().at(serial_number).device_format;
         }
 
-        validateColorFrame(color, res_format_opt);
+        validateColorFrame(color, res_format_opt, *model_config_);
         vsdk::Camera::raw_image response = encodeColorFrame(color);
         VIAM_RESOURCE_LOG(debug) << "[get_image] end";
         return response;
@@ -1332,7 +1337,7 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
 
         if (should_process_color) {
             color = fs->getFrame(OB_FRAME_COLOR);
-            validateColorFrame(color, device_format_opt);
+            validateColorFrame(color, device_format_opt, *model_config_);
             
             vsdk::Camera::raw_image color_image = encodeColorFrame(color);
             response.images.emplace_back(std::move(color_image));
@@ -1340,7 +1345,7 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
 
         if (should_process_depth) {
             depth = fs->getFrame(OB_FRAME_DEPTH);
-            validateDepthFrame(depth, device_format_opt);
+            validateDepthFrame(depth, device_format_opt, *model_config_);
 
             unsigned char* depthData = (unsigned char*)depth->getData();
             if (depthData == nullptr) {
@@ -1409,6 +1414,11 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
             for (auto const& [key, value] : command) {
                 if (key == firmware_key) {
                     vsdk::ProtoStruct resp = viam::sdk::ProtoStruct{};
+                    if(model_config_->model_name == "Gemini 335Le") {
+                        VIAM_RESOURCE_LOG(error) << "[do_command] firmware update not supported for this model";
+                        resp.emplace(firmware_key, std::string("firmware update not supported for this model"));
+                        return resp;
+                    }
                     if (firmware_version_.find(model_config_->min_firmware_version) != std::string::npos) {
                         std::ostringstream buffer;
                         buffer << "device firmware already on version " << model_config_->min_firmware_version;
@@ -1541,8 +1551,8 @@ vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const v
         std::shared_ptr<ob::Frame> color = fs->getFrame(OB_FRAME_COLOR);
         std::shared_ptr<ob::Frame> depth = fs->getFrame(OB_FRAME_DEPTH);
 
-        validateColorFrame(color, std::nullopt);
-        validateDepthFrame(depth, std::nullopt);
+        validateColorFrame(color, std::nullopt, *model_config_);
+        validateDepthFrame(depth, std::nullopt, *model_config_);
 
         std::uint8_t* colorData = (std::uint8_t*)color->getData();
         if (colorData == nullptr) {
@@ -1669,7 +1679,7 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
     std::shared_ptr<ob::DeviceInfo> deviceInfo = dev->getDeviceInfo();
     const OrbbecModelConfig* modelConfig = &OrbbecModelConfig::forDevice(deviceInfo->name());
     
-    std::shared_ptr<ob::Config> config = createHwD2CAlignConfig(pipe, std::nullopt, std::nullopt, modelConfig);
+    std::shared_ptr<ob::Config> config = createHwD2CAlignConfig(pipe, std::nullopt, std::nullopt, *modelConfig);
     if (config == nullptr) {
         VIAM_SDK_LOG(warn) << "Device " << serialNumber << " does not support hardware depth-to-color alignment, trying software alignment";
         
