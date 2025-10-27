@@ -195,7 +195,7 @@ uint64_t timeSinceFrameUs(uint64_t nowUs, uint64_t imageTimeUs) {
     if (nowUs > imageTimeUs) {
         return nowUs - imageTimeUs;
     }
-    return imageTimeUs - nowUs;
+    return 0;
 }
 
 namespace {
