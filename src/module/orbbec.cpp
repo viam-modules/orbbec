@@ -699,14 +699,30 @@ void startDevice(std::string serialNumber, const OrbbecModelConfig* modelConfig)
                             }
                         }
                         
-                        // If no exact match found, fall back to default profiles
+                        // If no exact match found, throw an error since user specified requirements
                         if (!colorProfile) {
-                            colorProfile = colorStreamProfiles->getProfile(0);
-                            VIAM_SDK_LOG(warn) << "No exact color profile match found, using default profile";
+                            std::ostringstream buffer;
+                            buffer << service_name << ": device with serial number " << serialNumber
+                                   << " does not support the requested color resolution/format: ";
+                            if (resolution_opt.has_value() && resolution_opt->color_resolution.has_value()) {
+                                buffer << "resolution " << resolution_opt->color_resolution->width << "x" << resolution_opt->color_resolution->height;
+                            }
+                            if (format_opt.has_value() && format_opt->color_format.has_value()) {
+                                buffer << ", format " << format_opt->color_format.value();
+                            }
+                            throw std::runtime_error(buffer.str());
                         }
                         if (!depthProfile) {
-                            depthProfile = depthStreamProfiles->getProfile(0);
-                            VIAM_SDK_LOG(warn) << "No exact depth profile match found, using default profile";
+                            std::ostringstream buffer;
+                            buffer << service_name << ": device with serial number " << serialNumber
+                                   << " does not support the requested depth resolution/format: ";
+                            if (resolution_opt.has_value() && resolution_opt->depth_resolution.has_value()) {
+                                buffer << "resolution " << resolution_opt->depth_resolution->width << "x" << resolution_opt->depth_resolution->height;
+                            }
+                            if (format_opt.has_value() && format_opt->depth_format.has_value()) {
+                                buffer << ", format " << format_opt->depth_format.value();
+                            }
+                            throw std::runtime_error(buffer.str());
                         }
                         
                         config->enableStream(colorProfile);
