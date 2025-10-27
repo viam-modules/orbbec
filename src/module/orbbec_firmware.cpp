@@ -79,7 +79,8 @@ void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev,
     
     for (zip_int64_t i = 0; i < numEntries; i++) {
         const char* name = zip_get_name(zip, i, 0);
-        if (name && std::string(name).substr(std::string(name).length() - 4) == ".bin") {
+        if (name && std::string(name).length() >= 4 &&
+            std::string(name).substr(std::string(name).length() - 4) == ".bin") {
             fileName = name;
             break;
         }
