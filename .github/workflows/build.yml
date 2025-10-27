@@ -84,7 +84,6 @@ jobs:
           python3 -m venv venv && . ./venv/bin/activate
           python3 -m pip install conan
           conan profile detect
-          echo "core:non_interactive = True" >> $(conan config home)/global.conf
           conan remote add viamconan https://viam.jfrog.io/artifactory/api/conan/viamconan
 
       - name: Build package and module
