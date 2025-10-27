@@ -135,6 +135,7 @@ namespace firmware {
             switch (state) {
                 case STAT_VERIFY_SUCCESS:
                     std::cout << "Image file verification success\n";
+                    break;
                 case STAT_FILE_TRANSFER:
                     std::cout << "File transfer in progress\n";
                     break;
