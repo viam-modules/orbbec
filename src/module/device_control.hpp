@@ -86,28 +86,28 @@ inline std::string propertyTypeToString(OBPropertyType type) {
 
 inline std::string distortionTypeToString(OBCameraDistortionModel model) {
     switch (model) {
-            case OB_DISTORTION_NONE:
-                return "NONE";
-                break;
-            case OB_DISTORTION_MODIFIED_BROWN_CONRADY:
-                return "MODIFIED_BROWN_CONRADY";
-                break;
-            case OB_DISTORTION_INVERSE_BROWN_CONRADY:
-                return "INVERSE_BROWN_CONRADY";
-                break;
-            case OB_DISTORTION_BROWN_CONRADY:
-                return "BROWN_CONRADY";
-                break;
-            case OB_DISTORTION_BROWN_CONRADY_K6:
-                return "BROWN_CONRADY_K6";
-                break;
-            case OB_DISTORTION_KANNALA_BRANDT4:
-                return "KANNALA_BRANDT4";
-                break;
-            default:
-                return "UNKNOWN";
-                break;
-        }
+        case OB_DISTORTION_NONE:
+            return "NONE";
+            break;
+        case OB_DISTORTION_MODIFIED_BROWN_CONRADY:
+            return "MODIFIED_BROWN_CONRADY";
+            break;
+        case OB_DISTORTION_INVERSE_BROWN_CONRADY:
+            return "INVERSE_BROWN_CONRADY";
+            break;
+        case OB_DISTORTION_BROWN_CONRADY:
+            return "BROWN_CONRADY";
+            break;
+        case OB_DISTORTION_BROWN_CONRADY_K6:
+            return "BROWN_CONRADY_K6";
+            break;
+        case OB_DISTORTION_KANNALA_BRANDT4:
+            return "KANNALA_BRANDT4";
+            break;
+        default:
+            return "UNKNOWN";
+            break;
+    }
 }
 
 viam::sdk::ProtoStruct getOrbbecSDKVersion(std::string const& command) {

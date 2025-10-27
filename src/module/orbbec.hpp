@@ -97,8 +97,8 @@ struct ObResourceConfig {
 };
 
 struct OrbbecModelConfig {
-    std::string model_name;              // "Astra 2" or "Gemini 335Le"
-    std::string viam_model_suffix;       // "astra2" or "gemini_335le"
+    std::string model_name;         // "Astra 2" or "Gemini 335Le"
+    std::string viam_model_suffix;  // "astra2" or "gemini_335le"
     Resolution default_color_resolution;
     Resolution default_depth_resolution;
     std::optional<std::string> firmware_url;
@@ -108,10 +108,10 @@ struct OrbbecModelConfig {
     std::unordered_set<std::string> supported_depth_formats;
     std::string default_color_format;
     std::string default_depth_format;
-    
+
     // Get config for a device name
     static const OrbbecModelConfig& forDevice(const std::string& device_name);
-    
+
     // Check if a device name is supported
     static bool isSupported(const std::string& device_name);
 };
@@ -160,7 +160,7 @@ class Orbbec final : public viam::sdk::Camera, public viam::sdk::Reconfigurable 
     const OrbbecModelConfig* model_config_;
     static std::unique_ptr<ObResourceConfig> configure(viam::sdk::Dependencies deps, viam::sdk::ResourceConfig cfg);
     static void validate_sensor(std::pair<std::string, viam::sdk::ProtoValue> const& sensor_pair, const OrbbecModelConfig& modelConfig);
-    
+
     // Create a config for hardware depth-to-color alignment
     static std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline> pipe,
                                                               std::optional<DeviceResolution> deviceRes,

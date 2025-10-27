@@ -42,13 +42,12 @@ std::vector<vsdk::ResourceConfig> OrbbecDiscovery::discover_resources(const vsdk
                 std::string ipAddress = devList->ipAddress(i);
 
                 std::stringstream deviceInfoString;
-                deviceInfoString << "Device " << (i + 1) << " - Name: " << deviceName 
-                                 << ", Serial: " << serialNumber 
+                deviceInfoString << "Device " << (i + 1) << " - Name: " << deviceName << ", Serial: " << serialNumber
                                  << ", Connection: " << connectionType;
                 if (!ipAddress.empty()) {
                     deviceInfoString << ", IP: " << ipAddress;
                 }
-                
+
                 VIAM_RESOURCE_LOG(info) << deviceInfoString.str();
 
                 std::ostringstream name;
@@ -67,12 +66,15 @@ std::vector<vsdk::ResourceConfig> OrbbecDiscovery::discover_resources(const vsdk
                     continue;
                 }
 
-                vsdk::ResourceConfig config(
-                    "camera", std::move(name.str()), "viam", attributes, "rdk:component:camera", 
-                    vsdk::Model("viam", "orbbec", viamModelSuffix),
-                    vsdk::log_level::info);
+                vsdk::ResourceConfig config("camera",
+                                            std::move(name.str()),
+                                            "viam",
+                                            attributes,
+                                            "rdk:component:camera",
+                                            vsdk::Model("viam", "orbbec", viamModelSuffix),
+                                            vsdk::log_level::info);
                 configs.push_back(config);
-                
+
                 VIAM_RESOURCE_LOG(info) << "Successfully configured device " << (i + 1) << " with serial: " << serialNumber;
             } catch (ob::Error& deviceError) {
                 VIAM_RESOURCE_LOG(warn) << "Failed to get device info for device " << (i + 1) << ": " << deviceError.what();
@@ -80,11 +82,8 @@ std::vector<vsdk::ResourceConfig> OrbbecDiscovery::discover_resources(const vsdk
             }
         }
     } catch (ob::Error& e) {
-        VIAM_RESOURCE_LOG(error) << "Failed to discover Orbbec devices: " << e.what() 
-                           << " (function: " << e.getFunction() 
-                           << ", args: " << e.getArgs() 
-                           << ", name: " << e.getName() 
-                           << ", type: " << e.getExceptionType() << ")";
+        VIAM_RESOURCE_LOG(error) << "Failed to discover Orbbec devices: " << e.what() << " (function: " << e.getFunction()
+                                 << ", args: " << e.getArgs() << ", name: " << e.getName() << ", type: " << e.getExceptionType() << ")";
         VIAM_RESOURCE_LOG(warn) << "Discovery failed - check network connectivity for Ethernet cameras or USB connection for USB cameras";
     } catch (const std::exception& e) {
         VIAM_RESOURCE_LOG(error) << "Failed to discover Orbbec devices: " << e.what();
@@ -93,7 +92,7 @@ std::vector<vsdk::ResourceConfig> OrbbecDiscovery::discover_resources(const vsdk
         VIAM_RESOURCE_LOG(error) << "Failed to discover Orbbec devices: unknown error";
         VIAM_RESOURCE_LOG(warn) << "Discovery failed - check network connectivity for Ethernet cameras or USB connection for USB cameras";
     }
-    
+
     return configs;
 }
 

@@ -29,5 +29,5 @@ std::string uint16ToHex(uint16_t value);
 // Setup Windows device registry for Orbbec cameras
 void setupWindowsDeviceRegistry(std::shared_ptr<ob::Device> device);
 
-} // namespace windows_registry
-} // namespace orbbec
+}  // namespace windows_registry
+}  // namespace orbbec

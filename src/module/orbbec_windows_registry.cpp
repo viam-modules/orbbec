@@ -16,9 +16,9 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#include <iomanip>
 #include <iostream>
 #include <sstream>
-#include <iomanip>
 #include <stdexcept>
 #include <vector>
 
@@ -131,7 +131,7 @@ void setupWindowsDeviceRegistry(std::shared_ptr<ob::Device> device) {
     }
 }
 
-} // namespace windows_registry
-} // namespace orbbec
+}  // namespace windows_registry
+}  // namespace orbbec
 
-#endif // _WIN32
+#endif  // _WIN32
