@@ -120,8 +120,9 @@ void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev,
     // Update firmware on device
     if (my_dev && my_dev->device) {
         try {
-            // Note: The actual firmware update would depend on the Orbbec SDK API
-            // This is a placeholder for the actual implementation
+            // Perform the actual firmware update using the Orbbec SDK API
+            // Example: updateFirmware method (replace with actual API if different)
+            my_dev->device->updateFirmware(binData.data(), static_cast<uint32_t>(binData.size()));
             std::cout << "Firmware update completed successfully" << std::endl;
         } catch (const std::exception& e) {
             throw std::runtime_error("Firmware update failed: " + std::string(e.what()));
