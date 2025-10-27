@@ -45,7 +45,7 @@ std::vector<vsdk::ResourceConfig> OrbbecDiscovery::discover_resources(const vsdk
                 deviceInfoString << "Device " << (i + 1) << " - Name: " << deviceName 
                                  << ", Serial: " << serialNumber 
                                  << ", Connection: " << connectionType;
-                if(!ipAddress.empty()) {
+                if (!ipAddress.empty()) {
                     deviceInfoString << ", IP: " << ipAddress;
                 }
                 
