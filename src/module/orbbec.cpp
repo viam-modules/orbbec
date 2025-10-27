@@ -1827,7 +1827,7 @@ void startOrbbecSDK(ob::Context& ctx) {
                 deviceInfoString << "Device " << (i + 1) << " - Name: " << deviceName 
                                  << ", Serial: " << serialNumber 
                                  << ", Connection: " << connectionType;
-                if(!ipAddress.empty()) {
+                if (!ipAddress.empty()) {
                     deviceInfoString << ", IP: " << ipAddress;
                 }
                 VIAM_SDK_LOG(info) << deviceInfoString.str();
