@@ -20,6 +20,8 @@
 
 #include <libobsensor/ObSensor.hpp>
 
+#include <viam/sdk/log/logging.hpp>
+
 namespace orbbec {
 
 struct ViamOBDevice;
@@ -32,7 +34,8 @@ size_t writeFileCallback(void* contents, size_t size, size_t nmemb, void* userp)
 // Main firmware update function
 void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev, 
                    std::shared_ptr<ob::Context> ctx,
-                   const std::string& firmware_url);
+                   const std::string& firmware_url,
+                   viam::sdk::LogSource &logger);
 
 } // namespace firmware
 } // namespace orbbec

@@ -25,112 +25,155 @@
 namespace orbbec {
 namespace firmware {
 
-// Callback for writing downloaded data to buffer
-size_t writeFileCallback(void* contents, size_t size, size_t nmemb, void* userp) {
-    size_t realsize = size * nmemb;
-    std::vector<char>* buffer = static_cast<std::vector<char>*>(userp);
-    buffer->insert(buffer->end(), static_cast<char*>(contents), static_cast<char*>(contents) + realsize);
-    return realsize;
-}
-
-void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev, 
-                   std::shared_ptr<ob::Context> ctx,
-                   const std::string& firmware_url) {
-    std::cout << "Starting firmware update from: " << firmware_url << std::endl;
-    
-    // Download firmware file
-    std::vector<char> zipBuffer;
-    
-    CURL* curl = curl_easy_init();
-    if (!curl) {
-        throw std::runtime_error("Failed to initialize CURL");
+    size_t writeFileCallback(void* contents, size_t size, size_t nmemb, void* userp) {
+        auto* buffer = static_cast<std::vector<char>*>(userp);
+        size_t totalSize = size * nmemb;
+        buffer->insert(buffer->end(), static_cast<char*>(contents), static_cast<char*>(contents) + totalSize);
+        return totalSize;
     }
     
-    curl_easy_setopt(curl, CURLOPT_URL, firmware_url.c_str());
-    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeFileCallback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &zipBuffer);
+    template <auto cleanup_fp>
+    struct Cleanup {
+        using pointer_type = std::tuple_element_t<0, boost::callable_traits::args_t<decltype(cleanup_fp)>>;
+        using value_type = std::remove_pointer_t<pointer_type>;
     
-    CURLcode res = curl_easy_perform(curl);
-    curl_easy_cleanup(curl);
-    
-    if (res != CURLE_OK) {
-        throw std::runtime_error("Failed to download firmware: " + std::string(curl_easy_strerror(res)));
-    }
-    
-    std::cout << "Downloaded " << zipBuffer.size() << " bytes" << std::endl;
-    
-    // Extract ZIP file
-    zip_error_t zipError;
-    zip_source_t* src = zip_source_buffer_create(zipBuffer.data(), zipBuffer.size(), 0, &zipError);
-    if (!src) {
-        throw std::runtime_error("Failed to create zip source");
-    }
-    
-    zip_t* zip = zip_open_from_source(src, 0, &zipError);
-    if (!zip) {
-        zip_source_free(src);
-        throw std::runtime_error("Failed to open zip file");
-    }
-    
-    // Find firmware file (assuming it's a .bin file)
-    zip_int64_t numEntries = zip_get_num_entries(zip, 0);
-    std::string fileName;
-    
-    for (zip_int64_t i = 0; i < numEntries; i++) {
-        const char* name = zip_get_name(zip, i, 0);
-        if (name && std::string(name).length() >= 4 &&
-            std::string(name).substr(std::string(name).length() - 4) == ".bin") {
-            fileName = name;
-            break;
+        void operator()(pointer_type p) {
+            if (p != nullptr) {
+                cleanup_fp(p);
+            }
         }
-    }
+    };
     
-    if (fileName.empty()) {
-        zip_close(zip);
-        throw std::runtime_error("No firmware file found in zip");
-    }
+    template <auto cleanup_fp>
+    using CleanupPtr = std::unique_ptr<typename Cleanup<cleanup_fp>::value_type, Cleanup<cleanup_fp>>;
     
-    std::cout << "Found firmware file: " << fileName << std::endl;
+    void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev, std::shared_ptr<ob::Context> ctx, const std::string& firmwareUrl, viam::sdk::LogSource &logger) {
+    // On linux, orbbec reccomends to set libuvc backend for firmware update
+    #if defined(__linux__)
+        ctx->setUvcBackendType(OB_UVC_BACKEND_TYPE_LIBUVC);
+    #endif
     
-    // Extract firmware file
-    zip_stat_t stats;
-    if (zip_stat(zip, fileName.c_str(), 0, &stats) != 0) {
-        zip_close(zip);
-        throw std::runtime_error("Failed to get file stats");
-    }
+        CleanupPtr<curl_easy_cleanup> curl(curl_easy_init());
+        if (!curl) {
+            throw std::invalid_argument("curl easy init failed");
+        }
     
-    zip_file_t* binFile = zip_fopen(zip, fileName.c_str(), 0);
-    if (!binFile) {
-        zip_close(zip);
-        throw std::runtime_error("Failed to open firmware file");
-    }
+        // Download the firmware and write it to a buffer
+        std::vector<char> zipBuffer;
+        curl_easy_setopt(curl.get(), CURLOPT_URL, firmwareUrl.c_str());
+        curl_easy_setopt(curl.get(), CURLOPT_FOLLOWLOCATION, 1L);
+        curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, writeFileCallback);
+        curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, &zipBuffer);
+        CURLcode res = curl_easy_perform(curl.get());
+        if (res != CURLE_OK) {
+            std::ostringstream buffer;
+            buffer << "curl early perform failed: " << curl_easy_strerror(res);
+            throw std::invalid_argument(buffer.str());
+        }
     
-    std::vector<char> binData(stats.size);
-    zip_int64_t bytesRead = zip_fread(binFile, binData.data(), stats.size);
-    zip_fclose(binFile);
-    zip_close(zip);
+        std::vector<uint8_t> binData;
+        zip_error_t ziperror;
+        zip_error_init(&ziperror);
     
-    if (bytesRead != static_cast<zip_int64_t>(stats.size)) {
-        throw std::runtime_error("Failed to read complete firmware file");
-    }
+        zip_source_t* src = zip_source_buffer_create(zipBuffer.data(), zipBuffer.size(), 0, &ziperror);
+        if (!src) {
+            std::ostringstream buffer;
+            buffer << "failed to create zip buffer: " << zip_error_strerror(&ziperror);
+            throw std::runtime_error(buffer.str());
+        }
     
-    std::cout << "Extracted " << bytesRead << " bytes of firmware data" << std::endl;
+        // Ensure src cleanup if zip_open fails
+        CleanupPtr<zip_source_free> srcCleanup(src);
     
-    // Update firmware on device
-    if (my_dev && my_dev->device) {
+        // If this succeeds, zip takes ownership of src, so src will be freed when zip_close is called.
+        zip_t* zip = zip_open_from_source(src, 0, &ziperror);
+        if (!zip) {
+            std::ostringstream buffer;
+            buffer << "failed to open zip from source: " << zip_error_strerror(&ziperror);
+            throw std::runtime_error(buffer.str());
+        }
+    
+        srcCleanup.release();
+        CleanupPtr<zip_close> zipCleanup(zip);
+    
+        if (zip_get_num_entries(zip, 0) != 1) {
+            throw std::runtime_error("unexpected number of files in firmware zip");
+        }
+    
+        const char* fileName = zip_get_name(zip, 0, 0);
+        if (!fileName) {
+            throw std::runtime_error("couldn't get bin file name");
+        }
+    
+        CleanupPtr<zip_fclose> binFile(zip_fopen(zip, fileName, 0));
+        if (!binFile) {
+            throw std::runtime_error("failed to open the firmware bin file");
+        }
+    
+        zip_stat_t stats;
+        zip_stat_init(&stats);
+        if (zip_stat(zip, fileName, 0, &stats) != 0) {
+            throw std::invalid_argument("failed to stat file");
+        }
+    
+        binData.resize(stats.size);
+        zip_int64_t bytesRead = zip_fread(binFile.get(), binData.data(), stats.size);
+        if (bytesRead == -1) {
+            zip_error_t* err = zip_file_get_error(binFile.get());
+            std::ostringstream buffer;
+            buffer << "failed to read bin: " << zip_error_strerror(err);
+            throw std::runtime_error(buffer.str());
+        }
+    
+        if (bytesRead != stats.size) {
+            std::ostringstream buffer;
+            buffer << "failed to fully read binary file, file size: " << stats.size << "bytes read: " << bytesRead;
+            throw std::runtime_error(buffer.str());
+        }
+    
+        auto firmwareUpdateCallback = [](OBFwUpdateState state, const char* message, uint8_t percent) {
+            switch (state) {
+                case STAT_VERIFY_SUCCESS:
+                    std::cout << "Image file verification success\n";
+                case STAT_FILE_TRANSFER:
+                    std::cout << "File transfer in progress\n";
+                    break;
+                case STAT_DONE:
+                    std::cout << "Update completed\n";
+                    break;
+                case STAT_IN_PROGRESS:
+                    std::cout << "Upgrade in progress\n";
+                    break;
+                case STAT_START:
+                    std::cout << "Starting the upgrade\n";
+                    break;
+                case STAT_VERIFY_IMAGE:
+                    std::cout << "Verifying image file\n";
+                    break;
+                default:
+                    std::cerr << "Unknown status or error\n";
+                    break;
+            }
+            std::cout << "Firmware update in progress: " << message << " upgrade " << static_cast<int>(percent) << "% complete\n";
+        };
+    
+        bool executeAsync = false;
         try {
-            // Perform the actual firmware update using the Orbbec SDK API
-            // Example: updateFirmware method (replace with actual API if different)
-            my_dev->device->updateFirmware(binData.data(), static_cast<uint32_t>(binData.size()));
-            std::cout << "Firmware update completed successfully" << std::endl;
-        } catch (const std::exception& e) {
-            throw std::runtime_error("Firmware update failed: " + std::string(e.what()));
+            my_dev->device->updateFirmwareFromData(binData.data(), binData.size(), std::move(firmwareUpdateCallback), executeAsync);
+            VIAM_SDK_LOG_IMPL(logger, info) << "firmware update successful!";
+        } catch (...) {
+            VIAM_SDK_LOG_IMPL(logger, error) << "firmware update failed!";
+            // Reset UVC backend type before re-throwing
+    #if defined(__linux__)
+            ctx->setUvcBackendType(OB_UVC_BACKEND_TYPE_AUTO);
+    #endif
+            throw;
         }
-    } else {
-        throw std::runtime_error("No device available for firmware update");
+    
+        // Reset UVC backend type on success
+    #if defined(__linux__)
+        ctx->setUvcBackendType(OB_UVC_BACKEND_TYPE_AUTO);
+    #endif
     }
-}
-
 } // namespace firmware
 } // namespace orbbec

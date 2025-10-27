@@ -1163,7 +1163,7 @@ vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::Pro
             serial_number = serial_number_;
         }
 
-        checkFirmwareVersion(firmware_version_);
+        checkFirmwareVersion(firmware_version_, model_config_->min_firmware_version, model_config_->model_name);
 
         std::shared_ptr<ob::FrameSet> fs = nullptr;
         {
@@ -1433,7 +1433,7 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
                     VIAM_RESOURCE_LOG(info) << "Updating device firmware...";
                     try {
                         if (model_config_->firmware_url.has_value()) {
-                            firmware::updateFirmware(dev, ob_ctx_, model_config_->firmware_url.value());
+                            firmware::updateFirmware(dev, ob_ctx_, model_config_->firmware_url.value(), logger_);
                         } else {
                             throw std::runtime_error("Firmware update not supported for this model");
                         }
