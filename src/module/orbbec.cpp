@@ -1163,7 +1163,7 @@ vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::Pro
             serial_number = serial_number_;
         }
 
-        // checkFirmwareVersion(firmware_version_);
+        checkFirmwareVersion(firmware_version_);
 
         std::shared_ptr<ob::FrameSet> fs = nullptr;
         {
