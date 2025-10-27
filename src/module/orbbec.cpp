@@ -1238,30 +1238,8 @@ vsdk::Camera::properties Orbbec::get_properties() {
         p.intrinsic_parameters.focal_y_px = intrinsic_props.fy;
         p.intrinsic_parameters.center_x_px = intrinsic_props.cx;
         p.intrinsic_parameters.center_y_px = intrinsic_props.cy;
+        p.distortion_parameters.model = device_control::distortionTypeToString(distortion_props.model);
 
-        switch (distortion_props.model) {
-            case OB_DISTORTION_NONE:
-                p.distortion_parameters.model = "NONE";
-                break;
-            case OB_DISTORTION_MODIFIED_BROWN_CONRADY:
-                p.distortion_parameters.model = "MODIFIED_BROWN_CONRADY";
-                break;
-            case OB_DISTORTION_INVERSE_BROWN_CONRADY:
-                p.distortion_parameters.model = "INVERSE_BROWN_CONRADY";
-                break;
-            case OB_DISTORTION_BROWN_CONRADY:
-                p.distortion_parameters.model = "BROWN_CONRADY";
-                break;
-            case OB_DISTORTION_BROWN_CONRADY_K6:
-                p.distortion_parameters.model = "BROWN_CONRADY_K6";
-                break;
-            case OB_DISTORTION_KANNALA_BRANDT4:
-                p.distortion_parameters.model = "KANNALA_BRANDT4";
-                break;
-            default:
-                p.distortion_parameters.model = "UNKNOWN";
-                break;
-        }
         // TODO: These should be named parameters in the struct, not relying on order
         // If this is ever changed, make sure to update the README
         p.distortion_parameters.parameters = std::vector<double>{distortion_props.p1,
