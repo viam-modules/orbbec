@@ -67,7 +67,7 @@ namespace firmware {
         CURLcode res = curl_easy_perform(curl.get());
         if (res != CURLE_OK) {
             std::ostringstream buffer;
-            buffer << "curl early perform failed: " << curl_easy_strerror(res);
+            buffer << "curl easy perform failed: " << curl_easy_strerror(res);
             throw std::invalid_argument(buffer.str());
         }
     
