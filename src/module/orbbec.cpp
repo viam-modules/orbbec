@@ -90,8 +90,8 @@ namespace {
         .viam_model_suffix = "gemini_335le",
         .default_color_resolution = {1280, 800},
         .default_depth_resolution = {1280, 800},
-        .firmware_url = "https://orbbec-debian-repos-aws.s3.amazonaws.com/product/Gemini330_Release_1.6.00.zip",
-        .min_firmware_version = "1.5.31",
+        .firmware_url = "https://orbbec-debian-repos-aws.s3.amazonaws.com/product/Gemini330_Release_1.5.55.zip",
+        .min_firmware_version = "1.5.55",
         .color_to_depth_supported_resolutions = {{{1280, 800}, {{1280, 800}, {848, 530}, {640, 400}, {424, 266}, {320, 200}}}, // 16:10 aspect ratio
                                                  {{848, 530}, {{848, 530}, {640, 400}, {424, 266}, {320, 200}}}, // 16:10 aspect ratio
                                                  {{640, 400}, {{640, 400}, {424, 266}, {320, 200}}}, // 16:10 aspect ratio
@@ -1415,11 +1415,6 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
                 if (key == firmware_key) {
                     VIAM_RESOURCE_LOG(info) << "Received firmware update command";
                     vsdk::ProtoStruct resp = viam::sdk::ProtoStruct{};
-                    if(model_config_->model_name == "Gemini 335Le") {
-                        VIAM_RESOURCE_LOG(error) << "[do_command] firmware update not supported for this model";
-                        resp.emplace(firmware_key, std::string("firmware update not supported for this model"));
-                        return resp;
-                    }
                     if (firmware_version_.find(model_config_->min_firmware_version) != std::string::npos) {
                         std::ostringstream buffer;
                         buffer << "Device firmware already on version " << model_config_->min_firmware_version;
