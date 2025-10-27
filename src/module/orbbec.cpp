@@ -1413,6 +1413,7 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
             std::unique_ptr<ViamOBDevice>& dev = search->second;
             for (auto const& [key, value] : command) {
                 if (key == firmware_key) {
+                    VIAM_RESOURCE_LOG(info) << "Received firmware update command";
                     vsdk::ProtoStruct resp = viam::sdk::ProtoStruct{};
                     if(model_config_->model_name == "Gemini 335Le") {
                         VIAM_RESOURCE_LOG(error) << "[do_command] firmware update not supported for this model";
@@ -1421,18 +1422,20 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
                     }
                     if (firmware_version_.find(model_config_->min_firmware_version) != std::string::npos) {
                         std::ostringstream buffer;
-                        buffer << "device firmware already on version " << model_config_->min_firmware_version;
+                        buffer << "Device firmware already on version " << model_config_->min_firmware_version;
                         resp.emplace(firmware_key, buffer.str());
-                        break;
+                        VIAM_RESOURCE_LOG(info) << buffer.str();
+                        return resp;
                     }
+                    VIAM_RESOURCE_LOG(info) << "Updating device firmware...";
                     if (dev->started) {
                         dev->pipe->stop();
                         dev->started = false;
                     }
 
-                    VIAM_RESOURCE_LOG(info) << "Updating device firmware...";
                     try {
                         if (model_config_->firmware_url.has_value()) {
+                            VIAM_RESOURCE_LOG(info) << "Updating device firmware from URL: " << model_config_->firmware_url.value();
                             firmware::updateFirmware(dev, ob_ctx_, model_config_->firmware_url.value(), logger_);
                         } else {
                             throw std::runtime_error("Firmware update not supported for this model");
