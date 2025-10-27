@@ -48,7 +48,7 @@ namespace firmware {
     using CleanupPtr = std::unique_ptr<typename Cleanup<cleanup_fp>::value_type, Cleanup<cleanup_fp>>;
     
     void updateFirmware(std::unique_ptr<ViamOBDevice>& my_dev, std::shared_ptr<ob::Context> ctx, const std::string& firmwareUrl, viam::sdk::LogSource &logger) {
-    // On linux, orbbec reccomends to set libuvc backend for firmware update
+    // On linux, orbbec recommends to set libuvc backend for firmware update
     #if defined(__linux__)
         ctx->setUvcBackendType(OB_UVC_BACKEND_TYPE_LIBUVC);
     #endif
