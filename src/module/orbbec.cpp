@@ -67,39 +67,39 @@ const uint64_t maxFrameAgeUs = 1e6;  // time until a frame is considered stale, 
 // Model configurations
 namespace {
     const OrbbecModelConfig ASTRA2_CONFIG{
-        .model_name = "Astra 2",
-        .viam_model_suffix = "astra2",
-        .default_color_resolution = {1280, 720},
-        .default_depth_resolution = {1600, 1200},
-        .firmware_url = "https://orbbec-debian-repos-aws.s3.amazonaws.com/product/Astra2_Release_2.8.20.zip",
-        .min_firmware_version = "2.8.20",
-        .color_to_depth_supported_resolutions = {{{1920, 1080}, {{1600, 1200}, {800, 600}, {400, 300}}},
-                                                 {{1440, 1080}, {{1600, 1200}, {800, 600}, {400, 300}}},
-                                                 {{1280, 720}, {{1600, 1200}, {800, 600}, {400, 300}}},
-                                                 {{800, 600}, {{800, 600}, {400, 300}}},
-                                                 {{640, 480}, {{800, 600}, {400, 300}}},
-                                                 {{640, 360}, {{800, 600}, {400, 300}}}},
-        .supported_color_formats = {"RGB", "MJPG"},
-        .supported_depth_formats = {"Y16"},
-        .default_color_format = "MJPG",
-        .default_depth_format = "Y16"
+        "Astra 2", // model_name
+        "astra2", // viam_model_suffix
+        {1280, 720}, // default_color_resolution
+        {1600, 1200}, // default_depth_resolution
+        "https://orbbec-debian-repos-aws.s3.amazonaws.com/product/Astra2_Release_2.8.20.zip", // firmware_url
+        "2.8.20", // min_firmware_version
+        {{{1920, 1080}, {{1600, 1200}, {800, 600}, {400, 300}}}, // Supported resolutions, 16:9 aspect ratio
+         {{1440, 1080}, {{1600, 1200}, {800, 600}, {400, 300}}}, // Supported resolutions, 16:9 aspect ratio
+         {{1280, 720}, {{1600, 1200}, {800, 600}, {400, 300}}}, // Supported resolutions, 16:9 aspect ratio
+         {{800, 600}, {{800, 600}, {400, 300}}}, // Supported resolutions, 4:3 aspect ratio
+         {{640, 480}, {{800, 600}, {400, 300}}}, // Supported resolutions, 4:3 aspect ratio
+         {{640, 360}, {{800, 600}, {400, 300}}}}, // Supported resolutions, 4:3 aspect ratio
+        {"RGB", "MJPG"}, // supported_color_formats
+        {"Y16"}, // supported_depth_formats
+        "MJPG", // default_color_format
+        "Y16" // default_depth_format
     };
     
     const OrbbecModelConfig GEMINI_335LE_CONFIG{
-        .model_name = "Gemini 335Le",
-        .viam_model_suffix = "gemini_335le",
-        .default_color_resolution = {1280, 800},
-        .default_depth_resolution = {1280, 800},
-        .firmware_url = "https://orbbec-debian-repos-aws.s3.amazonaws.com/product/Gemini330_Release_1.5.55.zip",
-        .min_firmware_version = "1.5.55",
-        .color_to_depth_supported_resolutions = {{{1280, 800}, {{1280, 800}, {848, 530}, {640, 400}, {424, 266}, {320, 200}}}, // 16:10 aspect ratio
-                                                 {{848, 530}, {{848, 530}, {640, 400}, {424, 266}, {320, 200}}}, // 16:10 aspect ratio
-                                                 {{640, 400}, {{640, 400}, {424, 266}, {320, 200}}}, // 16:10 aspect ratio
-                                                 {{640, 480}, {{640, 480}}}}, // 4:3 aspect ratio
-        .supported_color_formats = {"MJPG"},
-        .supported_depth_formats = {"Y16"},
-        .default_color_format = "MJPG",
-        .default_depth_format = "Y16"
+        "Gemini 335Le", // model_name
+        "gemini_335le", // viam_model_suffix
+        {1280, 800}, // default_color_resolution
+        {1280, 800}, // default_depth_resolution
+        "https://orbbec-debian-repos-aws.s3.amazonaws.com/product/Gemini330_Release_1.5.55.zip", // firmware_url
+        "1.5.55", // min_firmware_version
+        {{{1280, 800}, {{1280, 800}, {848, 530}, {640, 400}, {424, 266}, {320, 200}}}, // Supported resolutions, 16:10 aspect ratio
+         {{848, 530}, {{848, 530}, {640, 400}, {424, 266}, {320, 200}}}, // 16:10 aspect ratio
+         {{640, 400}, {{640, 400}, {424, 266}, {320, 200}}}, // 16:10 aspect ratio
+         {{640, 480}, {{640, 480}}}}, // 4:3 aspect ratio
+        {"MJPG"}, // supported_color_formats
+        {"Y16"}, // supported_depth_formats
+        "MJPG", // default_color_format
+        "Y16" // default_depth_format
     };
 }
 

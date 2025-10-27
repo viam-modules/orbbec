@@ -18,10 +18,12 @@
 #include <windows.h>
 #include <iostream>
 #include <sstream>
+#include <iomanip>
 #include <stdexcept>
 #include <vector>
 
 #include <libobsensor/ObSensor.hpp>
+#include <viam/sdk/log/logging.hpp>
 
 namespace orbbec {
 namespace windows_registry {
