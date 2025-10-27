@@ -108,6 +108,9 @@ struct OrbbecModelConfig {
     
     // Get config for a device name
     static const OrbbecModelConfig& forDevice(const std::string& device_name);
+    
+    // Check if a device name is supported
+    static bool isSupported(const std::string& device_name);
 };
 
 struct ViamOBDevice {

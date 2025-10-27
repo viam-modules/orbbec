@@ -103,6 +103,12 @@ const OrbbecModelConfig& OrbbecModelConfig::forDevice(const std::string& device_
     throw std::runtime_error("Unsupported Orbbec camera model: " + device_name);
 }
 
+bool OrbbecModelConfig::isSupported(const std::string& device_name) {
+    return (device_name.find("Astra2") != std::string::npos || 
+            device_name.find("Astra 2") != std::string::npos ||
+            device_name.find("Gemini 335Le") != std::string::npos);
+}
+
 // CONSTANTS END
 
 // STRUCTS BEGIN
@@ -588,10 +594,10 @@ void startDevice(std::string serialNumber, const OrbbecModelConfig* modelConfig)
         throw std::invalid_argument(buffer.str());
     }
 
-    // Check if the device is a supported Orbbec camera (Astra 2 or Gemini 335Le)
+    // Check if the device is a supported Orbbec camera
     std::shared_ptr<ob::DeviceInfo> deviceInfo = search->second->device->getDeviceInfo();
     std::string deviceName = deviceInfo->name();
-    if (!strstr(deviceName.c_str(), "Astra 2") && !strstr(deviceName.c_str(), "Gemini 335Le")) {
+    if (!OrbbecModelConfig::isSupported(deviceName)) {
         std::ostringstream buffer;
         buffer << service_name << ": device " << serialNumber << " is not a supported camera (found: " << deviceName << ")";
         throw std::invalid_argument(buffer.str());
@@ -601,8 +607,9 @@ void startDevice(std::string serialNumber, const OrbbecModelConfig* modelConfig)
 
     std::unique_ptr<ViamOBDevice>& my_dev = search->second;
     if (my_dev->started) {
-        VIAM_SDK_LOG(info) << service_name << ": device " << serialNumber << " is already started, sharing existing instance";
-        return;
+        std::ostringstream buffer;
+        buffer << service_name << ": device " << serialNumber << " is already started";
+        throw std::runtime_error(buffer.str());
     }
     VIAM_SDK_LOG(info) << "[startDevice] Configuring device resolution";
     {
