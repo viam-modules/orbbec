@@ -28,7 +28,7 @@ jobs:
 
           conan profile detect
 
-          conan remote add viamconan https://viam.jfrog.io/artifactory/api/conan/viamconan
+          conan remote add viamconan https://viam.jfrog.io/artifactory/api/conan/viamconan --index 0
 
         env:
           CONAN_USER_HOME: c:/cache
@@ -83,7 +83,7 @@ jobs:
           python3 -m venv venv && . ./venv/bin/activate
           python3 -m pip install conan
           conan profile detect
-          conan remote add viamconan https://viam.jfrog.io/artifactory/api/conan/viamconan
+          conan remote add viamconan https://viam.jfrog.io/artifactory/api/conan/viamconan --index 0
 
       - name: Build package and module
         run: |
