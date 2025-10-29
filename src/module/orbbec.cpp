@@ -66,7 +66,7 @@ const uint64_t maxFrameAgeUs = 1e6;  // time until a frame is considered stale, 
 // Model configurations
 namespace {
 static const OrbbecModelConfig ASTRA2_CONFIG{
-    "Orbbec Astra2",                                                                             // model_name
+    {"Orbbec Astra 2", "Orbbec Astra2"},                                                                             // model_names
     "astra2",                                                                              // viam_model_suffix
     {1280, 720},                                                                           // default_color_resolution
     {1600, 1200},                                                                          // default_depth_resolution
@@ -85,7 +85,7 @@ static const OrbbecModelConfig ASTRA2_CONFIG{
 };
 
 static const OrbbecModelConfig GEMINI_335LE_CONFIG{
-    "Orbbec Gemini 335Le",                                                                           // model_name
+    {"Orbbec Gemini 335Le"},                                                                  // model_names
     "gemini_335le",                                                                           // viam_model_suffix
     {1280, 800},                                                                              // default_color_resolution
     {1280, 800},                                                                              // default_depth_resolution
@@ -100,19 +100,28 @@ static const OrbbecModelConfig GEMINI_335LE_CONFIG{
     "MJPG",                                                                                   // default_color_format
     "Y16"                                                                                     // default_depth_format
 };
+
+static const std::vector<OrbbecModelConfig> all_model_configs = {ASTRA2_CONFIG, GEMINI_335LE_CONFIG};
 }  // namespace
 
 std::optional<OrbbecModelConfig> OrbbecModelConfig::forDevice(const std::string& device_name) {
-    if (device_name.find(ASTRA2_CONFIG.model_name) != std::string::npos)
-        return ASTRA2_CONFIG;
-    if (device_name.find(GEMINI_335LE_CONFIG.model_name) != std::string::npos)
-        return GEMINI_335LE_CONFIG;
-    throw std::runtime_error("Unsupported Orbbec camera model: " + device_name);
+    VIAM_SDK_LOG(debug) << "OrbbecModelConfig::forDevice called with device_name: '" << device_name << "'";
+    
+    // Check each model config
+    for (const auto& config : all_model_configs) {
+        // First, try exact match on any model name in the set
+        if (config.model_names.count(device_name) != 0) {
+            VIAM_SDK_LOG(debug) << "Found exact match for device_name";
+            return config;
+        }
+    }
+    
+    VIAM_SDK_LOG(debug) << "No match found for device_name";
+    return std::nullopt;
 }
 
 bool OrbbecModelConfig::isSupported(const std::string& device_name) {
-    return (device_name.find("Astra2") != std::string::npos || device_name.find("Astra 2") != std::string::npos ||
-            device_name.find("Gemini 335Le") != std::string::npos);
+    return forDevice(device_name).has_value();
 }
 
 // CONSTANTS END
@@ -1061,7 +1070,7 @@ Orbbec::Orbbec(vsdk::Dependencies deps, vsdk::ResourceConfig cfg, std::shared_pt
             // Detect model and set model_config_
             std::shared_ptr<ob::DeviceInfo> deviceInfo = search->second->device->getDeviceInfo();
             model_config_ = OrbbecModelConfig::forDevice(deviceInfo->name());
-            VIAM_SDK_LOG(info) << "Detected model: " << model_config_->model_name;
+            VIAM_SDK_LOG(info) << "Detected model: " << model_config_->viam_model_suffix;
         }
     }
 
@@ -1176,7 +1185,7 @@ vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::Pro
         }
 
         if (model_config_.has_value()) {
-            checkFirmwareVersion(firmware_version_, model_config_->min_firmware_version, model_config_->model_name);
+            checkFirmwareVersion(firmware_version_, model_config_->min_firmware_version, model_config_->viam_model_suffix);
         }
 
         std::shared_ptr<ob::FrameSet> fs = nullptr;
@@ -1283,7 +1292,7 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
         }
 
         if (model_config_.has_value()) {
-            checkFirmwareVersion(firmware_version_, model_config_->min_firmware_version, model_config_->model_name);
+            checkFirmwareVersion(firmware_version_, model_config_->min_firmware_version, model_config_->viam_model_suffix);
         }
 
         std::shared_ptr<ob::FrameSet> fs = nullptr;
@@ -1532,7 +1541,7 @@ vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const v
         }
 
         if (model_config_.has_value()) {
-            checkFirmwareVersion(firmware_version_, model_config_->min_firmware_version, model_config_->model_name);
+            checkFirmwareVersion(firmware_version_, model_config_->min_firmware_version, model_config_->viam_model_suffix);
         }
 
         std::shared_ptr<ob::FrameSet> fs = nullptr;
