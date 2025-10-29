@@ -66,7 +66,7 @@ const uint64_t maxFrameAgeUs = 1e6;  // time until a frame is considered stale, 
 // Model configurations
 namespace {
 static const OrbbecModelConfig ASTRA2_CONFIG{
-    "Astra 2",                                                                             // model_name
+    "Orbbec Astra2",                                                                             // model_name
     "astra2",                                                                              // viam_model_suffix
     {1280, 720},                                                                           // default_color_resolution
     {1600, 1200},                                                                          // default_depth_resolution
@@ -85,7 +85,7 @@ static const OrbbecModelConfig ASTRA2_CONFIG{
 };
 
 static const OrbbecModelConfig GEMINI_335LE_CONFIG{
-    "Gemini 335Le",                                                                           // model_name
+    "Orbbec Gemini 335Le",                                                                           // model_name
     "gemini_335le",                                                                           // viam_model_suffix
     {1280, 800},                                                                              // default_color_resolution
     {1280, 800},                                                                              // default_depth_resolution
