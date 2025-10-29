@@ -66,7 +66,7 @@ const uint64_t maxFrameAgeUs = 1e6;  // time until a frame is considered stale, 
 // Model configurations
 namespace {
 static const OrbbecModelConfig ASTRA2_CONFIG{
-    {"Orbbec Astra 2", "Orbbec Astra2"},                                                                             // model_names
+    {"Orbbec Astra 2", "Orbbec Astra2"},                                                   // model_names
     "astra2",                                                                              // viam_model_suffix
     {1280, 720},                                                                           // default_color_resolution
     {1600, 1200},                                                                          // default_depth_resolution
@@ -106,7 +106,7 @@ static const std::vector<OrbbecModelConfig> all_model_configs = {ASTRA2_CONFIG, 
 
 std::optional<OrbbecModelConfig> OrbbecModelConfig::forDevice(const std::string& device_name) {
     VIAM_SDK_LOG(debug) << "OrbbecModelConfig::forDevice called with device_name: '" << device_name << "'";
-    
+
     // Check each model config
     for (const auto& config : all_model_configs) {
         // First, try exact match on any model name in the set
@@ -115,7 +115,7 @@ std::optional<OrbbecModelConfig> OrbbecModelConfig::forDevice(const std::string&
             return config;
         }
     }
-    
+
     VIAM_SDK_LOG(debug) << "No match found for device_name";
     return std::nullopt;
 }

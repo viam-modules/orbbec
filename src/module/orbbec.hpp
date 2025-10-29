@@ -97,8 +97,8 @@ struct ObResourceConfig {
 };
 
 struct OrbbecModelConfig {
-    std::unordered_set<std::string> model_names;         // "Astra 2" or "Gemini 335Le"
-    std::string viam_model_suffix;  // "astra2" or "gemini_335le"
+    std::unordered_set<std::string> model_names;  // "Astra 2" or "Gemini 335Le"
+    std::string viam_model_suffix;                // "astra2" or "gemini_335le"
     Resolution default_color_resolution;
     Resolution default_depth_resolution;
     std::optional<std::string> firmware_url;
