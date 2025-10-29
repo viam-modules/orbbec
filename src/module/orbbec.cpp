@@ -65,7 +65,7 @@ const uint64_t maxFrameAgeUs = 1e6;  // time until a frame is considered stale, 
 
 // Model configurations
 namespace {
-const OrbbecModelConfig ASTRA2_CONFIG{
+static const OrbbecModelConfig ASTRA2_CONFIG{
     "Astra 2",                                                                             // model_name
     "astra2",                                                                              // viam_model_suffix
     {1280, 720},                                                                           // default_color_resolution
@@ -84,7 +84,7 @@ const OrbbecModelConfig ASTRA2_CONFIG{
     "Y16"                                                                                  // default_depth_format
 };
 
-const OrbbecModelConfig GEMINI_335LE_CONFIG{
+static const OrbbecModelConfig GEMINI_335LE_CONFIG{
     "Gemini 335Le",                                                                           // model_name
     "gemini_335le",                                                                           // viam_model_suffix
     {1280, 800},                                                                              // default_color_resolution
@@ -102,10 +102,10 @@ const OrbbecModelConfig GEMINI_335LE_CONFIG{
 };
 }  // namespace
 
-const OrbbecModelConfig& OrbbecModelConfig::forDevice(const std::string& device_name) {
-    if (device_name.find("Astra2") != std::string::npos || device_name.find("Astra 2") != std::string::npos)
+std::optional<OrbbecModelConfig> OrbbecModelConfig::forDevice(const std::string& device_name) {
+    if (device_name.find(ASTRA2_CONFIG.model_name) != std::string::npos)
         return ASTRA2_CONFIG;
-    if (device_name.find("Gemini 335Le") != std::string::npos)
+    if (device_name.find(GEMINI_335LE_CONFIG.model_name) != std::string::npos)
         return GEMINI_335LE_CONFIG;
     throw std::runtime_error("Unsupported Orbbec camera model: " + device_name);
 }
@@ -588,7 +588,7 @@ auto frameCallback(const std::string& serialNumber) {
     };
 }
 
-void startDevice(std::string serialNumber, const OrbbecModelConfig* modelConfig) {
+void startDevice(std::string serialNumber, std::optional<OrbbecModelConfig> modelConfig) {
     VIAM_SDK_LOG(info) << service_name << ": starting device " << serialNumber;
     std::lock_guard<std::mutex> lock(devices_by_serial_mu());
     auto search = devices_by_serial().find(serialNumber);
@@ -1052,14 +1052,6 @@ Orbbec::Orbbec(vsdk::Dependencies deps, vsdk::ResourceConfig cfg, std::shared_pt
         applyExperimentalConfig(my_dev, cfg.attributes());
     }
 
-    startDevice(serial_number_, model_config_);
-    {
-        std::lock_guard<std::mutex> lock(serial_by_resource_mu());
-        serial_by_resource()[config->resource_name] = serial_number_;
-    }
-
-    // set firmware version  member variable
-
     {
         std::lock_guard<std::mutex> lock(devices_by_serial_mu());
         auto search = devices_by_serial().find(serial_number_);
@@ -1068,9 +1060,19 @@ Orbbec::Orbbec(vsdk::Dependencies deps, vsdk::ResourceConfig cfg, std::shared_pt
 
             // Detect model and set model_config_
             std::shared_ptr<ob::DeviceInfo> deviceInfo = search->second->device->getDeviceInfo();
-            model_config_ = &OrbbecModelConfig::forDevice(deviceInfo->name());
+            model_config_ = OrbbecModelConfig::forDevice(deviceInfo->name());
             VIAM_SDK_LOG(info) << "Detected model: " << model_config_->model_name;
         }
+    }
+
+    if (!model_config_.has_value()) {
+        throw std::runtime_error("Failed to detect Orbbec model configuration");
+    }
+
+    startDevice(serial_number_, model_config_);
+    {
+        std::lock_guard<std::mutex> lock(serial_by_resource_mu());
+        serial_by_resource()[config->resource_name] = serial_number_;
     }
 
     VIAM_RESOURCE_LOG(info) << "Orbbec constructor end " << serial_number_;
@@ -1135,12 +1137,6 @@ void Orbbec::reconfigure(const vsdk::Dependencies& deps, const vsdk::ResourceCon
         frame_set_by_serial().erase(prev_serial_number);
     }
 
-    startDevice(new_serial_number, model_config_);
-    {
-        std::lock_guard<std::mutex> lock(serial_by_resource_mu());
-        serial_by_resource()[new_resource_name] = new_serial_number;
-    }
-
     // set firmware version member variable and apply experimental config
     {
         std::lock_guard<std::mutex> lock_serial(serial_number_mu_);
@@ -1148,9 +1144,24 @@ void Orbbec::reconfigure(const vsdk::Dependencies& deps, const vsdk::ResourceCon
         auto search = devices_by_serial().find(serial_number_);
         if (search != devices_by_serial().end()) {
             firmware_version_ = search->second->device->getDeviceInfo()->firmwareVersion();
+
+            // Detect model and set model_config_
+            std::shared_ptr<ob::DeviceInfo> deviceInfo = search->second->device->getDeviceInfo();
+            model_config_ = OrbbecModelConfig::forDevice(deviceInfo->name());
+
             std::unique_ptr<ViamOBDevice>& my_dev = search->second;
             applyExperimentalConfig(my_dev, cfg.attributes());
         }
+    }
+
+    if (!model_config_.has_value()) {
+        throw std::runtime_error("Failed to detect Orbbec model configuration during reconfigure");
+    }
+
+    startDevice(new_serial_number, model_config_);
+    {
+        std::lock_guard<std::mutex> lock(serial_by_resource_mu());
+        serial_by_resource()[new_resource_name] = new_serial_number;
     }
     VIAM_RESOURCE_LOG(info) << "[reconfigure] Orbbec reconfigure end";
 }
@@ -1164,7 +1175,9 @@ vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::Pro
             serial_number = serial_number_;
         }
 
-        checkFirmwareVersion(firmware_version_, model_config_->min_firmware_version, model_config_->model_name);
+        if (model_config_.has_value()) {
+            checkFirmwareVersion(firmware_version_, model_config_->min_firmware_version, model_config_->model_name);
+        }
 
         std::shared_ptr<ob::FrameSet> fs = nullptr;
         {
@@ -1269,7 +1282,9 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
             serial_number = serial_number_;
         }
 
-        checkFirmwareVersion(firmware_version_, model_config_->min_firmware_version, model_config_->model_name);
+        if (model_config_.has_value()) {
+            checkFirmwareVersion(firmware_version_, model_config_->min_firmware_version, model_config_->model_name);
+        }
 
         std::shared_ptr<ob::FrameSet> fs = nullptr;
         {
@@ -1394,6 +1409,9 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
                 if (key == firmware_key) {
                     VIAM_RESOURCE_LOG(info) << "Received firmware update command";
                     vsdk::ProtoStruct resp = viam::sdk::ProtoStruct{};
+                    if (!model_config_.has_value()) {
+                        throw std::runtime_error("Model configuration not available for firmware update");
+                    }
                     if (firmware_version_.find(model_config_->min_firmware_version) != std::string::npos) {
                         std::ostringstream buffer;
                         buffer << "Device firmware already on version " << model_config_->min_firmware_version;
@@ -1513,7 +1531,9 @@ vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const v
             serial_number = serial_number_;
         }
 
-        checkFirmwareVersion(firmware_version_, model_config_->min_firmware_version, model_config_->model_name);
+        if (model_config_.has_value()) {
+            checkFirmwareVersion(firmware_version_, model_config_->min_firmware_version, model_config_->model_name);
+        }
 
         std::shared_ptr<ob::FrameSet> fs = nullptr;
         {
@@ -1654,7 +1674,11 @@ void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
 
     // Determine model configuration
     std::shared_ptr<ob::DeviceInfo> deviceInfo = dev->getDeviceInfo();
-    const OrbbecModelConfig* modelConfig = &OrbbecModelConfig::forDevice(deviceInfo->name());
+    std::optional<OrbbecModelConfig> modelConfig = OrbbecModelConfig::forDevice(deviceInfo->name());
+    if (!modelConfig.has_value()) {
+        VIAM_SDK_LOG(error) << "Failed to determine model configuration for device " << serialNumber;
+        return;
+    }
 
     std::shared_ptr<ob::Config> config = createHwD2CAlignConfig(pipe, std::nullopt, std::nullopt, *modelConfig);
     if (config == nullptr) {
@@ -1755,7 +1779,11 @@ void deviceChangedCallback(const std::shared_ptr<ob::DeviceList> removedList, co
                 for (auto& [resource_name, serial_number] : serial_by_resource()) {
                     if (serial_number == info->getSerialNumber()) {
                         // Determine model configuration
-                        const OrbbecModelConfig* modelConfig = &OrbbecModelConfig::forDevice(info->name());
+                        std::optional<OrbbecModelConfig> modelConfig = OrbbecModelConfig::forDevice(info->name());
+                        if (!modelConfig.has_value()) {
+                            VIAM_SDK_LOG(error) << "Failed to determine model configuration for device " << serial_number;
+                            continue;
+                        }
                         startDevice(serial_number, modelConfig);
                         serial_by_resource()[resource_name] = serial_number;
                     }

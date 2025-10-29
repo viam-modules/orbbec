@@ -17,9 +17,9 @@ std::vector<vsdk::ResourceConfig> OrbbecDiscovery::discover_resources(const vsdk
         ob_ctx_->enableNetDeviceEnumeration(true);
         VIAM_RESOURCE_LOG(info) << "Enabled network device enumeration for Ethernet cameras";
     } catch (ob::Error& e) {
-        VIAM_RESOURCE_LOG(warn) << "Failed to enable network device enumeration: " << e.what();
+        VIAM_RESOURCE_LOG(error) << "Failed to enable network device enumeration: " << e.what();
     } catch (const std::exception& e) {
-        VIAM_RESOURCE_LOG(warn) << "Failed to enable network device enumeration: " << e.what();
+        VIAM_RESOURCE_LOG(error) << "Failed to enable network device enumeration: " << e.what();
     }
 
     try {
@@ -58,13 +58,12 @@ std::vector<vsdk::ResourceConfig> OrbbecDiscovery::discover_resources(const vsdk
 
                 // Detect model and create appropriate resource
                 std::string viamModelSuffix;
-                try {
-                    const auto& modelConfig = orbbec::OrbbecModelConfig::forDevice(deviceName);
-                    viamModelSuffix = modelConfig.viam_model_suffix;
-                } catch (const std::runtime_error& e) {
-                    VIAM_RESOURCE_LOG(warn) << "Skipping unsupported camera: " << deviceName;
+                std::optional<orbbec::OrbbecModelConfig> modelConfig = orbbec::OrbbecModelConfig::forDevice(deviceName);
+                if (!modelConfig.has_value()) {
+                    VIAM_RESOURCE_LOG(error) << "Failed to determine model configuration for device " << deviceName;
                     continue;
                 }
+                viamModelSuffix = modelConfig->viam_model_suffix;
 
                 vsdk::ResourceConfig config("camera",
                                             std::move(name.str()),
@@ -77,20 +76,20 @@ std::vector<vsdk::ResourceConfig> OrbbecDiscovery::discover_resources(const vsdk
 
                 VIAM_RESOURCE_LOG(info) << "Successfully configured device " << (i + 1) << " with serial: " << serialNumber;
             } catch (ob::Error& deviceError) {
-                VIAM_RESOURCE_LOG(warn) << "Failed to get device info for device " << (i + 1) << ": " << deviceError.what();
+                VIAM_RESOURCE_LOG(error) << "Failed to get device info for device " << (i + 1) << ": " << deviceError.what();
                 // Continue with other devices even if one fails
             }
         }
     } catch (ob::Error& e) {
         VIAM_RESOURCE_LOG(error) << "Failed to discover Orbbec devices: " << e.what() << " (function: " << e.getFunction()
                                  << ", args: " << e.getArgs() << ", name: " << e.getName() << ", type: " << e.getExceptionType() << ")";
-        VIAM_RESOURCE_LOG(warn) << "Discovery failed - check network connectivity for Ethernet cameras or USB connection for USB cameras";
+        VIAM_RESOURCE_LOG(error) << "Discovery failed - check network connectivity for Ethernet cameras or USB connection for USB cameras";
     } catch (const std::exception& e) {
         VIAM_RESOURCE_LOG(error) << "Failed to discover Orbbec devices: " << e.what();
-        VIAM_RESOURCE_LOG(warn) << "Discovery failed - check network connectivity for Ethernet cameras or USB connection for USB cameras";
+        VIAM_RESOURCE_LOG(error) << "Discovery failed - check network connectivity for Ethernet cameras or USB connection for USB cameras";
     } catch (...) {
         VIAM_RESOURCE_LOG(error) << "Failed to discover Orbbec devices: unknown error";
-        VIAM_RESOURCE_LOG(warn) << "Discovery failed - check network connectivity for Ethernet cameras or USB connection for USB cameras";
+        VIAM_RESOURCE_LOG(error) << "Discovery failed - check network connectivity for Ethernet cameras or USB connection for USB cameras";
     }
 
     return configs;

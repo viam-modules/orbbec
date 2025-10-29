@@ -110,7 +110,7 @@ struct OrbbecModelConfig {
     std::string default_depth_format;
 
     // Get config for a device name
-    static const OrbbecModelConfig& forDevice(const std::string& device_name);
+    static std::optional<OrbbecModelConfig> forDevice(const std::string& device_name);
 
     // Check if a device name is supported
     static bool isSupported(const std::string& device_name);
@@ -157,7 +157,7 @@ class Orbbec final : public viam::sdk::Camera, public viam::sdk::Reconfigurable 
     std::string firmware_version_;
     std::mutex serial_number_mu_;
     std::string serial_number_;
-    const OrbbecModelConfig* model_config_;
+    std::optional<OrbbecModelConfig> model_config_;
     static std::unique_ptr<ObResourceConfig> configure(viam::sdk::Dependencies deps, viam::sdk::ResourceConfig cfg);
     static void validate_sensor(std::pair<std::string, viam::sdk::ProtoValue> const& sensor_pair, const OrbbecModelConfig& modelConfig);
 

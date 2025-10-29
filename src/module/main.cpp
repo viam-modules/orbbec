@@ -35,6 +35,7 @@ std::vector<std::shared_ptr<vsdk::ModelRegistration>> create_all_model_registrat
             return std::make_unique<discovery::OrbbecDiscovery>(std::move(deps), std::move(config), ctx);
         }));
 
+    // Return the registrations
     return registrations;
 }
 
