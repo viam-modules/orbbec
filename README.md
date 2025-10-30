@@ -11,7 +11,7 @@ This module provides access to the color and depth sensors and creates pointclou
 
 ## Model viam:orbbec:astra2
 
-Use [Orbbec cameras](https://www.orbbec.com/products/structured-light-camera/astra-2/).
+[Official Orbbec Astra 2 Camera Webpage](https://www.orbbec.com/products/structured-light-camera/astra-2/).
 
 ### Configuration
 The following attribute template can be used to configure this model:
@@ -35,7 +35,7 @@ The following attribute template can be used to configure this model:
 ```
 #### Configuration Attributes
 
-The following attributes are available for the Astra2 model:
+The following attributes are available for the Astra 2 model:
 
 | Name          | Type   | Inclusion | Description                |
 |---------------|--------|-----------|----------------------------|
@@ -68,7 +68,7 @@ The following attributes are available for the Astra2 model:
 
 ## Model viam:orbbec:gemini_335le
 
-Use [Orbbec cameras](https://www.orbbec.com/gemini-335le/).
+[Official Orbbec Gemini 335Le Camera Webpage](https://www.orbbec.com/gemini-335le/).
 
 ### Configuration
 The following attribute template can be used to configure this model:
@@ -92,7 +92,7 @@ The following attribute template can be used to configure this model:
 ```
 #### Configuration Attributes
 
-The following attributes are available for the Astra2 model:
+The following attributes are available for the Gemini 335Le model:
 
 | Name          | Type   | Inclusion | Description                |
 |---------------|--------|-----------|----------------------------|
@@ -141,7 +141,7 @@ Bear in mind that the distortion parameters contained in that struct are not nam
 ## DoCommand
 You can use DoCommand to upgrade the firmware of your device to the required version.
 
-Update the astra2 firmware to v2.8.20 and gemini_335le to v1.5.55. If running on macOS, you must manually unplug and replug the device after this returns.
+Update the astra 2 firmware to v2.8.20 and gemini_335le to v1.5.55. If running on macOS, you must manually unplug and replug the device after this returns.
 **WARNING**: Do not unplug the device while the firmware update is in progress.
 
 {
