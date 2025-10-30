@@ -76,7 +76,7 @@ else
 	--build=missing
 endif
 
-module.tar.gz: conan-pkg meta.json
+module.tar.gz: lint conan-pkg meta.json
 ifeq ($(OS),Windows_NT)
 	cmd /C "refreshenv && IF EXIST .\venv\Scripts\activate.bat call .\venv\Scripts\activate.bat && conan install --requires=viam-orbbec/0.0.1 -o:a "viam-cpp-sdk/*:shared=False" -s:a build_type=Release -s:a compiler.cppstd=17 --deployer-package "^&" --envs-generation false"
 else

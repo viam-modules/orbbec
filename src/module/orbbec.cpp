@@ -437,14 +437,13 @@ bool checkIfSupportHWD2CAlign(std::shared_ptr<ob::Pipeline> pipe,
 
 // Helper function to check if a video stream profile matches the given resolution and format
 bool profileMatchesSpec(std::shared_ptr<ob::VideoStreamProfile> vsp,
-                       std::optional<DeviceResolution> deviceRes,
-                       std::optional<DeviceFormat> deviceFormat,
-                       const OrbbecModelConfig& modelConfig,
-                       bool isColor) {
+                        std::optional<DeviceResolution> deviceRes,
+                        std::optional<DeviceFormat> deviceFormat,
+                        const OrbbecModelConfig& modelConfig,
+                        bool isColor) {
     if (deviceFormat.has_value()) {
-        std::string requestedFormat = isColor ? 
-            (deviceFormat->color_format.has_value() ? deviceFormat->color_format.value() : "") :
-            (deviceFormat->depth_format.has_value() ? deviceFormat->depth_format.value() : "");
+        std::string requestedFormat = isColor ? (deviceFormat->color_format.has_value() ? deviceFormat->color_format.value() : "")
+                                              : (deviceFormat->depth_format.has_value() ? deviceFormat->depth_format.value() : "");
         if (!requestedFormat.empty() && ob::TypeHelper::convertOBFormatTypeToString(vsp->getFormat()) != requestedFormat) {
             return false;
         }
@@ -457,8 +456,7 @@ bool profileMatchesSpec(std::shared_ptr<ob::VideoStreamProfile> vsp,
 
     if (deviceRes.has_value()) {
         auto requestedRes = isColor ? deviceRes->color_resolution : deviceRes->depth_resolution;
-        if (requestedRes.has_value() && 
-            (vsp->getWidth() != requestedRes->width || vsp->getHeight() != requestedRes->height)) {
+        if (requestedRes.has_value() && (vsp->getWidth() != requestedRes->width || vsp->getHeight() != requestedRes->height)) {
             return false;
         }
     } else {
@@ -472,42 +470,42 @@ bool profileMatchesSpec(std::shared_ptr<ob::VideoStreamProfile> vsp,
 }
 
 // Helper function to find matching stream profiles
-std::pair<std::shared_ptr<ob::StreamProfile>, std::shared_ptr<ob::StreamProfile>>
-findMatchingProfiles(std::shared_ptr<ob::Pipeline> pipe,
-                    std::optional<DeviceResolution> deviceRes,
-                    std::optional<DeviceFormat> deviceFormat,
-                    const OrbbecModelConfig& modelConfig) {
+std::pair<std::shared_ptr<ob::StreamProfile>, std::shared_ptr<ob::StreamProfile>> findMatchingProfiles(
+    std::shared_ptr<ob::Pipeline> pipe,
+    std::optional<DeviceResolution> deviceRes,
+    std::optional<DeviceFormat> deviceFormat,
+    const OrbbecModelConfig& modelConfig) {
     auto colorStreamProfiles = pipe->getStreamProfileList(OB_SENSOR_COLOR);
     auto depthStreamProfiles = pipe->getStreamProfileList(OB_SENSOR_DEPTH);
-    
+
     auto colorSpCount = colorStreamProfiles->getCount();
     auto depthSpCount = depthStreamProfiles->getCount();
-    
+
     for (uint32_t i = 0; i < colorSpCount; i++) {
         auto colorProfile = colorStreamProfiles->getProfile(i);
         auto colorVsp = colorProfile->as<ob::VideoStreamProfile>();
-        
+
         if (!profileMatchesSpec(colorVsp, deviceRes, deviceFormat, modelConfig, true)) {
             continue;
         }
-        
+
         for (uint32_t j = 0; j < depthSpCount; j++) {
             auto depthProfile = depthStreamProfiles->getProfile(j);
             auto depthVsp = depthProfile->as<ob::VideoStreamProfile>();
-            
+
             // make sure the color and depth stream have the same fps
             if (colorVsp->getFps() != depthVsp->getFps()) {
                 continue;
             }
-            
+
             if (!profileMatchesSpec(depthVsp, deviceRes, deviceFormat, modelConfig, false)) {
                 continue;
             }
-            
+
             return std::make_pair(colorProfile, depthProfile);
         }
     }
-    
+
     return std::make_pair(nullptr, nullptr);
 }
 
@@ -515,13 +513,13 @@ findMatchingProfiles(std::shared_ptr<ob::Pipeline> pipe,
 std::string buildProfileErrorMsg(bool isColor, std::optional<DeviceResolution> deviceRes, std::optional<DeviceFormat> deviceFormat) {
     std::ostringstream buffer;
     buffer << service_name << " does not support the requested " << (isColor ? "color" : "depth") << " resolution/format: ";
-    auto res = isColor ? (deviceRes.has_value() ? deviceRes->color_resolution : std::nullopt) :
-                        (deviceRes.has_value() ? deviceRes->depth_resolution : std::nullopt);
+    auto res = isColor ? (deviceRes.has_value() ? deviceRes->color_resolution : std::nullopt)
+                       : (deviceRes.has_value() ? deviceRes->depth_resolution : std::nullopt);
     if (res.has_value()) {
         buffer << "resolution " << res->width << "x" << res->height;
     }
-    auto fmt = isColor ? (deviceFormat.has_value() ? deviceFormat->color_format : std::nullopt) :
-                        (deviceFormat.has_value() ? deviceFormat->depth_format : std::nullopt);
+    auto fmt = isColor ? (deviceFormat.has_value() ? deviceFormat->color_format : std::nullopt)
+                       : (deviceFormat.has_value() ? deviceFormat->depth_format : std::nullopt);
     if (fmt.has_value()) {
         buffer << ", format " << fmt.value();
     }
@@ -540,10 +538,9 @@ std::shared_ptr<ob::Config> createSwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
         VIAM_SDK_LOG(info) << "[createSwD2CAlignConfig] format specified: " << deviceFormat->to_string();
     }
 
-
     // Find matching color and depth profiles
     auto [colorProfile, depthProfile] = findMatchingProfiles(pipe, deviceRes, deviceFormat, modelConfig);
-    
+
     if (!colorProfile || !depthProfile) {
         VIAM_SDK_LOG(warn) << "[createSwD2CAlignConfig] Could not find matching stream profiles for software depth-to-color alignment that "
                            << "also match the given resolution and format specification ("
@@ -560,9 +557,8 @@ std::shared_ptr<ob::Config> createSwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
 
     auto colorVsp = colorProfile->as<ob::VideoStreamProfile>();
     auto depthVsp = depthProfile->as<ob::VideoStreamProfile>();
-    VIAM_SDK_LOG(info) << "Using software depth-to-color alignment with color "
-                       << colorVsp->getWidth() << "x" << colorVsp->getHeight() << " and depth " << depthVsp->getWidth()
-                       << "x" << depthVsp->getHeight();
+    VIAM_SDK_LOG(info) << "Using software depth-to-color alignment with color " << colorVsp->getWidth() << "x" << colorVsp->getHeight()
+                       << " and depth " << depthVsp->getWidth() << "x" << depthVsp->getHeight();
 
     return config;
 }
@@ -582,31 +578,31 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
     // Find matching color and depth profiles that support hardware D2C alignment
     auto colorStreamProfiles = pipe->getStreamProfileList(OB_SENSOR_COLOR);
     auto depthStreamProfiles = pipe->getStreamProfileList(OB_SENSOR_DEPTH);
-    
+
     auto colorSpCount = colorStreamProfiles->getCount();
     auto depthSpCount = depthStreamProfiles->getCount();
-    
+
     for (uint32_t i = 0; i < colorSpCount; i++) {
         auto colorProfile = colorStreamProfiles->getProfile(i);
         auto colorVsp = colorProfile->as<ob::VideoStreamProfile>();
-        
+
         if (!profileMatchesSpec(colorVsp, deviceRes, deviceFormat, modelConfig, true)) {
             continue;
         }
-        
+
         for (uint32_t j = 0; j < depthSpCount; j++) {
             auto depthProfile = depthStreamProfiles->getProfile(j);
             auto depthVsp = depthProfile->as<ob::VideoStreamProfile>();
-            
+
             // make sure the color and depth stream have the same fps
             if (colorVsp->getFps() != depthVsp->getFps()) {
                 continue;
             }
-            
+
             if (!profileMatchesSpec(depthVsp, deviceRes, deviceFormat, modelConfig, false)) {
                 continue;
             }
-            
+
             // Check if the given stream profiles support hardware depth-to-color alignment
             if (checkIfSupportHWD2CAlign(pipe, colorProfile, depthProfile)) {
                 VIAM_SDK_LOG(info) << "[createHwD2CAlignConfig] Using hardware depth-to-color alignment with color stream "
@@ -624,17 +620,17 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
                 return hwD2CAlignConfig;
             } else {
                 VIAM_SDK_LOG(warn) << "[createHwD2CAlignConfig] color stream " << colorVsp->getWidth() << "x" << colorVsp->getHeight()
-                                    << "@" << colorVsp->getFps() << " and depth stream " << depthVsp->getWidth() << "x"
-                                    << depthVsp->getHeight() << "@" << depthVsp->getFps()
-                                    << " do NOT support hardware depth-to-color alignment\n";
+                                   << "@" << colorVsp->getFps() << " and depth stream " << depthVsp->getWidth() << "x"
+                                   << depthVsp->getHeight() << "@" << depthVsp->getFps()
+                                   << " do NOT support hardware depth-to-color alignment\n";
             }
         }
     }
 
     VIAM_SDK_LOG(warn) << "[createHwD2CAlignConfig] Could not find matching stream profiles for hardware depth-to-color alignment that "
-                           "also match the given resolution and format specification ("
-                        << (deviceRes.has_value() ? deviceRes->to_string() : "none") << ", "
-                        << (deviceFormat.has_value() ? deviceFormat->to_string() : "none") << ")\n";
+                          "also match the given resolution and format specification ("
+                       << (deviceRes.has_value() ? deviceRes->to_string() : "none") << ", "
+                       << (deviceFormat.has_value() ? deviceFormat->to_string() : "none") << ")\n";
     return nullptr;
 }
 
@@ -703,7 +699,7 @@ void configureDevice(std::string serialNumber, OrbbecModelConfig const& modelCon
     }
 
     std::unique_ptr<ViamOBDevice>& my_dev = search->second;
-    
+
     // Initialize fields if not already set
     if (!my_dev->pipe) {
         my_dev->pipe = std::make_shared<ob::Pipeline>(my_dev->device);
@@ -724,7 +720,7 @@ void configureDevice(std::string serialNumber, OrbbecModelConfig const& modelCon
         my_dev->postProcessDepthFilters = depthSensor->createRecommendedFilters();
         my_dev->applyEnabledPostProcessDepthFilters = false;
     }
-    
+
     // Get user-specified resolution/format if any
     std::optional<DeviceResolution> resolution_opt;
     std::optional<DeviceFormat> format_opt;
@@ -745,14 +741,14 @@ void configureDevice(std::string serialNumber, OrbbecModelConfig const& modelCon
     // Lets try hardware depth-to-color alignment first, if it fails, try software alignment
     auto config = createHwD2CAlignConfig(my_dev->pipe, resolution_opt, format_opt, modelConfig);
     if (config == nullptr) {
-        VIAM_SDK_LOG(warn) << "Device " << serialNumber
-                           << " does not support hardware depth-to-color alignment, trying software alignment";
+        VIAM_SDK_LOG(warn) << "Device " << serialNumber << " does not support hardware depth-to-color alignment, trying software alignment";
         // Use software alignment
         if (resolution_opt.has_value() || format_opt.has_value()) {
             config = createSwD2CAlignConfig(my_dev->pipe, resolution_opt, format_opt, modelConfig);
             if (config == nullptr) {
                 std::ostringstream buffer;
-                buffer << service_name << ": unable to configure device " << serialNumber << " with software D2C alignment for the requested resolution/format";
+                buffer << service_name << ": unable to configure device " << serialNumber
+                       << " with software D2C alignment for the requested resolution/format";
                 throw std::runtime_error(buffer.str());
             }
         } else {
@@ -769,13 +765,13 @@ void configureDevice(std::string serialNumber, OrbbecModelConfig const& modelCon
                 throw std::runtime_error("No stream profiles available");
             }
         }
-        if(config != nullptr) {
+        if (config != nullptr) {
             VIAM_SDK_LOG(info) << "Device " << serialNumber << " supports software depth-to-color alignment, using it";
         }
     } else {
         VIAM_SDK_LOG(info) << "Device " << serialNumber << " supports hardware depth-to-color alignment, using it";
     }
-    
+
     if (config == nullptr) {
         std::ostringstream buffer;
         buffer << service_name << ": unable to configure device " << serialNumber << " - no valid stream configuration found";
@@ -810,7 +806,7 @@ void startDevice(std::string serialNumber, OrbbecModelConfig const& modelConfig)
         buffer << service_name << ": device " << serialNumber << " is already started";
         throw std::runtime_error(buffer.str());
     }
-    
+
     // Start the pipeline with the configuration
     my_dev->pipe->start(my_dev->config, frameCallback(serialNumber));
     my_dev->started = true;
@@ -963,7 +959,6 @@ std::vector<std::string> Orbbec::validateOrbbecModel(vsdk::ResourceConfig cfg, O
 
     return {};
 }
-
 
 std::vector<std::string> Orbbec::validateAstra2(vsdk::ResourceConfig cfg) {
     return validateOrbbecModel(cfg, ASTRA2_CONFIG);
