@@ -965,7 +965,11 @@ std::vector<std::string> Orbbec::validateAstra2(vsdk::ResourceConfig cfg) {
 }
 
 std::vector<std::string> Orbbec::validateGemini335Le(vsdk::ResourceConfig cfg) {
+#if !defined(__linux__)
+    return {"viam:orbbec:gemini_335le is only supported on Linux hosts"};
+#else
     return validateOrbbecModel(cfg, GEMINI_335LE_CONFIG);
+#endif
 }
 
 std::string getSerialNumber(const vsdk::ResourceConfig& cfg) {
