@@ -120,10 +120,6 @@ std::optional<OrbbecModelConfig> OrbbecModelConfig::forDevice(const std::string&
     return std::nullopt;
 }
 
-bool OrbbecModelConfig::isSupported(const std::string& device_name) {
-    return forDevice(device_name).has_value();
-}
-
 // CONSTANTS END
 
 // STRUCTS BEGIN
@@ -597,7 +593,7 @@ auto frameCallback(const std::string& serialNumber) {
     };
 }
 
-void startDevice(std::string serialNumber, std::optional<OrbbecModelConfig> modelConfig) {
+void startDevice(std::string serialNumber, OrbbecModelConfig const& modelConfig) {
     VIAM_SDK_LOG(info) << service_name << ": starting device " << serialNumber;
     std::lock_guard<std::mutex> lock(devices_by_serial_mu());
     auto search = devices_by_serial().find(serialNumber);
@@ -610,11 +606,6 @@ void startDevice(std::string serialNumber, std::optional<OrbbecModelConfig> mode
     // Check if the device is a supported Orbbec camera
     std::shared_ptr<ob::DeviceInfo> deviceInfo = search->second->device->getDeviceInfo();
     std::string deviceName = deviceInfo->name();
-    if (!OrbbecModelConfig::isSupported(deviceName)) {
-        std::ostringstream buffer;
-        buffer << service_name << ": device " << serialNumber << " is not a supported camera (found: " << deviceName << ")";
-        throw std::invalid_argument(buffer.str());
-    }
 
     VIAM_SDK_LOG(info) << "Device " << serialNumber << " is supported: " << deviceName;
 
@@ -639,7 +630,7 @@ void startDevice(std::string serialNumber, std::optional<OrbbecModelConfig> mode
                            << (format_opt.has_value() ? format_opt->to_string() : "not specifed");
         if (resolution_opt.has_value() || format_opt.has_value()) {
             // Create the pipeline
-            auto config = createHwD2CAlignConfig(search->second->pipe, resolution_opt, format_opt, *modelConfig);
+            auto config = createHwD2CAlignConfig(search->second->pipe, resolution_opt, format_opt, modelConfig);
             if (config == nullptr) {
                 VIAM_SDK_LOG(warn) << "Device " << serialNumber
                                    << " does not support hardware depth-to-color alignment, trying software alignment";
@@ -882,7 +873,7 @@ void Orbbec::validate_sensor(std::pair<std::string, viam::sdk::ProtoValue> const
     }
 }
 
-std::vector<std::string> Orbbec::validateAstra2(vsdk::ResourceConfig cfg) {
+std::vector<std::string> Orbbec::validateOrbbecModel(vsdk::ResourceConfig cfg, OrbbecModelConfig const& modelConfig) {
     auto attrs = cfg.attributes();
 
     if (!attrs.count("serial_number")) {
@@ -906,17 +897,17 @@ std::vector<std::string> Orbbec::validateAstra2(vsdk::ResourceConfig cfg) {
         }
         if (sensors) {
             for (auto const& sensor_pair : *sensors) {
-                validate_sensor(sensor_pair, ASTRA2_CONFIG);
+                validate_sensor(sensor_pair, modelConfig);
             }
         }
         auto color_width_uint32 =
             static_cast<std::uint32_t>(*sensors->at("color").get<viam::sdk::ProtoStruct>()->at("width").get<double>());
         auto color_height_uint32 =
             static_cast<std::uint32_t>(*sensors->at("color").get<viam::sdk::ProtoStruct>()->at("height").get<double>());
-        if (ASTRA2_CONFIG.color_to_depth_supported_resolutions.count({color_width_uint32, color_height_uint32}) == 0) {
+        if (modelConfig.color_to_depth_supported_resolutions.count({color_width_uint32, color_height_uint32}) == 0) {
             std::ostringstream buffer;
             buffer << "color resolution must be one of: ";
-            for (const auto& res : ASTRA2_CONFIG.color_to_depth_supported_resolutions) {
+            for (const auto& res : modelConfig.color_to_depth_supported_resolutions) {
                 buffer << "{" << res.first.to_string() << "} ";
             }
             VIAM_SDK_LOG(error) << buffer.str();
@@ -926,12 +917,12 @@ std::vector<std::string> Orbbec::validateAstra2(vsdk::ResourceConfig cfg) {
             static_cast<std::uint32_t>(*sensors->at("depth").get<viam::sdk::ProtoStruct>()->at("width").get<double>());
         auto depth_height_uint32 =
             static_cast<std::uint32_t>(*sensors->at("depth").get<viam::sdk::ProtoStruct>()->at("height").get<double>());
-        if (ASTRA2_CONFIG.color_to_depth_supported_resolutions.at({color_width_uint32, color_height_uint32})
+        if (modelConfig.color_to_depth_supported_resolutions.at({color_width_uint32, color_height_uint32})
                 .count({depth_width_uint32, depth_height_uint32}) == 0) {
             std::ostringstream buffer;
             buffer << "color/depth resolution combination not supported, for color resolution " << "{" << color_width_uint32 << ", "
                    << color_height_uint32 << "}, depth resolution must be one of: ";
-            for (const auto& res : ASTRA2_CONFIG.color_to_depth_supported_resolutions.at({color_width_uint32, color_height_uint32})) {
+            for (const auto& res : modelConfig.color_to_depth_supported_resolutions.at({color_width_uint32, color_height_uint32})) {
                 buffer << "{" << res.to_string() << "} ";
             }
             VIAM_SDK_LOG(error) << buffer.str();
@@ -942,64 +933,13 @@ std::vector<std::string> Orbbec::validateAstra2(vsdk::ResourceConfig cfg) {
     return {};
 }
 
+
+std::vector<std::string> Orbbec::validateAstra2(vsdk::ResourceConfig cfg) {
+    return validateOrbbecModel(cfg, ASTRA2_CONFIG);
+}
+
 std::vector<std::string> Orbbec::validateGemini335Le(vsdk::ResourceConfig cfg) {
-    auto attrs = cfg.attributes();
-
-    if (!attrs.count("serial_number")) {
-        throw std::invalid_argument("serial_number is a required argument");
-    }
-
-    if (!attrs["serial_number"].get<std::string>()) {
-        throw std::invalid_argument("serial_number must be a string");
-    }
-
-    // We already established this is a string, so it's safe to call this
-    std::string const serial = attrs["serial_number"].get_unchecked<std::string>();
-    if (serial.empty()) {
-        throw std::invalid_argument("serial_number must be a non-empty string");
-    }
-
-    if (attrs.count("sensors")) {
-        auto sensors = attrs["sensors"].get<viam::sdk::ProtoStruct>();
-        if (!sensors) {
-            throw std::invalid_argument("sensors must be a struct");
-        }
-        if (sensors) {
-            for (auto const& sensor_pair : *sensors) {
-                validate_sensor(sensor_pair, GEMINI_335LE_CONFIG);
-            }
-        }
-        auto color_width_uint32 =
-            static_cast<std::uint32_t>(*sensors->at("color").get<viam::sdk::ProtoStruct>()->at("width").get<double>());
-        auto color_height_uint32 =
-            static_cast<std::uint32_t>(*sensors->at("color").get<viam::sdk::ProtoStruct>()->at("height").get<double>());
-        if (GEMINI_335LE_CONFIG.color_to_depth_supported_resolutions.count({color_width_uint32, color_height_uint32}) == 0) {
-            std::ostringstream buffer;
-            buffer << "color resolution must be one of: ";
-            for (const auto& res : GEMINI_335LE_CONFIG.color_to_depth_supported_resolutions) {
-                buffer << "{" << res.first.to_string() << "} ";
-            }
-            VIAM_SDK_LOG(error) << buffer.str();
-            throw std::invalid_argument(buffer.str());
-        }
-        auto depth_width_uint32 =
-            static_cast<std::uint32_t>(*sensors->at("depth").get<viam::sdk::ProtoStruct>()->at("width").get<double>());
-        auto depth_height_uint32 =
-            static_cast<std::uint32_t>(*sensors->at("depth").get<viam::sdk::ProtoStruct>()->at("height").get<double>());
-        if (GEMINI_335LE_CONFIG.color_to_depth_supported_resolutions.at({color_width_uint32, color_height_uint32})
-                .count({depth_width_uint32, depth_height_uint32}) == 0) {
-            std::ostringstream buffer;
-            buffer << "color/depth resolution combination not supported, for color resolution " << "{" << color_width_uint32 << ", "
-                   << color_height_uint32 << "}, depth resolution must be one of: ";
-            for (const auto& res : GEMINI_335LE_CONFIG.color_to_depth_supported_resolutions.at({color_width_uint32, color_height_uint32})) {
-                buffer << "{" << res.to_string() << "} ";
-            }
-            VIAM_SDK_LOG(error) << buffer.str();
-            throw std::invalid_argument(buffer.str());
-        }
-    }
-
-    return {};
+    return validateOrbbecModel(cfg, GEMINI_335LE_CONFIG);
 }
 
 std::string getSerialNumber(const vsdk::ResourceConfig& cfg) {
@@ -1078,7 +1018,7 @@ Orbbec::Orbbec(vsdk::Dependencies deps, vsdk::ResourceConfig cfg, std::shared_pt
         throw std::runtime_error("Failed to detect Orbbec model configuration");
     }
 
-    startDevice(serial_number_, model_config_);
+    startDevice(serial_number_, model_config_.value());
     {
         std::lock_guard<std::mutex> lock(serial_by_resource_mu());
         serial_by_resource()[config->resource_name] = serial_number_;
@@ -1167,7 +1107,7 @@ void Orbbec::reconfigure(const vsdk::Dependencies& deps, const vsdk::ResourceCon
         throw std::runtime_error("Failed to detect Orbbec model configuration during reconfigure");
     }
 
-    startDevice(new_serial_number, model_config_);
+    startDevice(new_serial_number, model_config_.value());
     {
         std::lock_guard<std::mutex> lock(serial_by_resource_mu());
         serial_by_resource()[new_resource_name] = new_serial_number;
@@ -1793,7 +1733,7 @@ void deviceChangedCallback(const std::shared_ptr<ob::DeviceList> removedList, co
                             VIAM_SDK_LOG(error) << "Failed to determine model configuration for device " << serial_number;
                             continue;
                         }
-                        startDevice(serial_number, modelConfig);
+                        startDevice(serial_number, modelConfig.value());
                         serial_by_resource()[resource_name] = serial_number;
                     }
                 }

@@ -148,6 +148,7 @@ class Orbbec final : public viam::sdk::Camera, public viam::sdk::Reconfigurable 
     std::vector<viam::sdk::GeometryConfig> get_geometries(const viam::sdk::ProtoStruct& extra) override;
     static std::vector<std::string> validateAstra2(viam::sdk::ResourceConfig cfg);
     static std::vector<std::string> validateGemini335Le(viam::sdk::ResourceConfig cfg);
+    static std::vector<std::string> validateOrbbecModel(viam::sdk::ResourceConfig cfg, OrbbecModelConfig const& modelConfig);
     static viam::sdk::GeometryConfig geometry;
     static viam::sdk::Model model_astra2;
     static viam::sdk::Model model_gemini_335le;
