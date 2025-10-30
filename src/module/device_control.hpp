@@ -84,6 +84,32 @@ inline std::string propertyTypeToString(OBPropertyType type) {
     }
 }
 
+inline std::string distortionTypeToString(OBCameraDistortionModel model) {
+    switch (model) {
+        case OB_DISTORTION_NONE:
+            return "NONE";
+            break;
+        case OB_DISTORTION_MODIFIED_BROWN_CONRADY:
+            return "MODIFIED_BROWN_CONRADY";
+            break;
+        case OB_DISTORTION_INVERSE_BROWN_CONRADY:
+            return "INVERSE_BROWN_CONRADY";
+            break;
+        case OB_DISTORTION_BROWN_CONRADY:
+            return "BROWN_CONRADY";
+            break;
+        case OB_DISTORTION_BROWN_CONRADY_K6:
+            return "BROWN_CONRADY_K6";
+            break;
+        case OB_DISTORTION_KANNALA_BRANDT4:
+            return "KANNALA_BRANDT4";
+            break;
+        default:
+            return "UNKNOWN";
+            break;
+    }
+}
+
 viam::sdk::ProtoStruct getOrbbecSDKVersion(std::string const& command) {
     viam::sdk::ProtoStruct resp;
     std::stringstream ss;
@@ -539,6 +565,7 @@ viam::sdk::ProtoStruct getCameraParams(std::shared_ptr<PipelineT> pipe) {
             distortion_struct["k6"] = static_cast<double>(distortion.k6);
             distortion_struct["p1"] = static_cast<double>(distortion.p1);
             distortion_struct["p2"] = static_cast<double>(distortion.p2);
+            distortion_struct["model"] = distortionTypeToString(distortion.model);
             profile["distortion"] = distortion_struct;
 
             result[sensorName] = profile;
@@ -630,7 +657,7 @@ viam::sdk::ProtoStruct createModuleConfig(std::unique_ptr<ViamDeviceT>& dev) {
     }
 
     viam::sdk::ProtoStruct result;
-    result["serial_number"] = dev->serial_number;
+    result["serial_number"] = dev->serialNumber;
     result["sensors"] = sensors;
     result["post_process_depth_filters"] =
         getPostProcessDepthFilters(dev->postProcessDepthFilters, "create_module_config")["create_module_config"];
