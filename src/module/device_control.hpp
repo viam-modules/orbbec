@@ -657,7 +657,7 @@ viam::sdk::ProtoStruct createModuleConfig(std::unique_ptr<ViamDeviceT>& dev) {
     }
 
     viam::sdk::ProtoStruct result;
-    result["serial_number"] = dev->serial_number;
+    result["serial_number"] = dev->serialNumber;
     result["sensors"] = sensors;
     result["post_process_depth_filters"] =
         getPostProcessDepthFilters(dev->postProcessDepthFilters, "create_module_config")["create_module_config"];

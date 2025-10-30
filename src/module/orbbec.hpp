@@ -118,9 +118,9 @@ struct OrbbecModelConfig {
 
 struct ViamOBDevice {
     ~ViamOBDevice() {
-        std::cout << "deleting ViamOBDevice " << serial_number << "\n";
+        std::cout << "deleting ViamOBDevice " << serialNumber << "\n";
     }
-    std::string serial_number{};
+    std::string serialNumber{};
     std::shared_ptr<ob::Device> device{};
     bool started{};
     std::shared_ptr<ob::Pipeline> pipe{};

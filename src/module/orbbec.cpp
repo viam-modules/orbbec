@@ -702,6 +702,86 @@ auto frameCallback(const std::string& serialNumber) {
     };
 }
 
+void configureDevice(std::string serialNumber, OrbbecModelConfig const& modelConfig) {
+    VIAM_SDK_LOG(info) << "[configureDevice] Configuring device " << serialNumber;
+    std::lock_guard<std::mutex> lock(devices_by_serial_mu());
+    auto search = devices_by_serial().find(serialNumber);
+    if (search == devices_by_serial().end()) {
+        std::ostringstream buffer;
+        buffer << service_name << ": unable to configure undetected device " << serialNumber;
+        throw std::invalid_argument(buffer.str());
+    }
+
+    std::unique_ptr<ViamOBDevice>& my_dev = search->second;
+    
+    // Initialize fields if not already set
+    if (!my_dev->pipe) {
+        my_dev->pipe = std::make_shared<ob::Pipeline>(my_dev->device);
+        my_dev->pipe->enableFrameSync();
+    }
+    if (!my_dev->pointCloudFilter) {
+        my_dev->pointCloudFilter = std::make_shared<ob::PointCloudFilter>();
+        my_dev->pointCloudFilter->setCreatePointFormat(OB_FORMAT_RGB_POINT);
+    }
+    if (!my_dev->align) {
+        my_dev->align = std::make_shared<ob::Align>(OB_STREAM_COLOR);
+    }
+    if (my_dev->postProcessDepthFilters.empty()) {
+        auto depthSensor = my_dev->device->getSensor(OB_SENSOR_DEPTH);
+        if (depthSensor == nullptr) {
+            throw std::runtime_error("Current device does not have a depth sensor.");
+        }
+        my_dev->postProcessDepthFilters = depthSensor->createRecommendedFilters();
+        my_dev->applyEnabledPostProcessDepthFilters = false;
+    }
+    
+    // Get user-specified resolution/format if any
+    std::optional<DeviceResolution> resolution_opt;
+    std::optional<DeviceFormat> format_opt;
+    {
+        std::lock_guard<std::mutex> configLock(config_by_serial_mu());
+        if (config_by_serial().count(serialNumber) > 0) {
+            resolution_opt = config_by_serial().at(serialNumber).device_resolution;
+            format_opt = config_by_serial().at(serialNumber).device_format;
+            VIAM_SDK_LOG(info) << "[configureDevice] Resolution from config: "
+                               << (resolution_opt.has_value() ? resolution_opt->to_string() : "not specified, Format from config: ")
+                               << (format_opt.has_value() ? format_opt->to_string() : "not specified");
+        } else {
+            VIAM_SDK_LOG(info) << "[configureDevice] No custom config for " << serialNumber << ", using defaults";
+        }
+    }
+
+    // Create the pipeline config (with user settings if provided, otherwise defaults)
+    auto config = createHwD2CAlignConfig(my_dev->pipe, resolution_opt, format_opt, modelConfig);
+    if (config == nullptr) {
+        VIAM_SDK_LOG(warn) << "Device " << serialNumber
+                           << " does not support hardware depth-to-color alignment, trying software alignment";
+        // Use software alignment
+        if (resolution_opt.has_value() || format_opt.has_value()) {
+            config = createSwD2CAlignConfig(my_dev->pipe, resolution_opt, format_opt, modelConfig);
+        } else {
+            // Create basic config with first available profiles
+            auto colorStreamProfiles = my_dev->pipe->getStreamProfileList(OB_SENSOR_COLOR);
+            auto depthStreamProfiles = my_dev->pipe->getStreamProfileList(OB_SENSOR_DEPTH);
+            if (colorStreamProfiles->getCount() > 0 && depthStreamProfiles->getCount() > 0) {
+                config = std::make_shared<ob::Config>();
+                config->enableStream(colorStreamProfiles->getProfile(0));
+                config->enableStream(depthStreamProfiles->getProfile(0));
+                config->setFrameAggregateOutputMode(OB_FRAME_AGGREGATE_OUTPUT_ALL_TYPE_FRAME_REQUIRE);
+                VIAM_SDK_LOG(info) << "Created basic config for device " << serialNumber;
+            } else {
+                throw std::runtime_error("No stream profiles available");
+            }
+        }
+        if(config != nullptr) {
+            VIAM_SDK_LOG(info) << "Device " << serialNumber << " supports software depth-to-color alignment, using it";
+        }
+    } else {
+        VIAM_SDK_LOG(info) << "Device " << serialNumber << " supports hardware depth-to-color alignment, using it";
+    }
+    my_dev->config = config;
+}
+
 void startDevice(std::string serialNumber, OrbbecModelConfig const& modelConfig) {
     VIAM_SDK_LOG(info) << service_name << ": starting device " << serialNumber;
     std::lock_guard<std::mutex> lock(devices_by_serial_mu());
@@ -712,7 +792,6 @@ void startDevice(std::string serialNumber, OrbbecModelConfig const& modelConfig)
         throw std::invalid_argument(buffer.str());
     }
 
-    // Check if the device is a supported Orbbec camera
     std::shared_ptr<ob::DeviceInfo> deviceInfo = search->second->device->getDeviceInfo();
     std::string deviceName = deviceInfo->name();
 
@@ -724,36 +803,7 @@ void startDevice(std::string serialNumber, OrbbecModelConfig const& modelConfig)
         buffer << service_name << ": device " << serialNumber << " is already started";
         throw std::runtime_error(buffer.str());
     }
-    VIAM_SDK_LOG(info) << "[startDevice] Configuring device resolution";
-    {
-        std::lock_guard<std::mutex> lock(config_by_serial_mu());
-        if (config_by_serial().count(serialNumber) == 0) {
-            std::ostringstream buffer;
-            buffer << service_name << ": device with serial number " << serialNumber << " is not in config_by_serial, skipping start";
-            throw std::runtime_error(buffer.str());
-        }
-        auto resolution_opt = config_by_serial().at(serialNumber).device_resolution;
-        auto format_opt = config_by_serial().at(serialNumber).device_format;
-        VIAM_SDK_LOG(info) << "[startDevice] Resolution from config: "
-                           << (resolution_opt.has_value() ? resolution_opt->to_string() : "not specified, Format from config: ")
-                           << (format_opt.has_value() ? format_opt->to_string() : "not specifed");
-        if (resolution_opt.has_value() || format_opt.has_value()) {
-            // Create the pipeline config
-            auto config = createHwD2CAlignConfig(search->second->pipe, resolution_opt, format_opt, modelConfig);
-            if (config == nullptr) {
-                VIAM_SDK_LOG(warn) << "Device " << serialNumber
-                                   << " does not support hardware depth-to-color alignment, trying software alignment";
-                // Use software alignment with user-specified resolution/format
-                config = createSwD2CAlignConfig(search->second->pipe, resolution_opt, format_opt, modelConfig);
-                if(config != nullptr) {
-                    VIAM_SDK_LOG(info) << "Device " << serialNumber << " supports software depth-to-color alignment, using it";
-                }
-            } else {
-                VIAM_SDK_LOG(info) << "Device " << serialNumber << " supports hardware depth-to-color alignment, using it";
-            }
-            my_dev->config = config;
-        }
-    }
+    
     // Start the pipeline with the configuration
     my_dev->pipe->start(my_dev->config, frameCallback(serialNumber));
     my_dev->started = true;
@@ -992,6 +1042,7 @@ Orbbec::Orbbec(vsdk::Dependencies deps, vsdk::ResourceConfig cfg, std::shared_pt
         throw std::runtime_error("Failed to detect Orbbec model configuration");
     }
 
+    configureDevice(serial_number_, model_config_.value());
     startDevice(serial_number_, model_config_.value());
     {
         std::lock_guard<std::mutex> lock(serial_by_resource_mu());
@@ -1081,6 +1132,7 @@ void Orbbec::reconfigure(const vsdk::Dependencies& deps, const vsdk::ResourceCon
         throw std::runtime_error("Failed to detect Orbbec model configuration during reconfigure");
     }
 
+    configureDevice(new_serial_number, model_config_.value());
     startDevice(new_serial_number, model_config_.value());
     {
         std::lock_guard<std::mutex> lock(serial_by_resource_mu());
@@ -1591,80 +1643,24 @@ std::unique_ptr<orbbec::ObResourceConfig> Orbbec::configure(vsdk::Dependencies d
 
 // ORBBEC SDK DEVICE REGISTRY START
 void registerDevice(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
-    VIAM_SDK_LOG(info) << "starting " << serialNumber;
-    std::shared_ptr<ob::Pipeline> pipe = std::make_shared<ob::Pipeline>(dev);
-    pipe->enableFrameSync();
-
-    // Determine model configuration
-    std::shared_ptr<ob::DeviceInfo> deviceInfo = dev->getDeviceInfo();
-    std::optional<OrbbecModelConfig> modelConfig = OrbbecModelConfig::forDevice(deviceInfo->name());
-    if (!modelConfig.has_value()) {
-        VIAM_SDK_LOG(error) << "Failed to determine model configuration for device " << serialNumber;
-        return;
-    }
-
-    std::shared_ptr<ob::Config> config = createHwD2CAlignConfig(pipe, std::nullopt, std::nullopt, *modelConfig);
-    if (config == nullptr) {
-        VIAM_SDK_LOG(warn) << "Device " << serialNumber << " does not support hardware depth-to-color alignment, trying software alignment";
-
-        // Try to create a basic config without hardware alignment
-        try {
-            auto colorStreamProfiles = pipe->getStreamProfileList(OB_SENSOR_COLOR);
-            auto depthStreamProfiles = pipe->getStreamProfileList(OB_SENSOR_DEPTH);
-
-            if (colorStreamProfiles->getCount() > 0 && depthStreamProfiles->getCount() > 0) {
-                config = std::make_shared<ob::Config>();
-                config->enableStream(colorStreamProfiles->getProfile(0));
-                config->enableStream(depthStreamProfiles->getProfile(0));
-                config->setFrameAggregateOutputMode(OB_FRAME_AGGREGATE_OUTPUT_ALL_TYPE_FRAME_REQUIRE);
-                VIAM_SDK_LOG(info) << "Created basic config for device " << serialNumber;
-            } else {
-                VIAM_SDK_LOG(error) << "Device " << serialNumber << " has no available stream profiles";
-                return;
-            }
-        } catch (ob::Error& e) {
-            VIAM_SDK_LOG(error) << "Failed to create basic config for device " << serialNumber << ": " << e.what();
-            return;
-        }
-    }
+    VIAM_SDK_LOG(info) << "[registerDevice] Registering device " << serialNumber;
 
 #ifdef _WIN32
     // Setup Windows device registry for Orbbec cameras
     try {
         windows_registry::setupWindowsDeviceRegistry(dev);
     } catch (const std::exception& e) {
-        VIAM_SDK_LOG(error) << "Windows registry setup failed: " << e.what();
-        // Continue anyway - this is not critical for functionality
+        throw std::runtime_error("failed to setup windows device registry: " + std::string(e.what()));
     }
 #endif
 
-    auto depthSensor = dev->getSensor(OB_SENSOR_DEPTH);
-    if (depthSensor == nullptr) {
-        throw std::runtime_error("Current device does not have a depth sensor.");
-    }
-    auto depthFilterList = depthSensor->createRecommendedFilters();
-
-    // NOTE: Swap this to depth if you want to align to depth
-    std::shared_ptr<ob::Align> align = std::make_shared<ob::Align>(OB_STREAM_COLOR);
-
-    std::shared_ptr<ob::PointCloudFilter> pointCloudFilter = std::make_shared<ob::PointCloudFilter>();
-    pointCloudFilter->setCreatePointFormat(OB_FORMAT_RGB_POINT);
     {
         std::lock_guard<std::mutex> lock(devices_by_serial_mu());
         std::unique_ptr<ViamOBDevice> my_dev = std::make_unique<ViamOBDevice>();
-
-        my_dev->pipe = pipe;
         my_dev->device = dev;
-        my_dev->serial_number = serialNumber;
-        my_dev->pointCloudFilter = pointCloudFilter;
-        my_dev->align = align;
-        my_dev->config = config;
-        my_dev->postProcessDepthFilters =
-            depthFilterList;  // We save the recommended post process filters as the default, user can modify later via do_command
-        my_dev->applyEnabledPostProcessDepthFilters =
-            false;  // We don't apply the post process filters by default, user can enable via `apply_post_process_depth_filters` do_command
-
+        my_dev->serialNumber = serialNumber;
         devices_by_serial()[serialNumber] = std::move(my_dev);
+        VIAM_SDK_LOG(info) << "[registerDevice] Successfully registered device " << serialNumber;
     }
 }
 
@@ -1707,6 +1703,7 @@ void deviceChangedCallback(const std::shared_ptr<ob::DeviceList> removedList, co
                             VIAM_SDK_LOG(error) << "Failed to determine model configuration for device " << serial_number;
                             continue;
                         }
+                        configureDevice(serial_number, modelConfig.value());
                         startDevice(serial_number, modelConfig.value());
                         serial_by_resource()[resource_name] = serial_number;
                     }
