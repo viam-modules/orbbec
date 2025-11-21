@@ -29,7 +29,7 @@ struct Resolution {
 struct DeviceResolution {
     std::optional<Resolution> color_resolution{};
     std::optional<Resolution> depth_resolution{};
-
+    std::optional<Resolution> infrared_resolution{};
     std::string to_string() const {
         std::ostringstream os;
         os << "DeviceResolution(";
@@ -41,6 +41,10 @@ struct DeviceResolution {
             os << ", depth_resolution=" << depth_resolution->width << "x" << depth_resolution->height;
         else
             os << ", depth_resolution=nullopt";
+        if (infrared_resolution.has_value())
+            os << ", infrared_resolution=" << infrared_resolution->width << "x" << infrared_resolution->height;
+        else
+            os << ", infrared_resolution=nullopt";
         os << ")";
         return os.str();
     }
@@ -49,7 +53,7 @@ struct DeviceResolution {
 struct DeviceFormat {
     std::optional<std::string> color_format{};
     std::optional<std::string> depth_format{};
-
+    std::optional<std::string> infrared_format{};
     std::string to_string() const {
         std::ostringstream os;
         os << "(";
@@ -61,6 +65,10 @@ struct DeviceFormat {
             os << ", depth_format=" << *depth_format;
         else
             os << ", depth_format=nullopt";
+        if (infrared_format.has_value())
+            os << ", infrared_format=" << *infrared_format;
+        else
+            os << ", infrared_format=nullopt";
         os << ")";
         return os.str();
     }
@@ -72,12 +80,18 @@ struct ObResourceConfig {
     std::string serial_number;
     std::optional<DeviceResolution> device_resolution;
     std::optional<DeviceFormat> device_format;
+    std::unordered_set<std::string> enabled_sensors;
 
     explicit ObResourceConfig(std::string const& serial_number,
                               std::string const& resource_name,
                               std::optional<DeviceResolution> device_resolution,
-                              std::optional<DeviceFormat> device_format)
-        : serial_number(serial_number), resource_name(resource_name), device_resolution(device_resolution), device_format(device_format) {}
+                              std::optional<DeviceFormat> device_format,
+                              std::unordered_set<std::string> enabled_sensors = {"color", "depth"})
+        : serial_number(serial_number),
+          resource_name(resource_name),
+          device_resolution(device_resolution),
+          device_format(device_format),
+          enabled_sensors(enabled_sensors) {}
     std::string to_string() const {
         std::ostringstream os;
         os << "(resource_name=" << resource_name << ", serial_number=" << serial_number;
@@ -101,13 +115,18 @@ struct OrbbecModelConfig {
     std::string viam_model_suffix;                // "astra2" or "gemini_335le"
     Resolution default_color_resolution;
     Resolution default_depth_resolution;
+    Resolution default_infrared_resolution;
     std::optional<std::string> firmware_url;
     std::string min_firmware_version;
     std::map<Resolution, std::set<Resolution, std::greater<Resolution>>, std::greater<Resolution>> color_to_depth_supported_resolutions;
+    std::map<std::string, std::set<Resolution, std::greater<Resolution>>> infrared_format_to_resolutions;
     std::unordered_set<std::string> supported_color_formats;
     std::unordered_set<std::string> supported_depth_formats;
+    std::unordered_set<std::string> supported_infrared_formats;
     std::string default_color_format;
     std::string default_depth_format;
+    std::string default_infrared_format;
+    float default_infrared_fps;
 
     // Get config for a device name
     static std::optional<OrbbecModelConfig> forDevice(const std::string& device_name);

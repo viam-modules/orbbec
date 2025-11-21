@@ -12,6 +12,12 @@
       "short_description": "Orbbec Astra2 driver return images, depth maps and pointclouds"
     },
     {
+      "api": "rdk:component:camera",
+      "markdown_link": "README.md#model-viamorbbecgemini335le",
+      "model": "viam:orbbec:gemini_335le",
+      "short_description": "Orbbec Gemini 335Le driver return images, depth maps and pointclouds"
+    },
+    {
       "api": "rdk:service:discovery",
       "markdown_link": "README.md#model-viamorbbecdiscovery",
       "model": "viam:orbbec:discovery",

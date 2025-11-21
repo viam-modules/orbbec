@@ -70,6 +70,7 @@ static const OrbbecModelConfig ASTRA2_CONFIG{
     "astra2",                                                                              // viam_model_suffix
     {1280, 720},                                                                           // default_color_resolution
     {1600, 1200},                                                                          // default_depth_resolution
+    {1600, 1200},                                                                          // default_infrared_resolution
     "https://orbbec-debian-repos-aws.s3.amazonaws.com/product/Astra2_Release_2.8.20.zip",  // firmware_url
     "2.8.20",                                                                              // min_firmware_version
     {{{1920, 1080}, {{1600, 1200}, {800, 600}, {400, 300}}},                               // Supported resolutions, 16:9 aspect ratio
@@ -78,10 +79,14 @@ static const OrbbecModelConfig ASTRA2_CONFIG{
      {{800, 600}, {{800, 600}, {400, 300}}},                                               // Supported resolutions, 4:3 aspect ratio
      {{640, 480}, {{800, 600}, {400, 300}}},                                               // Supported resolutions, 4:3 aspect ratio
      {{640, 360}, {{800, 600}, {400, 300}}}},                                              // Supported resolutions, 4:3 aspect ratio
+    {{"MJPG", {{1600, 1200}, {800, 600}}}},                                                // Supported infrared formats, 16:9 aspect ratio
     {"RGB", "MJPG"},                                                                       // supported_color_formats
     {"Y16"},                                                                               // supported_depth_formats
+    {"MJPG"},                                                                              // supported_infrared_formats
     "MJPG",                                                                                // default_color_format
-    "Y16"                                                                                  // default_depth_format
+    "Y16",                                                                                 // default_depth_format
+    "MJPG",                                                                                // default_infrared_format
+    30.0f                                                                                  // default_infrared_fps
 };
 
 static const OrbbecModelConfig GEMINI_335LE_CONFIG{
@@ -89,16 +94,21 @@ static const OrbbecModelConfig GEMINI_335LE_CONFIG{
     "gemini_335le",                                                                           // viam_model_suffix
     {1280, 800},                                                                              // default_color_resolution
     {1280, 800},                                                                              // default_depth_resolution
+    {},                                                                                       // default_infrared_resolution
     "https://orbbec-debian-repos-aws.s3.amazonaws.com/product/Gemini330_Release_1.5.55.zip",  // firmware_url
     "1.5.55",                                                                                 // min_firmware_version
     {{{1280, 800}, {{1280, 800}, {848, 530}, {640, 400}, {424, 266}, {320, 200}}},            // Supported resolutions, 16:10 aspect ratio
      {{848, 530}, {{848, 530}, {640, 400}, {424, 266}, {320, 200}}},                          // 16:10 aspect ratio
      {{640, 400}, {{640, 400}, {424, 266}, {320, 200}}},                                      // 16:10 aspect ratio
      {{640, 480}, {{640, 480}}}},                                                             // 4:3 aspect ratio
-    {"MJPG"},                                                                                 // supported_color_formats
-    {"Y16"},                                                                                  // supported_depth_formats
-    "MJPG",                                                                                   // default_color_format
-    "Y16"                                                                                     // default_depth_format
+    {},        // Supported infrared formats, 16:9 aspect ratio
+    {"MJPG"},  // supported_color_formats
+    {"Y16"},   // supported_depth_formats
+    {},        // supported_infrared_formats
+    "MJPG",    // default_color_format
+    "Y16",     // default_depth_format
+    {},        // default_infrared_format
+    0.0f       // default_infrared_fps
 };
 
 static const std::vector<OrbbecModelConfig> all_model_configs = {ASTRA2_CONFIG, GEMINI_335LE_CONFIG};
@@ -211,6 +221,25 @@ std::string formatError(Args&&... args) {
     std::ostringstream buffer;
     (buffer << ... << args);
     return buffer.str();
+}
+
+void validateInfraredFrame(std::shared_ptr<ob::Frame> infrared,
+                           const std::optional<DeviceFormat>& device_format_opt,
+                           const OrbbecModelConfig& modelConfig) {
+    if (infrared == nullptr) {
+        throw std::runtime_error(formatError("no infrared frame"));
+    }
+
+    // Format validation
+    std::string frameFormat = ob::TypeHelper::convertOBFormatTypeToString(infrared->getFormat());
+    if (modelConfig.supported_infrared_formats.count(frameFormat) == 0) {
+        std::ostringstream buffer;
+        buffer << "unsupported infrared format: " << frameFormat << ", supported: ";
+        for (const auto& fmt : modelConfig.supported_infrared_formats) {
+            buffer << fmt << ", ";
+        }
+        throw std::runtime_error(formatError(buffer.str()));
+    }
 }
 
 // Validate color frame format and timestamp
@@ -636,8 +665,8 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
 
 auto frameCallback(const std::string& serialNumber) {
     return [serialNumber](std::shared_ptr<ob::FrameSet> frameSet) {
-        if (frameSet->getCount() != 2) {
-            std::cerr << "got non 2 frame count: " << frameSet->getCount() << "\n";
+        if (frameSet->getCount() < 2 || frameSet->getCount() > 3) {
+            std::cerr << "got invalid frame count: " << frameSet->getCount() << ", expected 2 or 3\n";
             return;
         }
         std::shared_ptr<ob::Frame> color = frameSet->getFrame(OB_FRAME_COLOR);
@@ -650,6 +679,14 @@ auto frameCallback(const std::string& serialNumber) {
         if (depth == nullptr) {
             std::cerr << "no depth frame\n";
             return;
+        }
+
+        if (frameSet->getCount() == 3) {
+            std::shared_ptr<ob::Frame> infrared = frameSet->getFrame(OB_FRAME_IR);
+            if (infrared == nullptr) {
+                std::cerr << "no infrared frame\n";
+                return;
+            }
         }
 
         std::lock_guard<std::mutex> lock(frame_set_by_serial_mu());
@@ -667,7 +704,7 @@ auto frameCallback(const std::string& serialNumber) {
 
         auto it = frame_set_by_serial().find(serialNumber);
         if (it != frame_set_by_serial().end()) {
-            std::shared_ptr<ob::Frame> prevColor = it->second->getFrame(OB_FRAME_COLOR);
+            std::shared_ptr<ob::Frame> prevColor = it->second->getFrame(OB_FRAME_IR);
             std::shared_ptr<ob::Frame> prevDepth = it->second->getFrame(OB_FRAME_DEPTH);
             if (prevColor != nullptr && prevDepth != nullptr) {
                 diff = timeSinceFrameUs(color->getSystemTimeStampUs(), prevColor->getSystemTimeStampUs());
@@ -777,6 +814,62 @@ void configureDevice(std::string serialNumber, OrbbecModelConfig const& modelCon
         buffer << service_name << ": unable to configure device " << serialNumber << " - no valid stream configuration found";
         throw std::runtime_error(buffer.str());
     }
+
+    // Get enabled_sensors from the config stored in config_by_serial
+    std::unordered_set<std::string> enabled_sensors;
+    {
+        std::lock_guard<std::mutex> lock(config_by_serial_mu());
+        if (config_by_serial().count(serialNumber) > 0) {
+            enabled_sensors = config_by_serial().at(serialNumber).enabled_sensors;
+        } else {
+            // Default: color and depth are always enabled
+            enabled_sensors = {"color", "depth"};
+        }
+    }
+
+    if (enabled_sensors.count("infrared") > 0) {
+        // Query all supported infrared sensor type and enable the infrared stream.
+        // For dual infrared device, enable the left and right infrared streams.
+        // For single infrared device, enable the infrared stream.
+        auto infraredStreamProfiles = my_dev->pipe->getStreamProfileList(OB_SENSOR_IR);
+        if (infraredStreamProfiles->getCount() > 0) {
+            VIAM_SDK_LOG(info) << "Amount of infrared stream profiles: " << infraredStreamProfiles->getCount() << "\n";
+            for (uint32_t i = 0; i < infraredStreamProfiles->getCount(); i++) {
+                auto infraredVsp = infraredStreamProfiles->getProfile(i)->as<ob::VideoStreamProfile>();
+                VIAM_SDK_LOG(info) << "Infrared stream profile: format: "
+                                   << ob::TypeHelper::convertOBFormatTypeToString(infraredVsp->getFormat())
+                                   << " width: " << infraredVsp->getWidth() << " height: " << infraredVsp->getHeight()
+                                   << " fps: " << infraredVsp->getFps() << "\n";
+                if (format_opt->infrared_format.has_value() &&
+                    (ob::TypeHelper::convertOBFormatTypeToString(infraredVsp->getFormat()) != *format_opt->infrared_format)) {
+                    continue;
+                }
+                if ((!format_opt->infrared_format.has_value()) &&
+                    (ob::TypeHelper::convertOBFormatTypeToString(infraredVsp->getFormat()) == modelConfig.default_infrared_format)) {
+                    continue;
+                }
+                if (resolution_opt->infrared_resolution.has_value() &&
+                    (infraredVsp->getWidth() != resolution_opt->infrared_resolution->width ||
+                     infraredVsp->getHeight() != resolution_opt->infrared_resolution->height)) {
+                    continue;
+                }
+                if ((!resolution_opt->infrared_resolution.has_value()) &&
+                    ((infraredVsp->getWidth() != modelConfig.default_infrared_resolution.width) ||
+                     (infraredVsp->getHeight() != modelConfig.default_infrared_resolution.height))) {
+                    continue;
+                }
+                if (infraredVsp->getFps() != modelConfig.default_infrared_fps) {
+                    continue;
+                }
+                VIAM_SDK_LOG(info) << "Enabling infrared stream profile: format: "
+                                   << ob::TypeHelper::convertOBFormatTypeToString(infraredVsp->getFormat())
+                                   << " width: " << infraredVsp->getWidth() << " height: " << infraredVsp->getHeight()
+                                   << " fps: " << infraredVsp->getFps() << "\n";
+                config->enableStream(infraredStreamProfiles->getProfile(i));
+            }
+        }
+    }
+
     my_dev->config = config;
 }
 
@@ -895,8 +988,18 @@ void Orbbec::validate_sensor(std::pair<std::string, viam::sdk::ProtoValue> const
             VIAM_SDK_LOG(error) << buffer.str();
             throw std::invalid_argument(buffer.str());
         }
+    } else if (sensor_type == "infrared") {
+        if (!modelConfig.supported_infrared_formats.count(*format)) {
+            std::ostringstream buffer;
+            buffer << "infrared sensor format must be one of: ";
+            for (const auto& type : modelConfig.supported_infrared_formats) {
+                buffer << type << " ";
+            }
+            VIAM_SDK_LOG(error) << buffer.str();
+            throw std::invalid_argument(buffer.str());
+        }
     } else {
-        throw std::invalid_argument("sensor type must be color or depth");
+        throw std::invalid_argument("sensor type must be color, depth or infrared");
     }
 }
 
@@ -926,6 +1029,9 @@ std::vector<std::string> Orbbec::validateOrbbecModel(vsdk::ResourceConfig cfg, O
             for (auto const& sensor_pair : *sensors) {
                 validate_sensor(sensor_pair, modelConfig);
             }
+        }
+        if (sensors->count("infrared")) {
+            validate_sensor(std::make_pair("infrared", sensors->at("infrared")), modelConfig);
         }
         auto color_width_uint32 =
             static_cast<std::uint32_t>(*sensors->at("color").get<viam::sdk::ProtoStruct>()->at("width").get<double>());
@@ -1169,19 +1275,32 @@ vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::Pro
             }
             fs = search->second;
         }
-        std::shared_ptr<ob::Frame> color = fs->getFrame(OB_FRAME_COLOR);
 
+        std::shared_ptr<ob::Frame> image = nullptr;
+        bool is_infrared = false;
+
+        // Get enabled_sensors from the config stored in config_by_serial
+        std::unordered_set<std::string> enabled_sensors;
         std::optional<DeviceFormat> res_format_opt;
         {
             std::lock_guard<std::mutex> lock(config_by_serial_mu());
             if (config_by_serial().count(serial_number) == 0) {
                 throw std::invalid_argument("device with serial number " + serial_number + " is not in config_by_serial");
             }
+            enabled_sensors = config_by_serial().at(serial_number).enabled_sensors;
             res_format_opt = config_by_serial().at(serial_number).device_format;
         }
 
-        validateColorFrame(color, res_format_opt, *model_config_);
-        vsdk::Camera::raw_image response = encodeColorFrame(color);
+        // Select frame based on enabled sensors: infrared takes priority if enabled, otherwise color
+        if (enabled_sensors.count("infrared") > 0) {
+            image = fs->getFrame(OB_FRAME_IR);
+            validateInfraredFrame(image, res_format_opt, *model_config_);
+        } else {
+            image = fs->getFrame(OB_FRAME_COLOR);
+            validateColorFrame(image, res_format_opt, *model_config_);
+        }
+
+        vsdk::Camera::raw_image response = encodeColorFrame(image);
         VIAM_RESOURCE_LOG(debug) << "[get_image] end";
         return response;
     } catch (const std::exception& e) {
@@ -1280,42 +1399,66 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
             throw std::runtime_error("no frameset");
         }
 
-        bool should_process_color = false;
-        bool should_process_depth = false;
-
-        if (filter_source_names.empty()) {
-            should_process_color = true;
-            should_process_depth = true;
-        } else {
-            for (const auto& name : filter_source_names) {
-                if (name == kColorSourceName) {
-                    should_process_color = true;
-                }
-                if (name == kDepthSourceName) {
-                    should_process_depth = true;
-                }
-            }
-        }
-
-        vsdk::Camera::image_collection response;
-        std::shared_ptr<ob::Frame> color = nullptr;
-        std::shared_ptr<ob::Frame> depth = nullptr;
-        uint64_t nowUs = getNowUs();
+        // Get enabled_sensors and device_format from the config stored in config_by_serial
+        std::unordered_set<std::string> enabled_sensors;
         std::optional<DeviceFormat> device_format_opt;
         {
             std::lock_guard<std::mutex> lock(config_by_serial_mu());
             if (config_by_serial().count(serial_number) == 0) {
                 throw std::runtime_error("device with serial number " + serial_number + " is not in config_by_serial");
             }
+            enabled_sensors = config_by_serial().at(serial_number).enabled_sensors;
             device_format_opt = config_by_serial().at(serial_number).device_format;
         }
 
-        if (should_process_color) {
-            color = fs->getFrame(OB_FRAME_COLOR);
-            validateColorFrame(color, device_format_opt, *model_config_);
+        bool should_process_color = false;
+        bool should_process_depth = false;
+        bool should_process_infrared = false;
 
-            vsdk::Camera::raw_image color_image = encodeColorFrame(color);
-            response.images.emplace_back(std::move(color_image));
+        if (filter_source_names.empty()) {
+            // If no filter, process all enabled sensors
+            if (enabled_sensors.count("infrared") > 0) {
+                should_process_infrared = true;
+            } else if (enabled_sensors.count("color") > 0) {
+                should_process_color = true;
+            }
+            should_process_depth = enabled_sensors.count("depth") > 0;
+        } else {
+            for (const auto& name : filter_source_names) {
+                if (name == kColorSourceName) {
+                    if (enabled_sensors.count("infrared") > 0) {
+                        should_process_infrared = true;
+                    } else if (enabled_sensors.count("color") > 0) {
+                        should_process_color = true;
+                    }
+                }
+                if (name == kDepthSourceName && enabled_sensors.count("depth") > 0) {
+                    should_process_depth = true;
+                }
+            }
+        }
+
+        vsdk::Camera::image_collection response;
+        std::shared_ptr<ob::Frame> image = nullptr;
+        std::shared_ptr<ob::Frame> depth = nullptr;
+        uint64_t nowUs = getNowUs();
+
+        if (should_process_infrared && should_process_color) {
+            throw std::runtime_error("infrared and color cannot be processed at the same time");
+        }
+
+        if (should_process_color) {
+            image = fs->getFrame(OB_FRAME_COLOR);
+            validateColorFrame(image, device_format_opt, *model_config_);
+
+            vsdk::Camera::raw_image image_image = encodeColorFrame(image);
+            response.images.emplace_back(std::move(image_image));
+        } else if (should_process_infrared) {
+            image = fs->getFrame(OB_FRAME_IR);
+            validateInfraredFrame(image, device_format_opt, *model_config_);
+
+            vsdk::Camera::raw_image image_image = encodeColorFrame(image);
+            response.images.emplace_back(std::move(image_image));
         }
 
         if (should_process_depth) {
@@ -1340,20 +1483,20 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
             return response;
         }
 
-        uint64_t colorTS = color ? color->getSystemTimeStampUs() : 0;
+        uint64_t imageTS = image ? image->getSystemTimeStampUs() : 0;
         uint64_t depthTS = depth ? depth->getSystemTimeStampUs() : 0;
         uint64_t timestamp = 0;
 
-        if (colorTS > 0 && depthTS > 0) {
-            if (colorTS != depthTS) {
+        if (imageTS > 0 && depthTS > 0) {
+            if (imageTS != depthTS) {
                 VIAM_RESOURCE_LOG(info) << "color and depth timestamps differ, defaulting to "
                                            "older of the two"
-                                        << "color timestamp was " << colorTS << " depth timestamp was " << depthTS;
+                                        << "image timestamp was " << imageTS << " depth timestamp was " << depthTS;
             }
             // use the older of the two timestamps
-            timestamp = (colorTS > depthTS) ? depthTS : colorTS;
-        } else if (colorTS > 0) {
-            timestamp = colorTS;
+            timestamp = (imageTS > depthTS) ? depthTS : imageTS;
+        } else if (imageTS > 0) {
+            timestamp = imageTS;
         } else {
             timestamp = depthTS;
         }
@@ -1636,14 +1779,39 @@ std::unique_ptr<orbbec::ObResourceConfig> Orbbec::configure(vsdk::Dependencies d
         auto const depth_res = Resolution{static_cast<uint32_t>(depth_width), static_cast<uint32_t>(depth_height)};
         auto const depth_format = sensors->at("depth").get<viam::sdk::ProtoStruct>()->at("format").get_unchecked<std::string>();
 
-        dev_res = DeviceResolution{color_res, depth_res};
-        dev_fmt = DeviceFormat{color_format, depth_format};
+        std::optional<Resolution> infrared_res = std::nullopt;
+        std::optional<std::string> infrared_format = std::nullopt;
+
+        // Build enabled_sensors dynamically: color and depth are always enabled, infrared if specified
+        std::unordered_set<std::string> enabled_sensors{"color", "depth"};
+        if (sensors->count("infrared")) {
+            auto infrared_struct = sensors->at("infrared").get<viam::sdk::ProtoStruct>();
+            infrared_res = Resolution{static_cast<uint32_t>(infrared_struct->at("width").get_unchecked<double>()),
+                                      static_cast<uint32_t>(infrared_struct->at("height").get_unchecked<double>())};
+            infrared_format = infrared_struct->at("format").get_unchecked<std::string>();
+            enabled_sensors.insert("infrared");
+        }
+
+        dev_res = DeviceResolution{color_res, depth_res, infrared_res};
+        dev_fmt = DeviceFormat{color_format, depth_format, infrared_format};
+
+        VIAM_SDK_LOG(info) << "[configure] enabled_sensors: ";
+        for (const auto& sensor : enabled_sensors) {
+            VIAM_SDK_LOG(info) << sensor << " ";
+        }
+        auto native_config =
+            std::make_unique<orbbec::ObResourceConfig>(serial_number_from_config, configuration.name(), dev_res, dev_fmt, enabled_sensors);
+        VIAM_SDK_LOG(info) << "[configure] configured: " << native_config->to_string();
+        return native_config;
     } else {
         VIAM_SDK_LOG(info) << "[configure] no sensors specified in config, using defaults";
+        // Default: color and depth are always enabled
+        std::unordered_set<std::string> enabled_sensors{"color", "depth"};
+        auto native_config =
+            std::make_unique<orbbec::ObResourceConfig>(serial_number_from_config, configuration.name(), dev_res, dev_fmt, enabled_sensors);
+        VIAM_SDK_LOG(info) << "[configure] configured: " << native_config->to_string();
+        return native_config;
     }
-    auto native_config = std::make_unique<orbbec::ObResourceConfig>(serial_number_from_config, configuration.name(), dev_res, dev_fmt);
-    VIAM_SDK_LOG(info) << "[configure] configured: " << native_config->to_string();
-    return native_config;
 }
 // RESOURCE END
 
