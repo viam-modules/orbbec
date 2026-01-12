@@ -470,29 +470,33 @@ bool profileMatchesSpec(std::shared_ptr<ob::VideoStreamProfile> vsp,
                         std::optional<DeviceFormat> deviceFormat,
                         const OrbbecModelConfig& modelConfig,
                         bool isColor) {
+    std::string requestedFormat = "";
     if (deviceFormat.has_value()) {
-        std::string requestedFormat = isColor ? (deviceFormat->color_format.has_value() ? deviceFormat->color_format.value() : "")
-                                              : (deviceFormat->depth_format.has_value() ? deviceFormat->depth_format.value() : "");
-        if (!requestedFormat.empty() && ob::TypeHelper::convertOBFormatTypeToString(vsp->getFormat()) != requestedFormat) {
-            return false;
-        }
-    } else {
-        std::string defaultFormat = isColor ? modelConfig.default_color_format : modelConfig.default_depth_format;
-        if (ob::TypeHelper::convertOBFormatTypeToString(vsp->getFormat()) != defaultFormat) {
-            return false;
-        }
+        requestedFormat = isColor ? (deviceFormat->color_format.has_value() ? deviceFormat->color_format.value() : "")
+                                  : (deviceFormat->depth_format.has_value() ? deviceFormat->depth_format.value() : "");
+    }
+    if (requestedFormat.empty()) {
+        requestedFormat = isColor ? modelConfig.default_color_format : modelConfig.default_depth_format;
+    }
+    if (ob::TypeHelper::convertOBFormatTypeToString(vsp->getFormat()) != requestedFormat) {
+        return false;
     }
 
+    Resolution requestedRes;
+    bool hasRequestedRes = false;
     if (deviceRes.has_value()) {
-        auto requestedRes = isColor ? deviceRes->color_resolution : deviceRes->depth_resolution;
-        if (requestedRes.has_value() && (vsp->getWidth() != requestedRes->width || vsp->getHeight() != requestedRes->height)) {
-            return false;
+        auto resOpt = isColor ? deviceRes->color_resolution : deviceRes->depth_resolution;
+        if (resOpt.has_value()) {
+            requestedRes = *resOpt;
+            hasRequestedRes = true;
         }
-    } else {
-        auto defaultRes = isColor ? modelConfig.default_color_resolution : modelConfig.default_depth_resolution;
-        if (vsp->getWidth() != defaultRes.width || vsp->getHeight() != defaultRes.height) {
-            return false;
-        }
+    }
+    if (!hasRequestedRes) {
+        requestedRes = isColor ? modelConfig.default_color_resolution : modelConfig.default_depth_resolution;
+    }
+
+    if (vsp->getWidth() != requestedRes.width || vsp->getHeight() != requestedRes.height) {
+        return false;
     }
 
     return true;
@@ -828,44 +832,38 @@ void configureDevice(std::string serialNumber, OrbbecModelConfig const& modelCon
     }
 
     if (enabled_sensors.count("infrared") > 0) {
-        // Query all supported infrared sensor type and enable the infrared stream.
-        // For dual infrared device, enable the left and right infrared streams.
-        // For single infrared device, enable the infrared stream.
         auto infraredStreamProfiles = my_dev->pipe->getStreamProfileList(OB_SENSOR_IR);
         if (infraredStreamProfiles->getCount() > 0) {
             VIAM_SDK_LOG(info) << "Amount of infrared stream profiles: " << infraredStreamProfiles->getCount() << "\n";
             for (uint32_t i = 0; i < infraredStreamProfiles->getCount(); i++) {
                 auto infraredVsp = infraredStreamProfiles->getProfile(i)->as<ob::VideoStreamProfile>();
-                VIAM_SDK_LOG(info) << "Infrared stream profile: format: "
+                VIAM_SDK_LOG(info) << "Checking infrared stream profile: format: "
                                    << ob::TypeHelper::convertOBFormatTypeToString(infraredVsp->getFormat())
                                    << " width: " << infraredVsp->getWidth() << " height: " << infraredVsp->getHeight()
                                    << " fps: " << infraredVsp->getFps() << "\n";
-                if (format_opt->infrared_format.has_value() &&
-                    (ob::TypeHelper::convertOBFormatTypeToString(infraredVsp->getFormat()) != *format_opt->infrared_format)) {
+
+                std::string targetFormat =
+                    format_opt && format_opt->infrared_format ? *format_opt->infrared_format : modelConfig.default_infrared_format;
+                if (ob::TypeHelper::convertOBFormatTypeToString(infraredVsp->getFormat()) != targetFormat) {
                     continue;
                 }
-                if ((!format_opt->infrared_format.has_value()) &&
-                    (ob::TypeHelper::convertOBFormatTypeToString(infraredVsp->getFormat()) == modelConfig.default_infrared_format)) {
+
+                Resolution targetRes = resolution_opt && resolution_opt->infrared_resolution ? *resolution_opt->infrared_resolution
+                                                                                             : modelConfig.default_infrared_resolution;
+                if (infraredVsp->getWidth() != targetRes.width || infraredVsp->getHeight() != targetRes.height) {
                     continue;
                 }
-                if (resolution_opt->infrared_resolution.has_value() &&
-                    (infraredVsp->getWidth() != resolution_opt->infrared_resolution->width ||
-                     infraredVsp->getHeight() != resolution_opt->infrared_resolution->height)) {
-                    continue;
-                }
-                if ((!resolution_opt->infrared_resolution.has_value()) &&
-                    ((infraredVsp->getWidth() != modelConfig.default_infrared_resolution.width) ||
-                     (infraredVsp->getHeight() != modelConfig.default_infrared_resolution.height))) {
-                    continue;
-                }
+
                 if (infraredVsp->getFps() != modelConfig.default_infrared_fps) {
                     continue;
                 }
+
                 VIAM_SDK_LOG(info) << "Enabling infrared stream profile: format: "
                                    << ob::TypeHelper::convertOBFormatTypeToString(infraredVsp->getFormat())
                                    << " width: " << infraredVsp->getWidth() << " height: " << infraredVsp->getHeight()
                                    << " fps: " << infraredVsp->getFps() << "\n";
                 config->enableStream(infraredStreamProfiles->getProfile(i));
+                break;  // Found a match, enable it and stop
             }
         }
     }
@@ -1807,8 +1805,12 @@ std::unique_ptr<orbbec::ObResourceConfig> Orbbec::configure(vsdk::Dependencies d
             enabled_sensors.insert("infrared");
         }
 
-        dev_res = DeviceResolution{color_res, depth_res, infrared_res};
-        dev_fmt = DeviceFormat{color_format, depth_format, infrared_format};
+        if (color_res || depth_res || infrared_res) {
+            dev_res = DeviceResolution{color_res, depth_res, infrared_res};
+        }
+        if (color_format || depth_format || infrared_format) {
+            dev_fmt = DeviceFormat{color_format, depth_format, infrared_format};
+        }
 
         VIAM_SDK_LOG(info) << "[configure] enabled_sensors: ";
         for (const auto& sensor : enabled_sensors) {
