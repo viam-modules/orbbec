@@ -1030,13 +1030,15 @@ std::vector<std::string> Orbbec::validateOrbbecModel(vsdk::ResourceConfig cfg, O
                 validate_sensor(sensor_pair, modelConfig);
             }
         }
-        if (sensors->count("infrared")) {
-            validate_sensor(std::make_pair("infrared", sensors->at("infrared")), modelConfig);
+
+        std::uint32_t color_width_uint32 = modelConfig.default_color_resolution.width;
+        std::uint32_t color_height_uint32 = modelConfig.default_color_resolution.height;
+        if (sensors->count("color")) {
+            auto const& color_struct = sensors->at("color").get_unchecked<viam::sdk::ProtoStruct>();
+            color_width_uint32 = static_cast<std::uint32_t>(color_struct.at("width").get_unchecked<double>());
+            color_height_uint32 = static_cast<std::uint32_t>(color_struct.at("height").get_unchecked<double>());
         }
-        auto color_width_uint32 =
-            static_cast<std::uint32_t>(*sensors->at("color").get<viam::sdk::ProtoStruct>()->at("width").get<double>());
-        auto color_height_uint32 =
-            static_cast<std::uint32_t>(*sensors->at("color").get<viam::sdk::ProtoStruct>()->at("height").get<double>());
+
         if (modelConfig.color_to_depth_supported_resolutions.count({color_width_uint32, color_height_uint32}) == 0) {
             std::ostringstream buffer;
             buffer << "color resolution must be one of: ";
@@ -1046,10 +1048,15 @@ std::vector<std::string> Orbbec::validateOrbbecModel(vsdk::ResourceConfig cfg, O
             VIAM_SDK_LOG(error) << buffer.str();
             throw std::invalid_argument(buffer.str());
         }
-        auto depth_width_uint32 =
-            static_cast<std::uint32_t>(*sensors->at("depth").get<viam::sdk::ProtoStruct>()->at("width").get<double>());
-        auto depth_height_uint32 =
-            static_cast<std::uint32_t>(*sensors->at("depth").get<viam::sdk::ProtoStruct>()->at("height").get<double>());
+
+        std::uint32_t depth_width_uint32 = modelConfig.default_depth_resolution.width;
+        std::uint32_t depth_height_uint32 = modelConfig.default_depth_resolution.height;
+        if (sensors->count("depth")) {
+            auto const& depth_struct = sensors->at("depth").get_unchecked<viam::sdk::ProtoStruct>();
+            depth_width_uint32 = static_cast<std::uint32_t>(depth_struct.at("width").get_unchecked<double>());
+            depth_height_uint32 = static_cast<std::uint32_t>(depth_struct.at("height").get_unchecked<double>());
+        }
+
         if (modelConfig.color_to_depth_supported_resolutions.at({color_width_uint32, color_height_uint32})
                 .count({depth_width_uint32, depth_height_uint32}) == 0) {
             std::ostringstream buffer;
@@ -1769,15 +1776,23 @@ std::unique_ptr<orbbec::ObResourceConfig> Orbbec::configure(vsdk::Dependencies d
         VIAM_SDK_LOG(info) << "[configure] sensors specified in config";
         auto sensors = attrs["sensors"].get<viam::sdk::ProtoStruct>();
 
-        auto const color_height = sensors->at("color").get<viam::sdk::ProtoStruct>()->at("height").get_unchecked<double>();
-        auto const color_width = sensors->at("color").get<viam::sdk::ProtoStruct>()->at("width").get_unchecked<double>();
-        auto const color_res = Resolution{static_cast<uint32_t>(color_width), static_cast<uint32_t>(color_height)};
-        auto const color_format = sensors->at("color").get<viam::sdk::ProtoStruct>()->at("format").get_unchecked<std::string>();
+        std::optional<Resolution> color_res = std::nullopt;
+        std::optional<std::string> color_format = std::nullopt;
+        if (sensors->count("color")) {
+            auto const& color_struct = sensors->at("color").get_unchecked<viam::sdk::ProtoStruct>();
+            color_res = Resolution{static_cast<uint32_t>(color_struct.at("width").get_unchecked<double>()),
+                                   static_cast<uint32_t>(color_struct.at("height").get_unchecked<double>())};
+            color_format = color_struct.at("format").get_unchecked<std::string>();
+        }
 
-        auto const depth_height = sensors->at("depth").get<viam::sdk::ProtoStruct>()->at("height").get_unchecked<double>();
-        auto const depth_width = sensors->at("depth").get<viam::sdk::ProtoStruct>()->at("width").get_unchecked<double>();
-        auto const depth_res = Resolution{static_cast<uint32_t>(depth_width), static_cast<uint32_t>(depth_height)};
-        auto const depth_format = sensors->at("depth").get<viam::sdk::ProtoStruct>()->at("format").get_unchecked<std::string>();
+        std::optional<Resolution> depth_res = std::nullopt;
+        std::optional<std::string> depth_format = std::nullopt;
+        if (sensors->count("depth")) {
+            auto const& depth_struct = sensors->at("depth").get_unchecked<viam::sdk::ProtoStruct>();
+            depth_res = Resolution{static_cast<uint32_t>(depth_struct.at("width").get_unchecked<double>()),
+                                   static_cast<uint32_t>(depth_struct.at("height").get_unchecked<double>())};
+            depth_format = depth_struct.at("format").get_unchecked<std::string>();
+        }
 
         std::optional<Resolution> infrared_res = std::nullopt;
         std::optional<std::string> infrared_format = std::nullopt;
