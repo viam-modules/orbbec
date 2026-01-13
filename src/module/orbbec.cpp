@@ -94,21 +94,21 @@ static const OrbbecModelConfig GEMINI_335LE_CONFIG{
     "gemini_335le",                                                                           // viam_model_suffix
     {1280, 800},                                                                              // default_color_resolution
     {1280, 800},                                                                              // default_depth_resolution
-    {},                                                                                       // default_infrared_resolution
+    {1280, 800},                                                                              // default_infrared_resolution
     "https://orbbec-debian-repos-aws.s3.amazonaws.com/product/Gemini330_Release_1.5.55.zip",  // firmware_url
     "1.5.55",                                                                                 // min_firmware_version
     {{{1280, 800}, {{1280, 800}, {848, 530}, {640, 400}, {424, 266}, {320, 200}}},            // Supported resolutions, 16:10 aspect ratio
      {{848, 530}, {{848, 530}, {640, 400}, {424, 266}, {320, 200}}},                          // 16:10 aspect ratio
      {{640, 400}, {{640, 400}, {424, 266}, {320, 200}}},                                      // 16:10 aspect ratio
      {{640, 480}, {{640, 480}}}},                                                             // 4:3 aspect ratio
-    {},        // Supported infrared formats, 16:9 aspect ratio
-    {"MJPG"},  // supported_color_formats
-    {"Y16"},   // supported_depth_formats
-    {},        // supported_infrared_formats
-    "MJPG",    // default_color_format
-    "Y16",     // default_depth_format
-    {},        // default_infrared_format
-    0.0f       // default_infrared_fps
+    {{"MJPG", {{1280, 800}, {848, 530}, {640, 400}, {424, 266}, {320, 200}}}},                // Supported infrared formats
+    {"MJPG"},                                                                                 // supported_color_formats
+    {"Y16"},                                                                                  // supported_depth_formats
+    {"MJPG"},                                                                                 // supported_infrared_formats
+    "MJPG",                                                                                   // default_color_format
+    "Y16",                                                                                    // default_depth_format
+    "MJPG",                                                                                   // default_infrared_format
+    30.0f                                                                                     // default_infrared_fps
 };
 
 static const std::vector<OrbbecModelConfig> all_model_configs = {ASTRA2_CONFIG, GEMINI_335LE_CONFIG};
@@ -835,6 +835,7 @@ void configureDevice(std::string serialNumber, OrbbecModelConfig const& modelCon
         auto infraredStreamProfiles = my_dev->pipe->getStreamProfileList(OB_SENSOR_IR);
         if (infraredStreamProfiles->getCount() > 0) {
             VIAM_SDK_LOG(info) << "Amount of infrared stream profiles: " << infraredStreamProfiles->getCount() << "\n";
+            std::shared_ptr<ob::StreamProfile> bestProfile;
             for (uint32_t i = 0; i < infraredStreamProfiles->getCount(); i++) {
                 auto infraredVsp = infraredStreamProfiles->getProfile(i)->as<ob::VideoStreamProfile>();
                 VIAM_SDK_LOG(info) << "Checking infrared stream profile: format: "
@@ -854,16 +855,30 @@ void configureDevice(std::string serialNumber, OrbbecModelConfig const& modelCon
                     continue;
                 }
 
-                if (infraredVsp->getFps() != modelConfig.default_infrared_fps) {
-                    continue;
-                }
-
-                VIAM_SDK_LOG(info) << "Enabling infrared stream profile: format: "
+                VIAM_SDK_LOG(info) << "Found matching infrared stream profile: format: "
                                    << ob::TypeHelper::convertOBFormatTypeToString(infraredVsp->getFormat())
                                    << " width: " << infraredVsp->getWidth() << " height: " << infraredVsp->getHeight()
                                    << " fps: " << infraredVsp->getFps() << "\n";
-                config->enableStream(infraredStreamProfiles->getProfile(i));
-                break;  // Found a match, enable it and stop
+
+                if (infraredVsp->getFps() == modelConfig.default_infrared_fps) {
+                    VIAM_SDK_LOG(info) << "Enabling preferred infrared stream profile (matches default FPS: "
+                                       << modelConfig.default_infrared_fps << ")";
+                    config->enableStream(infraredStreamProfiles->getProfile(i));
+                    bestProfile = nullptr;  // Clear bestProfile if we found an exact match
+                    break;
+                }
+
+                // If we haven't found a match with preferred FPS yet, keep this one as a fallback
+                if (!bestProfile || infraredVsp->getFps() > bestProfile->as<ob::VideoStreamProfile>()->getFps()) {
+                    bestProfile = infraredStreamProfiles->getProfile(i);
+                }
+            }
+            if (bestProfile) {
+                auto vsp = bestProfile->as<ob::VideoStreamProfile>();
+                VIAM_SDK_LOG(info) << "Enabling fallback infrared stream profile: format: "
+                                   << ob::TypeHelper::convertOBFormatTypeToString(vsp->getFormat()) << " width: " << vsp->getWidth()
+                                   << " height: " << vsp->getHeight() << " fps: " << vsp->getFps() << "\n";
+                config->enableStream(bestProfile);
             }
         }
     }

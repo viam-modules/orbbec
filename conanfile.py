@@ -70,7 +70,10 @@ class orbbec(ConanFile):
 
             self.output.info("Creating module.tar.gz")
             with tarfile.open("module.tar.gz", "w|gz") as tar:
-                tar.add(tmp_dir, ".")
+                # Add individual files directly from the directory to avoid the ./ prefix
+                for item in os.listdir(tmp_dir):
+                    item_path = os.path.join(tmp_dir, item)
+                    tar.add(item_path, arcname=item)
 
                 self.output.debug("module.tar.gz contents:")
                 for mem in tar.getmembers():
