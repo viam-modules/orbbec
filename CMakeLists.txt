@@ -93,7 +93,7 @@ else()
         PROGRAMS
             first_run.sh
             install_udev_rules.sh
-        DESTINATION ${CMAKE_INSTALL_PREFIX}
+        DESTINATION .
     )
     # The lib/extensions directory contains some shared libraries which are
     # mandatory for our use case but not picked up by the runtime dependency set
@@ -109,6 +109,6 @@ install(
     FILES
         meta.json
         99-obsensor-libusb.rules
-    DESTINATION ${CMAKE_INSTALL_PREFIX}
+    DESTINATION .
 )
 
