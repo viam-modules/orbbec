@@ -1315,6 +1315,7 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
             validateColorFrame(color, device_format_opt, *model_config_);
 
             vsdk::Camera::raw_image color_image = encodeColorFrame(color);
+            color_image.source_name = kColorSourceName;
             response.images.emplace_back(std::move(color_image));
         }
 
