@@ -126,7 +126,6 @@ struct OrbbecModelConfig {
     std::string default_color_format;
     std::string default_depth_format;
     std::string default_infrared_format;
-    float default_infrared_fps;
 
     // Get config for a device name
     static std::optional<OrbbecModelConfig> forDevice(const std::string& device_name);
