@@ -62,6 +62,8 @@ const std::string kPcdMimeType = "pointcloud/pcd";
 constexpr char service_name[] = "viam_orbbec";
 const float mmToMeterMultiple = 0.001;
 const uint64_t maxFrameAgeUs = 1e6;  // time until a frame is considered stale, in microseconds (equal to 1 sec)
+static constexpr std::uint64_t MAX_FRAME_SET_TIME_DIFF_MS =
+    2;  // max time difference between frames in a frameset to be considered simultaneous, in miliseconds (equal to 2 ms)
 
 // Model configurations
 namespace {
@@ -213,6 +215,18 @@ std::string formatError(Args&&... args) {
     return buffer.str();
 }
 
+// Get the best available timestamp for a frame (Global > System)
+uint64_t getBestTimestampUs(std::shared_ptr<ob::Frame> frame) {
+    if (frame == nullptr) {
+        return 0;
+    }
+    uint64_t ts = frame->getGlobalTimeStampUs();
+    if (ts > 0) {
+        return ts;
+    }
+    return frame->getSystemTimeStampUs();
+}
+
 // Validate color frame format and timestamp
 void validateColorFrame(std::shared_ptr<ob::Frame> color,
                         const std::optional<DeviceFormat>& device_format_opt,
@@ -234,7 +248,7 @@ void validateColorFrame(std::shared_ptr<ob::Frame> color,
 
     // Timestamp validation
     uint64_t nowUs = getNowUs();
-    uint64_t diff = timeSinceFrameUs(nowUs, color->getSystemTimeStampUs());
+    uint64_t diff = timeSinceFrameUs(nowUs, getBestTimestampUs(color));
     if (diff > maxFrameAgeUs) {
         throw std::runtime_error(formatError("no recent color frame: check connection, diff: ", diff, "us"));
     }
@@ -271,7 +285,7 @@ void validateDepthFrame(std::shared_ptr<ob::Frame> depth,
 
     // Timestamp validation
     uint64_t nowUs = getNowUs();
-    uint64_t diff = timeSinceFrameUs(nowUs, depth->getSystemTimeStampUs());
+    uint64_t diff = timeSinceFrameUs(nowUs, getBestTimestampUs(depth));
     if (diff > maxFrameAgeUs) {
         throw std::runtime_error(formatError("no recent depth frame: check connection, diff: ", diff, "us"));
     }
@@ -654,15 +668,15 @@ auto frameCallback(const std::string& serialNumber) {
 
         std::lock_guard<std::mutex> lock(frame_set_by_serial_mu());
         uint64_t nowUs = getNowUs();
-        uint64_t diff = timeSinceFrameUs(nowUs, color->getSystemTimeStampUs());
+        uint64_t diff = timeSinceFrameUs(nowUs, getBestTimestampUs(color));
         if (diff > maxFrameAgeUs) {
-            std::cerr << "color frame is " << diff << "us older than now, nowUs: " << nowUs << " frameTimeUs "
-                      << color->getSystemTimeStampUs() << "\n";
+            std::cerr << "color frame is " << diff << "us older than now, nowUs: " << nowUs << " frameTimeUs " << getBestTimestampUs(color)
+                      << "\n";
         }
-        diff = timeSinceFrameUs(nowUs, depth->getSystemTimeStampUs());
+        diff = timeSinceFrameUs(nowUs, getBestTimestampUs(depth));
         if (diff > maxFrameAgeUs) {
-            std::cerr << "depth frame is " << diff << "us older than now, nowUs: " << nowUs << " frameTimeUs "
-                      << depth->getSystemTimeStampUs() << "\n";
+            std::cerr << "depth frame is " << diff << "us older than now, nowUs: " << nowUs << " frameTimeUs " << getBestTimestampUs(depth)
+                      << "\n";
         }
 
         auto it = frame_set_by_serial().find(serialNumber);
@@ -670,17 +684,17 @@ auto frameCallback(const std::string& serialNumber) {
             std::shared_ptr<ob::Frame> prevColor = it->second->getFrame(OB_FRAME_COLOR);
             std::shared_ptr<ob::Frame> prevDepth = it->second->getFrame(OB_FRAME_DEPTH);
             if (prevColor != nullptr && prevDepth != nullptr) {
-                diff = timeSinceFrameUs(color->getSystemTimeStampUs(), prevColor->getSystemTimeStampUs());
+                diff = timeSinceFrameUs(getBestTimestampUs(color), getBestTimestampUs(prevColor));
                 if (diff > maxFrameAgeUs) {
                     std::cerr << "previous color frame is " << diff
-                              << "us older than current color frame. previousUs: " << prevColor->getSystemTimeStampUs()
-                              << " currentUs: " << color->getSystemTimeStampUs() << "\n";
+                              << "us older than current color frame. previousUs: " << getBestTimestampUs(prevColor)
+                              << " currentUs: " << getBestTimestampUs(color) << "\n";
                 }
-                diff = timeSinceFrameUs(depth->getSystemTimeStampUs(), prevDepth->getSystemTimeStampUs());
+                diff = timeSinceFrameUs(getBestTimestampUs(depth), getBestTimestampUs(prevDepth));
                 if (diff > maxFrameAgeUs) {
                     std::cerr << "previous depth frame is " << diff
-                              << "us older than current depth frame. previousUs: " << prevDepth->getSystemTimeStampUs()
-                              << " currentUs: " << depth->getSystemTimeStampUs() << "\n";
+                              << "us older than current depth frame. previousUs: " << getBestTimestampUs(prevDepth)
+                              << " currentUs: " << getBestTimestampUs(depth) << "\n";
                 }
             }
         }
@@ -699,6 +713,14 @@ void configureDevice(std::string serialNumber, OrbbecModelConfig const& modelCon
     }
 
     std::unique_ptr<ViamOBDevice>& my_dev = search->second;
+
+    // Enable global timestamp if supported
+    if (my_dev->device->isGlobalTimestampSupported()) {
+        my_dev->device->enableGlobalTimestamp(true);
+        VIAM_SDK_LOG(info) << "[configureDevice] Global timestamp enabled for device " << serialNumber;
+    } else {
+        VIAM_SDK_LOG(info) << "[configureDevice] Global timestamp not supported for device " << serialNumber;
+    }
 
     // Initialize fields if not already set
     if (!my_dev->pipe) {
@@ -1341,8 +1363,8 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
             return response;
         }
 
-        uint64_t colorTS = color ? color->getSystemTimeStampUs() : 0;
-        uint64_t depthTS = depth ? depth->getSystemTimeStampUs() : 0;
+        uint64_t colorTS = color ? getBestTimestampUs(color) : 0;
+        uint64_t depthTS = depth ? getBestTimestampUs(depth) : 0;
         uint64_t timestamp = 0;
 
         if (colorTS > 0 && depthTS > 0) {
