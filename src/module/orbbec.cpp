@@ -62,8 +62,6 @@ const std::string kPcdMimeType = "pointcloud/pcd";
 constexpr char service_name[] = "viam_orbbec";
 const float mmToMeterMultiple = 0.001;
 const uint64_t maxFrameAgeUs = 1e6;  // time until a frame is considered stale, in microseconds (equal to 1 sec)
-static constexpr std::uint64_t MAX_FRAME_SET_TIME_DIFF_MS =
-    2;  // max time difference between frames in a frameset to be considered simultaneous, in miliseconds (equal to 2 ms)
 
 // Model configurations
 namespace {
