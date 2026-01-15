@@ -1454,7 +1454,8 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
                 } else if (key == "get_device_properties") {
                     return device_control::getDeviceProperties(dev->device, key);
                 } else if (key == "set_device_properties") {
-                    return device_control::setDeviceProperties(dev->device, value, key);
+                    device_control::setDeviceProperties(dev->device, value, key);
+                    call_get_properties = true;
                 } else if (key == "get_device_property") {
                     return device_control::getDeviceProperty(dev->device, value, key);
                 } else if (key == "set_device_property") {
