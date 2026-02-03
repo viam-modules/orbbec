@@ -1418,6 +1418,7 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
 
             std::unique_ptr<ViamOBDevice>& dev = search->second;
             for (auto const& [key, value] : command) {
+                VIAM_RESOURCE_LOG(info) << "Received command: " << key;
                 if (key == firmware_key) {
                     VIAM_RESOURCE_LOG(info) << "Received firmware update command";
                     vsdk::ProtoStruct resp = viam::sdk::ProtoStruct{};
@@ -1483,10 +1484,10 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
                 } else if (key == "set_depth_unit") {
                     return device_control::setDepthUnit(dev->device, value, key);
                 } else if (key == "get_device_properties") {
+                    VIAM_RESOURCE_LOG(info) << "Received get_device_properties command";
                     return device_control::getDeviceProperties(dev->device, key);
                 } else if (key == "set_device_properties") {
-                    device_control::setDeviceProperties(dev->device, value, key);
-                    call_get_properties = true;
+                    return device_control::setDeviceProperties(dev->device, value, key);
                 } else if (key == "get_device_property") {
                     return device_control::getDeviceProperty(dev->device, value, key);
                 } else if (key == "set_device_property") {

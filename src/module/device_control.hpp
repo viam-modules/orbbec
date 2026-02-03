@@ -247,6 +247,9 @@ template <typename DeviceT>
 viam::sdk::ProtoStruct setDeviceProperties(std::shared_ptr<DeviceT> device,
                                            const viam::sdk::ProtoValue& properties,
                                            std::string const& command) {
+    if (device == nullptr) {
+        return {{"error", "device is null"}};
+    }
     if (!properties.template is_a<viam::sdk::ProtoStruct>()) {
         return {{"error", "properties must be a struct"}};
     }
@@ -269,6 +272,7 @@ viam::sdk::ProtoStruct setDeviceProperties(std::shared_ptr<DeviceT> device,
                     std::stringstream error_ss;
                     error_ss << "Value for property " << property_item.name << " is not a struct, skipping.";
                     VIAM_SDK_LOG(warn) << error_ss.str();
+                    continue;
                 }
                 auto const& value = value_struct->at("current");
                 writable_properties.insert(property_item.name);
@@ -297,6 +301,7 @@ viam::sdk::ProtoStruct setDeviceProperties(std::shared_ptr<DeviceT> device,
             }
         }
     }
+    return getDeviceProperties<DeviceT>(device, command, {});
 }
 
 template <typename DeviceT>
