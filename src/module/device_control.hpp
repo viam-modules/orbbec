@@ -248,10 +248,14 @@ viam::sdk::ProtoStruct setDeviceProperties(std::shared_ptr<DeviceT> device,
                                            const viam::sdk::ProtoValue& properties,
                                            std::string const& command) {
     if (device == nullptr) {
-        return {{"error", "device is null"}};
+        std::stringstream ss;
+        ss << "calling " << command << " on null device";
+        return {{"error", ss.str()}};
     }
     if (!properties.template is_a<viam::sdk::ProtoStruct>()) {
-        return {{"error", "properties must be a struct"}};
+        std::stringstream ss;
+        ss << "calling " << command << " on non-struct properties";
+        return {{"error", ss.str()}};
     }
     std::unordered_set<std::string> writable_properties;
     auto const& properties_map = properties.template get_unchecked<viam::sdk::ProtoStruct>();
