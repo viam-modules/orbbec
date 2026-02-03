@@ -1235,16 +1235,46 @@ vsdk::Camera::properties Orbbec::get_properties() {
         p.intrinsic_parameters.center_y_px = intrinsic_props.cy;
         p.distortion_parameters.model = device_control::distortionTypeToString(distortion_props.model);
 
-        // TODO: These should be named parameters in the struct, not relying on order
-        // If this is ever changed, make sure to update the README
-        p.distortion_parameters.parameters = std::vector<double>{distortion_props.p1,
-                                                                 distortion_props.p2,
-                                                                 distortion_props.k1,
-                                                                 distortion_props.k2,
-                                                                 distortion_props.k3,
-                                                                 distortion_props.k4,
-                                                                 distortion_props.k5,
-                                                                 distortion_props.k6};
+        if (distortion_props.model == OB_DISTORTION_BROWN_CONRADY_K6) {
+            // TODO: These should be named parameters in the struct, not relying on order
+            // If this is ever changed, make sure to update the README
+
+            /*
+            Brown-Conrady K6 distortion model in RDK: rimage/transform/brown_conrady_k6.go
+            Written here to display the correct order of parameters
+            type BrownConradyK6 struct {
+            RadialK1     float64 `json:"rk1"`
+            RadialK2     float64 `json:"rk2"`
+            RadialK3     float64 `json:"rk3"`
+            RadialK4     float64 `json:"rk4"`
+            RadialK5     float64 `json:"rk5"`
+            RadialK6     float64 `json:"rk6"`
+            TangentialP1 float64 `json:"tp1"`
+            TangentialP2 float64 `json:"tp2"`
+            }
+            */
+            p.distortion_parameters.parameters = std::vector<double>{distortion_props.k1,
+                                                                     distortion_props.k2,
+                                                                     distortion_props.k3,
+                                                                     distortion_props.k4,
+                                                                     distortion_props.k5,
+                                                                     distortion_props.k6,
+                                                                     distortion_props.p1,
+                                                                     distortion_props.p2};
+        } else {
+            throw std::runtime_error("Unsupported distortion model: " + device_control::distortionTypeToString(distortion_props.model));
+        }
+
+        std::stringstream properties_ss;
+        properties_ss << "distortion parameters: [model: " << p.distortion_parameters.model << ", parameters: [";
+        for (const auto& param : p.distortion_parameters.parameters) {
+            properties_ss << param << ", ";
+        }
+        properties_ss << "]], intrinsic parameters: [";
+        properties_ss << p.intrinsic_parameters.width_px << ", " << p.intrinsic_parameters.height_px << ", "
+                      << p.intrinsic_parameters.focal_x_px << ", " << p.intrinsic_parameters.focal_y_px << ", "
+                      << p.intrinsic_parameters.center_x_px << ", " << p.intrinsic_parameters.center_y_px << "]";
+        VIAM_RESOURCE_LOG(debug) << "[get_properties] Properties: " << properties_ss.str();
 
         VIAM_RESOURCE_LOG(debug) << "[get_properties] end";
         return p;
