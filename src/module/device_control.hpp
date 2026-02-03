@@ -1,4 +1,5 @@
 #pragma once
+#include <system_error>
 #include <viam/sdk/common/proto_value.hpp>
 
 namespace device_control {
@@ -243,60 +244,156 @@ viam::sdk::ProtoStruct getDeviceProperties(std::shared_ptr<DeviceT> device,
     return properties;
 }
 
+// Helper struct to hold validated property information for two-phase set
+struct ValidatedProperty {
+    OBPropertyItem item;
+    int int_value;
+    double float_value;
+    bool bool_value;
+    enum class Type { INT, FLOAT, BOOL } value_type;
+};
+
 template <typename DeviceT>
 viam::sdk::ProtoStruct setDeviceProperties(std::shared_ptr<DeviceT> device,
                                            const viam::sdk::ProtoValue& properties,
                                            std::string const& command) {
-    if (!properties.template is_a<viam::sdk::ProtoStruct>()) {
-        return {{"error", "properties must be a struct"}};
+    if (device == nullptr) {
+        std::stringstream ss;
+        ss << "calling " << command << " on null device";
+        return {{"error", ss.str()}};
     }
-    std::unordered_set<std::string> writable_properties;
+    if (!properties.template is_a<viam::sdk::ProtoStruct>()) {
+        std::stringstream ss;
+        ss << "calling " << command << " on non-struct properties";
+        return {{"error", ss.str()}};
+    }
+
     auto const& properties_map = properties.template get_unchecked<viam::sdk::ProtoStruct>();
+
+    // Build a map of device properties for quick lookup
+    std::unordered_map<std::string, OBPropertyItem> device_properties;
     int const supportedPropertyCount = device->getSupportedPropertyCount();
     for (int i = 0; i < supportedPropertyCount; i++) {
         OBPropertyItem property_item = device->getSupportedProperty(i);
-        if (properties_map.count(property_item.name) > 0) {
-            if (property_item.permission == OB_PERMISSION_DENY || property_item.permission == OB_PERMISSION_READ) {
+        device_properties[property_item.name] = property_item;
+    }
+
+    // Phase 1: Validate all properties before setting any
+    std::vector<ValidatedProperty> validated_properties;
+    std::unordered_set<std::string> writable_properties;
+
+    for (auto const& [prop_name, prop_value] : properties_map) {
+        // Check if property exists on the device
+        auto it = device_properties.find(prop_name);
+        if (it == device_properties.end()) {
+            std::stringstream error_ss;
+            error_ss << "Property '" << prop_name << "' is not supported by this device.";
+            VIAM_SDK_LOG(error) << error_ss.str();
+            return {{"error", error_ss.str()}};
+        }
+
+        OBPropertyItem const& property_item = it->second;
+
+        // Check if the property is writable
+        if (property_item.permission == OB_PERMISSION_DENY || property_item.permission == OB_PERMISSION_READ) {
+            std::stringstream error_ss;
+            error_ss << "Property '" << prop_name << "' is not writable (permission: " << permissionToString(property_item.permission)
+                     << ").";
+            VIAM_SDK_LOG(error) << error_ss.str();
+            return {{"error", error_ss.str()}};
+        }
+
+        // Validate value structure
+        auto const value_struct_opt = prop_value.template get<viam::sdk::ProtoStruct>();
+        if (!value_struct_opt) {
+            std::stringstream error_ss;
+            error_ss << "Value for property '" << prop_name << "' must be a struct with a 'current' field.";
+            VIAM_SDK_LOG(error) << error_ss.str();
+            return {{"error", error_ss.str()}};
+        }
+
+        auto const& value_struct = *value_struct_opt;
+        if (value_struct.count("current") == 0) {
+            std::stringstream error_ss;
+            error_ss << "Value for property '" << prop_name << "' is missing required 'current' field.";
+            VIAM_SDK_LOG(error) << error_ss.str();
+            return {{"error", error_ss.str()}};
+        }
+
+        auto const& value = value_struct.at("current");
+
+        // Validate type compatibility and extract value
+        ValidatedProperty validated;
+        validated.item = property_item;
+
+        if (property_item.type == OB_INT_PROPERTY) {
+            if (!value.template is_a<double>()) {
                 std::stringstream error_ss;
-                error_ss << "Property " << property_item.name << " is not writable, skipping.";
-                VIAM_SDK_LOG(warn) << error_ss.str();
-                return {{"error", error_ss.str()}};
-                continue;
-            }
-            try {
-                auto const& value_struct = properties_map.at(property_item.name).get<viam::sdk::ProtoStruct>();
-                if (!value_struct) {
-                    std::stringstream error_ss;
-                    error_ss << "Value for property " << property_item.name << " is not a struct, skipping.";
-                    VIAM_SDK_LOG(warn) << error_ss.str();
-                }
-                auto const& value = value_struct->at("current");
-                writable_properties.insert(property_item.name);
-                if (property_item.type == OB_INT_PROPERTY && value.is_a<double>()) {
-                    int int_value = static_cast<int>(value.get_unchecked<double>());
-                    device->setIntProperty(property_item.id, int_value);
-                    VIAM_SDK_LOG(info) << "[setDeviceProperties] Set int property " << property_item.name << " to " << int_value;
-                } else if (property_item.type == OB_FLOAT_PROPERTY && value.is_a<double>()) {
-                    double float_value = value.get_unchecked<double>();
-                    device->setFloatProperty(property_item.id, float_value);
-                    VIAM_SDK_LOG(info) << "[setDeviceProperties] Set float property " << property_item.name << " to " << float_value;
-                } else if (property_item.type == OB_BOOL_PROPERTY && value.is_a<bool>()) {
-                    bool bool_value = value.get_unchecked<bool>();
-                    device->setBoolProperty(property_item.id, bool_value);
-                    VIAM_SDK_LOG(info) << "[setDeviceProperties] Set bool property " << property_item.name << " to "
-                                       << (bool_value ? "true" : "false");
-                } else {
-                    VIAM_SDK_LOG(warn) << "[setDeviceProperties] Type mismatch or unsupported type for property " << property_item.name
-                                       << ", skipping.";
-                }
-            } catch (ob::Error& e) {
-                std::stringstream error_ss;
-                error_ss << "Failed to set property " << property_item.name << ": " << e.what();
+                error_ss << "Property '" << prop_name << "' expects numeric value for int property.";
                 VIAM_SDK_LOG(error) << error_ss.str();
                 return {{"error", error_ss.str()}};
             }
+            validated.int_value = static_cast<int>(value.template get_unchecked<double>());
+            validated.value_type = ValidatedProperty::Type::INT;
+        } else if (property_item.type == OB_FLOAT_PROPERTY) {
+            if (!value.template is_a<double>()) {
+                std::stringstream error_ss;
+                error_ss << "Property '" << prop_name << "' expects numeric value for float property.";
+                VIAM_SDK_LOG(error) << error_ss.str();
+                return {{"error", error_ss.str()}};
+            }
+            validated.float_value = value.template get_unchecked<double>();
+            validated.value_type = ValidatedProperty::Type::FLOAT;
+        } else if (property_item.type == OB_BOOL_PROPERTY) {
+            if (!value.template is_a<bool>()) {
+                std::stringstream error_ss;
+                error_ss << "Property '" << prop_name << "' expects boolean value for bool property.";
+                VIAM_SDK_LOG(error) << error_ss.str();
+                return {{"error", error_ss.str()}};
+            }
+            validated.bool_value = value.template get_unchecked<bool>();
+            validated.value_type = ValidatedProperty::Type::BOOL;
+        } else {
+            std::stringstream error_ss;
+            error_ss << "Property '" << prop_name << "' has unsupported type: " << propertyTypeToString(property_item.type) << ".";
+            VIAM_SDK_LOG(error) << error_ss.str();
+            return {{"error", error_ss.str()}};
+        }
+
+        validated_properties.push_back(validated);
+        writable_properties.insert(prop_name);
+    }
+
+    // Phase 2: Apply all validated properties
+    for (auto const& validated : validated_properties) {
+        try {
+            switch (validated.value_type) {
+                case ValidatedProperty::Type::INT:
+                    device->setIntProperty(validated.item.id, validated.int_value);
+                    VIAM_SDK_LOG(info) << "[setDeviceProperties] Set int property " << validated.item.name << " to " << validated.int_value;
+                    break;
+                case ValidatedProperty::Type::FLOAT:
+                    device->setFloatProperty(validated.item.id, validated.float_value);
+                    VIAM_SDK_LOG(info) << "[setDeviceProperties] Set float property " << validated.item.name << " to "
+                                       << validated.float_value;
+                    break;
+                case ValidatedProperty::Type::BOOL:
+                    device->setBoolProperty(validated.item.id, validated.bool_value);
+                    VIAM_SDK_LOG(info) << "[setDeviceProperties] Set bool property " << validated.item.name << " to "
+                                       << (validated.bool_value ? "true" : "false");
+                    break;
+            }
+        } catch (ob::Error& e) {
+            // Note: At this point we may have partially applied properties.
+            // This is unavoidable since the SDK doesn't support transactions.
+            std::stringstream error_ss;
+            error_ss << "Failed to set property '" << validated.item.name << "': " << e.what()
+                     << " (some properties may have been partially applied)";
+            VIAM_SDK_LOG(error) << error_ss.str();
+            return {{"error", error_ss.str()}};
         }
     }
+
     return getDeviceProperties(device, command, writable_properties);
 }
 
