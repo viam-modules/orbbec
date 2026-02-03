@@ -265,10 +265,9 @@ viam::sdk::ProtoStruct setDeviceProperties(std::shared_ptr<DeviceT> device,
         if (properties_map.count(property_item.name) > 0) {
             if (property_item.permission == OB_PERMISSION_DENY || property_item.permission == OB_PERMISSION_READ) {
                 std::stringstream error_ss;
-                error_ss << "Property " << property_item.name << " is not writable, skipping.";
+                error_ss << "Property " << property_item.name << " is not writable.";
                 VIAM_SDK_LOG(warn) << error_ss.str();
                 return {{"error", error_ss.str()}};
-                continue;
             }
             try {
                 auto const& value_struct = properties_map.at(property_item.name).get<viam::sdk::ProtoStruct>();
