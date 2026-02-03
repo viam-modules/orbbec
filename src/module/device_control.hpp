@@ -301,7 +301,7 @@ viam::sdk::ProtoStruct setDeviceProperties(std::shared_ptr<DeviceT> device,
             }
         }
     }
-    return getDeviceProperties<DeviceT>(device, command, {});
+    return getDeviceProperties(device, command, writable_properties);
 }
 
 template <typename DeviceT>
