@@ -1365,6 +1365,7 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
 
         uint64_t colorTS = color ? getBestTimestampUs(color) : 0;
         uint64_t depthTS = depth ? getBestTimestampUs(depth) : 0;
+        uint64_t timestamp = 0;
 
         if (colorTS > 0 && depthTS > 0) {
             if (colorTS != depthTS) {
@@ -1380,19 +1381,19 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
                     std::lock_guard<std::mutex> lock(devices_by_serial_mu());
                     auto search = devices_by_serial().find(serial_number);
                     if (search != devices_by_serial().end()) {
-                        lastTimestampLogTime = search->second.lastTimestampLogTime;
+                        lastTimestampLogTime = search->second->lastTimestampLogTime;
                     }
                 }
                 uint64_t nowUs =
                     std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
                 if (nowUs - lastTimestampLogTime > timestampWarningLogIntervalUs) {
-                    VIAM_RESOURCE_LOG(warning) << "color and depth timestamps differ by " << timeDiff << "us, using older timestamp. "
-                                               << "(This warning throttled to once per 60s; see debug for all occurrences)";
+                    VIAM_RESOURCE_LOG(warn) << "color and depth timestamps differ by " << timeDiff << "us, using older timestamp. "
+                                            << "(This warning throttled to once per 60s; see debug for all occurrences)";
                     {
                         std::lock_guard<std::mutex> lock(devices_by_serial_mu());
                         auto search = devices_by_serial().find(serial_number);
                         if (search != devices_by_serial().end()) {
-                            search->second.lastTimestampLogTime = nowUs;
+                            search->second->lastTimestampLogTime = nowUs;
                         }
                     }
                 }
