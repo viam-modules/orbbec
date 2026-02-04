@@ -63,6 +63,8 @@ constexpr char service_name[] = "viam_orbbec";
 const float mmToMeterMultiple = 0.001;
 const uint64_t maxFrameAgeUs = 1e6;  // time until a frame is considered stale, in microseconds (equal to 1 sec)
 
+const uint64_t timestampWarningLogIntervalUs = 60e6;  // log at warning level at most every 60 seconds
+
 // Model configurations
 namespace {
 static const OrbbecModelConfig ASTRA2_CONFIG{
@@ -1363,13 +1365,37 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
 
         uint64_t colorTS = color ? getBestTimestampUs(color) : 0;
         uint64_t depthTS = depth ? getBestTimestampUs(depth) : 0;
-        uint64_t timestamp = 0;
 
         if (colorTS > 0 && depthTS > 0) {
             if (colorTS != depthTS) {
-                VIAM_RESOURCE_LOG(info) << "color and depth timestamps differ, defaulting to "
-                                           "older of the two"
-                                        << "color timestamp was " << colorTS << " depth timestamp was " << depthTS;
+                uint64_t timeDiff = (colorTS > depthTS) ? colorTS - depthTS : depthTS - colorTS;
+
+                // Always log at debug level
+                VIAM_RESOURCE_LOG(debug) << "color and depth timestamps differ, "
+                                         << "color: " << colorTS << " depth: " << depthTS << ", diff: " << timeDiff << "us";
+
+                // Throttled info-level logging
+                uint64_t lastTimestampLogTime = 0;
+                {
+                    std::lock_guard<std::mutex> lock(devices_by_serial_mu());
+                    auto search = devices_by_serial().find(serial_number);
+                    if (search != devices_by_serial().end()) {
+                        lastTimestampLogTime = search->second.lastTimestampLogTime;
+                    }
+                }
+                uint64_t nowUs =
+                    std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+                if (nowUs - lastTimestampLogTime > timestampWarningLogIntervalUs) {
+                    VIAM_RESOURCE_LOG(warning) << "color and depth timestamps differ by " << timeDiff << "us, using older timestamp. "
+                                               << "(This warning throttled to once per 60s; see debug for all occurrences)";
+                    {
+                        std::lock_guard<std::mutex> lock(devices_by_serial_mu());
+                        auto search = devices_by_serial().find(serial_number);
+                        if (search != devices_by_serial().end()) {
+                            search->second.lastTimestampLogTime = nowUs;
+                        }
+                    }
+                }
             }
             // use the older of the two timestamps
             timestamp = (colorTS > depthTS) ? depthTS : colorTS;
