@@ -794,6 +794,33 @@ void configureDevice(std::string serialNumber, OrbbecModelConfig const& modelCon
         VIAM_SDK_LOG(info) << "Device " << serialNumber << " supports hardware depth-to-color alignment, using it";
     }
 
+    // If color and depth are enabled and they operate on the same FPS, we can enable OB_MULTI_DEVICE_SYNC_MODE_STANDALONE to make color and
+    // depth frames to be synced. More info here:
+    // https://orbbec.github.io/OrbbecSDK/doc/api/English/ObTypes_8h.html#aabad929b67059752029c3374594ac63ba6bd45c53211519f5392eab382e229225
+    if (config != nullptr) {
+        std::shared_ptr<ob::VideoStreamProfile> colorProfile = nullptr;
+        std::shared_ptr<ob::VideoStreamProfile> depthProfile = nullptr;
+        auto profiles = config->getEnabledStreamProfileList();
+        for (uint32_t i = 0; i < profiles->getCount(); i++) {
+            auto profile = profiles->getProfile(i);
+            if (profile->getType() == OB_STREAM_COLOR) {
+                colorProfile = profile->as<ob::VideoStreamProfile>();
+            } else if (profile->getType() == OB_STREAM_DEPTH) {
+                depthProfile = profile->as<ob::VideoStreamProfile>();
+            }
+        }
+
+        if (colorProfile != nullptr && depthProfile != nullptr && colorProfile->getFps() == depthProfile->getFps()) {
+            // Set multi-device sync mode to standalone to avoid depth/color timestamp differences
+            auto curConfig = my_dev->device->getMultiDeviceSyncConfig();
+            // Update the configuration items of the configuration file, and keep the original configuration for other items
+            VIAM_SDK_LOG(info) << "[configureDevice] Setting multi-device sync mode to standalone for device " << serialNumber
+                               << " with sync mode " << curConfig.syncMode << " to " << OB_MULTI_DEVICE_SYNC_MODE_STANDALONE;
+            curConfig.syncMode = OB_MULTI_DEVICE_SYNC_MODE_STANDALONE;
+            my_dev->device->setMultiDeviceSyncConfig(curConfig);
+        }
+    }
+
     if (config == nullptr) {
         std::ostringstream buffer;
         buffer << service_name << ": unable to configure device " << serialNumber << " - no valid stream configuration found";
@@ -1372,8 +1399,8 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
                 uint64_t timeDiff = (colorTS > depthTS) ? colorTS - depthTS : depthTS - colorTS;
 
                 // Always log at debug level
-                VIAM_RESOURCE_LOG(debug) << "color and depth timestamps differ, "
-                                         << "color: " << colorTS << " depth: " << depthTS << ", diff: " << timeDiff << "us";
+                VIAM_RESOURCE_LOG(info) << "color and depth timestamps differ, "
+                                        << "color: " << colorTS << " depth: " << depthTS << ", diff: " << timeDiff << "us";
 
                 // Throttled info-level logging
                 uint64_t lastTimestampLogTime = 0;
@@ -1832,16 +1859,16 @@ void startOrbbecSDK(ob::Context& ctx) {
     } catch (ob::Error& e) {
         VIAM_SDK_LOG(error) << "Failed to query Orbbec devices: " << e.what() << " (function: " << e.getFunction()
                             << ", args: " << e.getArgs() << ", name: " << e.getName() << ", type: " << e.getExceptionType() << ")";
-        VIAM_SDK_LOG(warn)
-            << "Continuing without Orbbec devices - check network connectivity for Ethernet cameras or USB connection for USB cameras";
+        VIAM_SDK_LOG(warn) << "Continuing without Orbbec devices - check network connectivity for Ethernet cameras or USB "
+                              "connection for USB cameras";
     } catch (const std::exception& e) {
         VIAM_SDK_LOG(error) << "Failed to query Orbbec devices: " << e.what();
-        VIAM_SDK_LOG(warn)
-            << "Continuing without Orbbec devices - check network connectivity for Ethernet cameras or USB connection for USB cameras";
+        VIAM_SDK_LOG(warn) << "Continuing without Orbbec devices - check network connectivity for Ethernet cameras or USB "
+                              "connection for USB cameras";
     } catch (...) {
         VIAM_SDK_LOG(error) << "Failed to query Orbbec devices: unknown error";
-        VIAM_SDK_LOG(warn)
-            << "Continuing without Orbbec devices - check network connectivity for Ethernet cameras or USB connection for USB cameras";
+        VIAM_SDK_LOG(warn) << "Continuing without Orbbec devices - check network connectivity for Ethernet cameras or USB "
+                              "connection for USB cameras";
     }
 }
 // ORBBEC SDK DEVICE REGISTRY END
