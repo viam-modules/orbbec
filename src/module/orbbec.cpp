@@ -63,7 +63,7 @@ constexpr char service_name[] = "viam_orbbec";
 const float mmToMeterMultiple = 0.001;
 const uint64_t maxFrameAgeUs = 1e6;  // time until a frame is considered stale, in microseconds (equal to 1 sec)
 
-const uint64_t timestampWarningLogIntervalUs = 60e6;  // log at warning level at most every 60 seconds
+const uint64_t timestampWarningLogIntervalUs = 300e6;  // log at warning level at most every 5 minutes
 const uint64_t maxFrameSetTimeDiffUs =
     2000;  // max time difference between frames in a frameset to be considered simultaneous, in microseconds (equal to 2 ms)
 
