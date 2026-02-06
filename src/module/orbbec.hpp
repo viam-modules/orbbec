@@ -130,6 +130,7 @@ struct ViamOBDevice {
     std::vector<std::shared_ptr<ob::Filter>> postProcessDepthFilters{};
     bool applyEnabledPostProcessDepthFilters{};
     bool dumpPCLFiles{};
+    uint64_t lastTimestampLogTime{};
 };
 
 void startOrbbecSDK(ob::Context& ctx);

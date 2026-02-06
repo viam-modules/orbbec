@@ -63,6 +63,10 @@ constexpr char service_name[] = "viam_orbbec";
 const float mmToMeterMultiple = 0.001;
 const uint64_t maxFrameAgeUs = 1e6;  // time until a frame is considered stale, in microseconds (equal to 1 sec)
 
+const uint64_t timestampWarningLogIntervalUs = 300e6;  // log at warning level at most every 5 minutes
+const uint64_t maxFrameSetTimeDiffUs =
+    2000;  // max time difference between frames in a frameset to be considered simultaneous, in microseconds (equal to 2 ms)
+
 // Model configurations
 namespace {
 static const OrbbecModelConfig ASTRA2_CONFIG{
@@ -213,6 +217,18 @@ std::string formatError(Args&&... args) {
     return buffer.str();
 }
 
+// Get the best available timestamp for a frame (Global > System)
+uint64_t getBestTimestampUs(std::shared_ptr<ob::Frame> frame) {
+    if (frame == nullptr) {
+        return 0;
+    }
+    uint64_t ts = frame->getGlobalTimeStampUs();
+    if (ts > 0) {
+        return ts;
+    }
+    return frame->getSystemTimeStampUs();
+}
+
 // Validate color frame format and timestamp
 void validateColorFrame(std::shared_ptr<ob::Frame> color,
                         const std::optional<DeviceFormat>& device_format_opt,
@@ -234,7 +250,7 @@ void validateColorFrame(std::shared_ptr<ob::Frame> color,
 
     // Timestamp validation
     uint64_t nowUs = getNowUs();
-    uint64_t diff = timeSinceFrameUs(nowUs, color->getSystemTimeStampUs());
+    uint64_t diff = timeSinceFrameUs(nowUs, getBestTimestampUs(color));
     if (diff > maxFrameAgeUs) {
         throw std::runtime_error(formatError("no recent color frame: check connection, diff: ", diff, "us"));
     }
@@ -271,7 +287,7 @@ void validateDepthFrame(std::shared_ptr<ob::Frame> depth,
 
     // Timestamp validation
     uint64_t nowUs = getNowUs();
-    uint64_t diff = timeSinceFrameUs(nowUs, depth->getSystemTimeStampUs());
+    uint64_t diff = timeSinceFrameUs(nowUs, getBestTimestampUs(depth));
     if (diff > maxFrameAgeUs) {
         throw std::runtime_error(formatError("no recent depth frame: check connection, diff: ", diff, "us"));
     }
@@ -654,15 +670,15 @@ auto frameCallback(const std::string& serialNumber) {
 
         std::lock_guard<std::mutex> lock(frame_set_by_serial_mu());
         uint64_t nowUs = getNowUs();
-        uint64_t diff = timeSinceFrameUs(nowUs, color->getSystemTimeStampUs());
+        uint64_t diff = timeSinceFrameUs(nowUs, getBestTimestampUs(color));
         if (diff > maxFrameAgeUs) {
-            std::cerr << "color frame is " << diff << "us older than now, nowUs: " << nowUs << " frameTimeUs "
-                      << color->getSystemTimeStampUs() << "\n";
+            std::cerr << "color frame is " << diff << "us older than now, nowUs: " << nowUs << " frameTimeUs " << getBestTimestampUs(color)
+                      << "\n";
         }
-        diff = timeSinceFrameUs(nowUs, depth->getSystemTimeStampUs());
+        diff = timeSinceFrameUs(nowUs, getBestTimestampUs(depth));
         if (diff > maxFrameAgeUs) {
-            std::cerr << "depth frame is " << diff << "us older than now, nowUs: " << nowUs << " frameTimeUs "
-                      << depth->getSystemTimeStampUs() << "\n";
+            std::cerr << "depth frame is " << diff << "us older than now, nowUs: " << nowUs << " frameTimeUs " << getBestTimestampUs(depth)
+                      << "\n";
         }
 
         auto it = frame_set_by_serial().find(serialNumber);
@@ -670,17 +686,17 @@ auto frameCallback(const std::string& serialNumber) {
             std::shared_ptr<ob::Frame> prevColor = it->second->getFrame(OB_FRAME_COLOR);
             std::shared_ptr<ob::Frame> prevDepth = it->second->getFrame(OB_FRAME_DEPTH);
             if (prevColor != nullptr && prevDepth != nullptr) {
-                diff = timeSinceFrameUs(color->getSystemTimeStampUs(), prevColor->getSystemTimeStampUs());
+                diff = timeSinceFrameUs(getBestTimestampUs(color), getBestTimestampUs(prevColor));
                 if (diff > maxFrameAgeUs) {
                     std::cerr << "previous color frame is " << diff
-                              << "us older than current color frame. previousUs: " << prevColor->getSystemTimeStampUs()
-                              << " currentUs: " << color->getSystemTimeStampUs() << "\n";
+                              << "us older than current color frame. previousUs: " << getBestTimestampUs(prevColor)
+                              << " currentUs: " << getBestTimestampUs(color) << "\n";
                 }
-                diff = timeSinceFrameUs(depth->getSystemTimeStampUs(), prevDepth->getSystemTimeStampUs());
+                diff = timeSinceFrameUs(getBestTimestampUs(depth), getBestTimestampUs(prevDepth));
                 if (diff > maxFrameAgeUs) {
                     std::cerr << "previous depth frame is " << diff
-                              << "us older than current depth frame. previousUs: " << prevDepth->getSystemTimeStampUs()
-                              << " currentUs: " << depth->getSystemTimeStampUs() << "\n";
+                              << "us older than current depth frame. previousUs: " << getBestTimestampUs(prevDepth)
+                              << " currentUs: " << getBestTimestampUs(depth) << "\n";
                 }
             }
         }
@@ -699,6 +715,14 @@ void configureDevice(std::string serialNumber, OrbbecModelConfig const& modelCon
     }
 
     std::unique_ptr<ViamOBDevice>& my_dev = search->second;
+
+    // Enable global timestamp if supported
+    if (my_dev->device->isGlobalTimestampSupported()) {
+        my_dev->device->enableGlobalTimestamp(true);
+        VIAM_SDK_LOG(info) << "[configureDevice] Global timestamp enabled for device " << serialNumber;
+    } else {
+        VIAM_SDK_LOG(info) << "[configureDevice] Global timestamp not supported for device " << serialNumber;
+    }
 
     // Initialize fields if not already set
     if (!my_dev->pipe) {
@@ -770,6 +794,33 @@ void configureDevice(std::string serialNumber, OrbbecModelConfig const& modelCon
         }
     } else {
         VIAM_SDK_LOG(info) << "Device " << serialNumber << " supports hardware depth-to-color alignment, using it";
+    }
+
+    // If color and depth are enabled and they operate on the same FPS, we can enable OB_MULTI_DEVICE_SYNC_MODE_STANDALONE to make color and
+    // depth frames to be synced. More info here:
+    // https://orbbec.github.io/OrbbecSDK/doc/api/English/ObTypes_8h.html#aabad929b67059752029c3374594ac63ba6bd45c53211519f5392eab382e229225
+    if (config != nullptr) {
+        std::shared_ptr<ob::VideoStreamProfile> colorProfile = nullptr;
+        std::shared_ptr<ob::VideoStreamProfile> depthProfile = nullptr;
+        auto profiles = config->getEnabledStreamProfileList();
+        for (uint32_t i = 0; i < profiles->getCount(); i++) {
+            auto profile = profiles->getProfile(i);
+            if (profile->getType() == OB_STREAM_COLOR) {
+                colorProfile = profile->as<ob::VideoStreamProfile>();
+            } else if (profile->getType() == OB_STREAM_DEPTH) {
+                depthProfile = profile->as<ob::VideoStreamProfile>();
+            }
+        }
+
+        if (colorProfile != nullptr && depthProfile != nullptr && colorProfile->getFps() == depthProfile->getFps()) {
+            // Set multi-device sync mode to standalone to avoid depth/color timestamp differences
+            auto curConfig = my_dev->device->getMultiDeviceSyncConfig();
+            // Update the configuration items of the configuration file, and keep the original configuration for other items
+            VIAM_SDK_LOG(info) << "[configureDevice] Setting multi-device sync mode to standalone for device " << serialNumber
+                               << " with sync mode " << curConfig.syncMode << " to " << OB_MULTI_DEVICE_SYNC_MODE_STANDALONE;
+            curConfig.syncMode = OB_MULTI_DEVICE_SYNC_MODE_STANDALONE;
+            my_dev->device->setMultiDeviceSyncConfig(curConfig);
+        }
     }
 
     if (config == nullptr) {
@@ -1371,26 +1422,48 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
             return response;
         }
 
-        uint64_t colorTS = color ? color->getSystemTimeStampUs() : 0;
-        uint64_t depthTS = depth ? depth->getSystemTimeStampUs() : 0;
-        uint64_t timestamp = 0;
+        uint64_t const colorTSUs = color ? getBestTimestampUs(color) : 0;
+        uint64_t const depthTSUs = depth ? getBestTimestampUs(depth) : 0;
+        uint64_t const timeDiff = (colorTSUs > depthTSUs) ? colorTSUs - depthTSUs : depthTSUs - colorTSUs;
+        uint64_t timestampUs = 0;
 
-        if (colorTS > 0 && depthTS > 0) {
-            if (colorTS != depthTS) {
-                VIAM_RESOURCE_LOG(info) << "color and depth timestamps differ, defaulting to "
-                                           "older of the two"
-                                        << "color timestamp was " << colorTS << " depth timestamp was " << depthTS;
+        if (colorTSUs > 0 && depthTSUs > 0 && timeDiff > maxFrameSetTimeDiffUs) {
+            // Always log at debug level
+            VIAM_RESOURCE_LOG(debug) << "color and depth timestamps differ, "
+                                     << "color: " << colorTSUs << " depth: " << depthTSUs << ", diff: " << timeDiff << "us";
+
+            // Throttled info-level logging
+            uint64_t lastTimestampLogTime = 0;
+            {
+                std::lock_guard<std::mutex> lock(devices_by_serial_mu());
+                auto search = devices_by_serial().find(serial_number);
+                if (search != devices_by_serial().end()) {
+                    lastTimestampLogTime = search->second->lastTimestampLogTime;
+                }
+            }
+            uint64_t nowUs =
+                std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+            if (nowUs - lastTimestampLogTime > timestampWarningLogIntervalUs) {
+                VIAM_RESOURCE_LOG(warn) << "color and depth timestamps differ by " << timeDiff << "us, using older timestamp. "
+                                        << "(This warning throttled to once per 60s; see debug for all occurrences)";
+                {
+                    std::lock_guard<std::mutex> lock(devices_by_serial_mu());
+                    auto search = devices_by_serial().find(serial_number);
+                    if (search != devices_by_serial().end()) {
+                        search->second->lastTimestampLogTime = nowUs;
+                    }
+                }
             }
             // use the older of the two timestamps
-            timestamp = (colorTS > depthTS) ? depthTS : colorTS;
-        } else if (colorTS > 0) {
-            timestamp = colorTS;
+            timestampUs = (colorTSUs > depthTSUs) ? depthTSUs : colorTSUs;
+        } else if (colorTSUs > 0) {
+            timestampUs = colorTSUs;
         } else {
-            timestamp = depthTS;
+            timestampUs = depthTSUs;
         }
 
-        std::chrono::microseconds latestTimestamp(timestamp);
-        response.metadata.captured_at = vsdk::time_pt{std::chrono::duration_cast<std::chrono::nanoseconds>(latestTimestamp)};
+        std::chrono::microseconds latestTimestampUs(timestampUs);
+        response.metadata.captured_at = vsdk::time_pt{std::chrono::duration_cast<std::chrono::nanoseconds>(latestTimestampUs)};
         VIAM_RESOURCE_LOG(debug) << "[get_images] end";
         return response;
     } catch (const std::exception& e) {
@@ -1815,16 +1888,16 @@ void startOrbbecSDK(ob::Context& ctx) {
     } catch (ob::Error& e) {
         VIAM_SDK_LOG(error) << "Failed to query Orbbec devices: " << e.what() << " (function: " << e.getFunction()
                             << ", args: " << e.getArgs() << ", name: " << e.getName() << ", type: " << e.getExceptionType() << ")";
-        VIAM_SDK_LOG(warn)
-            << "Continuing without Orbbec devices - check network connectivity for Ethernet cameras or USB connection for USB cameras";
+        VIAM_SDK_LOG(warn) << "Continuing without Orbbec devices - check network connectivity for Ethernet cameras or USB "
+                              "connection for USB cameras";
     } catch (const std::exception& e) {
         VIAM_SDK_LOG(error) << "Failed to query Orbbec devices: " << e.what();
-        VIAM_SDK_LOG(warn)
-            << "Continuing without Orbbec devices - check network connectivity for Ethernet cameras or USB connection for USB cameras";
+        VIAM_SDK_LOG(warn) << "Continuing without Orbbec devices - check network connectivity for Ethernet cameras or USB "
+                              "connection for USB cameras";
     } catch (...) {
         VIAM_SDK_LOG(error) << "Failed to query Orbbec devices: unknown error";
-        VIAM_SDK_LOG(warn)
-            << "Continuing without Orbbec devices - check network connectivity for Ethernet cameras or USB connection for USB cameras";
+        VIAM_SDK_LOG(warn) << "Continuing without Orbbec devices - check network connectivity for Ethernet cameras or USB "
+                              "connection for USB cameras";
     }
 }
 // ORBBEC SDK DEVICE REGISTRY END
