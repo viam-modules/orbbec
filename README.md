@@ -128,10 +128,8 @@ The following attributes are available for the Gemini 335Le model:
 
 | Source Name | MIME Type | Description |
 |-------------|-----------|-------------|
-| `color` | `image/jpeg` (MJPG) or `image/png` (RGB) | Color image from the RGB sensor |
+| `color` | `image/jpeg` or `image/png` | Color image from the RGB sensor |
 | `depth` | `image/vnd.viam.dep` | Depth map from the depth sensor |
-
-Both color and depth streams are always enabled in the pipeline. The `sensors` attribute configures resolution and format but does not disable either stream.
 
 If `filter_source_names` is empty, both `color` and `depth` images are returned. If populated, only the matching source names are returned. Unrecognized names are ignored.
 
