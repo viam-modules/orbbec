@@ -122,6 +122,17 @@ The following attributes are available for the Gemini 335Le model:
 | `640X480` | `640X480` |
 
 
+## `get_images` Source Names
+
+`get_images` supports two source names for use with `filter_source_names`:
+
+| Source Name | MIME Type | Description |
+|-------------|-----------|-------------|
+| `color` | `image/jpeg` or `image/png` | Color image from the RGB sensor |
+| `depth` | `image/vnd.viam.dep` | Depth map from the depth sensor |
+
+If `filter_source_names` is empty, both `color` and `depth` images are returned. If populated, only the matching source names are returned. Unrecognized names are ignored.
+
 ## Attributes
 A call to get_attributes will return the camera attributes in [this struct](https://github.com/viamrobotics/viam-cpp-sdk/blob/43deea420f572e6b61b6fbd519e09b2520f05676/src/viam/sdk/components/camera.hpp#L58)
 
