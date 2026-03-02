@@ -38,3 +38,14 @@ conan build . \
       -s:a build_type=Release \
       -s:a "&:build_type=RelWithDebInfo" \
       -s:a compiler.cppstd=17
+
+# Package the module binary, meta.json, and first_run.sh into module.tar.gz
+# so that `viam module reload-local` picks it up correctly (see meta.json build.path).
+STAGING_DIR="$(mktemp -d)"
+mkdir -p "${STAGING_DIR}/bin"
+cp build-conan/build/RelWithDebInfo/orbbec-module "${STAGING_DIR}/bin/"
+cp meta.json "${STAGING_DIR}/"
+cp first_run.sh "${STAGING_DIR}/"
+cp install_udev_rules.sh "${STAGING_DIR}/"
+tar czf module.tar.gz -C "${STAGING_DIR}" .
+rm -rf "${STAGING_DIR}"
