@@ -66,13 +66,6 @@ const uint64_t timestampWarningLogIntervalUs = 300e6;  // log at warning level a
 const uint64_t maxFrameSetTimeDiffUs =
     2000;  // max time difference between frames in a frameset to be considered simultaneous, in microseconds (equal to 2 ms)
 
-const std::string kAttrSerialNumber = "serial_number";
-const std::string kAttrSensors = "sensors";
-const std::string kAttrWidth = "width";
-const std::string kAttrHeight = "height";
-const std::string kAttrFormat = "format";
-// CONSTANTS END
-
 // Model configurations
 namespace {
 static const OrbbecModelConfig ASTRA2_CONFIG{

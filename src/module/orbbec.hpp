@@ -11,6 +11,13 @@
 
 namespace orbbec {
 
+// Attribute key constants shared across translation units (orbbec.cpp, discovery.cpp, etc.)
+inline const std::string kAttrSerialNumber = "serial_number";
+inline const std::string kAttrSensors = "sensors";
+inline const std::string kAttrWidth = "width";
+inline const std::string kAttrHeight = "height";
+inline const std::string kAttrFormat = "format";
+
 struct Resolution {
     uint32_t width{};
     uint32_t height{};
