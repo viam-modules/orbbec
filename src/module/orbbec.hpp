@@ -11,7 +11,7 @@
 
 namespace orbbec {
 
-// Attribute key constants shared across translation units (orbbec.cpp, discovery.cpp, etc.)
+// Attribute key constants shared across translation units
 inline const std::string kAttrSerialNumber = "serial_number";
 inline const std::string kAttrSensors = "sensors";
 inline const std::string kAttrWidth = "width";

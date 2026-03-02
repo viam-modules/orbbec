@@ -1,6 +1,8 @@
 #pragma once
 #include <viam/sdk/common/proto_value.hpp>
 
+#include "orbbec.hpp"
+
 namespace device_control {
 
 inline double depthPrecisionLevelToUnit(OBDepthPrecisionLevel precision) {
@@ -127,7 +129,7 @@ viam::sdk::ProtoStruct getDeviceInfo(std::shared_ptr<DeviceT>& device, std::stri
     info_struct["vid"] = info->getVid();
     info_struct["name"] = info->getName();
     info_struct["uid"] = info->getUid();
-    info_struct["serial_number"] = info->getSerialNumber();
+    info_struct[orbbec::kAttrSerialNumber] = info->getSerialNumber();
     info_struct["firmware_version"] = info->getFirmwareVersion();
     info_struct["connection_type"] = info->getConnectionType();
     info_struct["hardware_version"] = info->getHardwareVersion();
@@ -540,9 +542,9 @@ viam::sdk::ProtoStruct getCameraParams(std::shared_ptr<PipelineT> pipe) {
             auto vsp = sp->template as<VideoStreamProfileT>();
             std::string sensorName = ob::TypeHelper::convertOBStreamTypeToString(sp->getType());
             viam::sdk::ProtoStruct profile;
-            profile["width"] = static_cast<int>(vsp->getWidth());
-            profile["height"] = static_cast<int>(vsp->getHeight());
-            profile["format"] = ob::TypeHelper::convertOBFormatTypeToString(vsp->getFormat());
+            profile[orbbec::kAttrWidth] = static_cast<int>(vsp->getWidth());
+            profile[orbbec::kAttrHeight] = static_cast<int>(vsp->getHeight());
+            profile[orbbec::kAttrFormat] = ob::TypeHelper::convertOBFormatTypeToString(vsp->getFormat());
             profile["fps"] = static_cast<int>(vsp->getFps());
 
             viam::sdk::ProtoStruct intrinsics_struct;
@@ -551,8 +553,8 @@ viam::sdk::ProtoStruct getCameraParams(std::shared_ptr<PipelineT> pipe) {
             intrinsics_struct["fy"] = static_cast<double>(intrinsics.fy);
             intrinsics_struct["cx"] = static_cast<double>(intrinsics.cx);
             intrinsics_struct["cy"] = static_cast<double>(intrinsics.cy);
-            intrinsics_struct["width"] = static_cast<double>(intrinsics.width);
-            intrinsics_struct["height"] = static_cast<double>(intrinsics.height);
+            intrinsics_struct[orbbec::kAttrWidth] = static_cast<double>(intrinsics.width);
+            intrinsics_struct[orbbec::kAttrHeight] = static_cast<double>(intrinsics.height);
             profile["intrinsics"] = intrinsics_struct;
 
             viam::sdk::ProtoStruct distortion_struct;
@@ -643,22 +645,24 @@ viam::sdk::ProtoStruct createModuleConfig(std::unique_ptr<ViamDeviceT>& dev) {
             continue;
         }
         if (sp->getType() == OB_STREAM_DEPTH) {
-            depth_sensor["width"] = static_cast<int>(sp->template as<VideoStreamProfileT>()->getWidth());
-            depth_sensor["height"] = static_cast<int>(sp->template as<VideoStreamProfileT>()->getHeight());
-            depth_sensor["format"] = ob::TypeHelper::convertOBFormatTypeToString(sp->template as<VideoStreamProfileT>()->getFormat());
+            depth_sensor[orbbec::kAttrWidth] = static_cast<int>(sp->template as<VideoStreamProfileT>()->getWidth());
+            depth_sensor[orbbec::kAttrHeight] = static_cast<int>(sp->template as<VideoStreamProfileT>()->getHeight());
+            depth_sensor[orbbec::kAttrFormat] =
+                ob::TypeHelper::convertOBFormatTypeToString(sp->template as<VideoStreamProfileT>()->getFormat());
             sensors["depth"] = depth_sensor;
 
         } else if (sp->getType() == OB_STREAM_COLOR) {
-            color_sensor["width"] = static_cast<int>(sp->template as<VideoStreamProfileT>()->getWidth());
-            color_sensor["height"] = static_cast<int>(sp->template as<VideoStreamProfileT>()->getHeight());
-            color_sensor["format"] = ob::TypeHelper::convertOBFormatTypeToString(sp->template as<VideoStreamProfileT>()->getFormat());
+            color_sensor[orbbec::kAttrWidth] = static_cast<int>(sp->template as<VideoStreamProfileT>()->getWidth());
+            color_sensor[orbbec::kAttrHeight] = static_cast<int>(sp->template as<VideoStreamProfileT>()->getHeight());
+            color_sensor[orbbec::kAttrFormat] =
+                ob::TypeHelper::convertOBFormatTypeToString(sp->template as<VideoStreamProfileT>()->getFormat());
             sensors["color"] = color_sensor;
         }
     }
 
     viam::sdk::ProtoStruct result;
-    result["serial_number"] = dev->serialNumber;
-    result["sensors"] = sensors;
+    result[orbbec::kAttrSerialNumber] = dev->serialNumber;
+    result[orbbec::kAttrSensors] = sensors;
     result["post_process_depth_filters"] =
         getPostProcessDepthFilters(dev->postProcessDepthFilters, "create_module_config")["create_module_config"];
     result["apply_post_process_depth_filters"] = dev->applyEnabledPostProcessDepthFilters;
