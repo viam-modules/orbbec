@@ -22,7 +22,7 @@
   "first_run": "./first_run.sh",
   "build": {
     "setup": "bin/setup.sh",
-    "build": "make build",
+    "build": "make module.tar.gz",
     "path": "module.tar.gz",
     "arch": ["linux/amd64", "linux/arm64", "darwin/arm64", "windows/amd64"]
   }
