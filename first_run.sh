@@ -5,8 +5,8 @@ set -euo pipefail
 OS=$(uname)
 
 if [[ "$OS" == 'Linux' ]]; then
-    cd $(dirname $0)
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 
     # Install udev rules
-    sudo ./install_udev_rules.sh
+    sudo "$SCRIPT_DIR/install_udev_rules.sh"
 fi
