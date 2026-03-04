@@ -649,14 +649,14 @@ viam::sdk::ProtoStruct createModuleConfig(std::unique_ptr<ViamDeviceT>& dev) {
             depth_sensor[orbbec::kAttrHeight] = static_cast<int>(sp->template as<VideoStreamProfileT>()->getHeight());
             depth_sensor[orbbec::kAttrFormat] =
                 ob::TypeHelper::convertOBFormatTypeToString(sp->template as<VideoStreamProfileT>()->getFormat());
-            sensors["depth"] = depth_sensor;
+            sensors[orbbec::kDepthSourceName] = depth_sensor;
 
         } else if (sp->getType() == OB_STREAM_COLOR) {
             color_sensor[orbbec::kAttrWidth] = static_cast<int>(sp->template as<VideoStreamProfileT>()->getWidth());
             color_sensor[orbbec::kAttrHeight] = static_cast<int>(sp->template as<VideoStreamProfileT>()->getHeight());
             color_sensor[orbbec::kAttrFormat] =
                 ob::TypeHelper::convertOBFormatTypeToString(sp->template as<VideoStreamProfileT>()->getFormat());
-            sensors["color"] = color_sensor;
+            sensors[orbbec::kColorSourceName] = color_sensor;
         }
     }
 

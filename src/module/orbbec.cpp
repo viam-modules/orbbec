@@ -52,10 +52,10 @@ vsdk::Model Orbbec::model_astra2("viam", "orbbec", "astra2");
 vsdk::Model Orbbec::model_gemini_335le("viam", "orbbec", "gemini_335le");
 
 // CONSTANTS BEGIN
-const std::string kColorSourceName = "color";
+// kColorSourceName defined in orbbec.hpp
 const std::string kColorMimeTypeJPEG = "image/jpeg";
 const std::string kColorMimeTypePNG = "image/png";
-const std::string kDepthSourceName = "depth";
+// kDepthSourceName defined in orbbec.hpp
 const std::string kDepthMimeTypeViamDep = "image/vnd.viam.dep";
 const std::string kPcdMimeType = "pointcloud/pcd";
 // If the firmwareUrl is changed to a new version, also change the minFirmwareVer const.

@@ -18,6 +18,10 @@ inline const std::string kAttrWidth = "width";
 inline const std::string kAttrHeight = "height";
 inline const std::string kAttrFormat = "format";
 
+// Source name constants
+inline const std::string kColorSourceName = "color";
+inline const std::string kDepthSourceName = "depth";
+
 struct Resolution {
     uint32_t width{};
     uint32_t height{};
