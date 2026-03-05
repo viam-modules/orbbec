@@ -52,17 +52,16 @@ vsdk::Model Orbbec::model_astra2("viam", "orbbec", "astra2");
 vsdk::Model Orbbec::model_gemini_335le("viam", "orbbec", "gemini_335le");
 
 // CONSTANTS BEGIN
-const std::string kColorSourceName = "color";
+
 const std::string kColorMimeTypeJPEG = "image/jpeg";
 const std::string kColorMimeTypePNG = "image/png";
-const std::string kDepthSourceName = "depth";
+
 const std::string kDepthMimeTypeViamDep = "image/vnd.viam.dep";
 const std::string kPcdMimeType = "pointcloud/pcd";
 // If the firmwareUrl is changed to a new version, also change the minFirmwareVer const.
 constexpr char service_name[] = "viam_orbbec";
 const float mmToMeterMultiple = 0.001;
-const uint64_t maxFrameAgeUs = 1e6;  // time until a frame is considered stale, in microseconds (equal to 1 sec)
-
+const uint64_t maxFrameAgeUs = 1e6;                    // time until a frame is considered stale, in microseconds (equal to 1 sec)
 const uint64_t timestampWarningLogIntervalUs = 300e6;  // log at warning level at most every 5 minutes
 const uint64_t maxFrameSetTimeDiffUs =
     2000;  // max time difference between frames in a frameset to be considered simultaneous, in microseconds (equal to 2 ms)
@@ -124,9 +123,8 @@ std::optional<OrbbecModelConfig> OrbbecModelConfig::forDevice(const std::string&
     return std::nullopt;
 }
 
-// CONSTANTS END
-
 // STRUCTS BEGIN
+
 struct PointXYZRGB {
     float x, y, z;
     std::uint32_t rgb;
@@ -901,31 +899,31 @@ void Orbbec::validate_sensor(std::pair<std::string, viam::sdk::ProtoValue> const
     if (!sensor) {
         throw std::invalid_argument("sensor must be a struct");
     }
-    if (!sensor->count("width")) {
+    if (!sensor->count(kAttrWidth)) {
         throw std::invalid_argument("sensor must contain width key");
     }
-    auto width = sensor->at("width").get<double>();
+    auto width = sensor->at(kAttrWidth).get<double>();
     if (!width) {
         throw std::invalid_argument("sensor width must be a double");
     }
     if (*width <= 0) {
         throw std::invalid_argument("sensor width must be positive");
     }
-    if (!sensor->count("height")) {
+    if (!sensor->count(kAttrHeight)) {
         throw std::invalid_argument("sensor must contain height key");
     }
-    auto height = sensor->at("height").get<double>();
+    auto height = sensor->at(kAttrHeight).get<double>();
     if (!height) {
         throw std::invalid_argument("sensor height must be a double");
     }
     if (*height <= 0) {
         throw std::invalid_argument("sensor height must be positive");
     }
-    auto const format = sensor->at("format").get<std::string>();
+    auto const format = sensor->at(kAttrFormat).get<std::string>();
     if (!format) {
         throw std::invalid_argument("sensor format must be a string");
     }
-    if (sensor_type == "color") {
+    if (sensor_type == kColorSourceName) {
         if (!modelConfig.supported_color_formats.count(*format)) {
             std::ostringstream buffer;
             buffer << "color sensor format must be one of: ";
@@ -936,7 +934,7 @@ void Orbbec::validate_sensor(std::pair<std::string, viam::sdk::ProtoValue> const
             throw std::invalid_argument(buffer.str());
         }
 
-    } else if (sensor_type == "depth") {
+    } else if (sensor_type == kDepthSourceName) {
         if (!modelConfig.supported_depth_formats.count(*format)) {
             std::ostringstream buffer;
             buffer << "depth sensor format must be one of: ";
@@ -954,22 +952,22 @@ void Orbbec::validate_sensor(std::pair<std::string, viam::sdk::ProtoValue> const
 std::vector<std::string> Orbbec::validateOrbbecModel(vsdk::ResourceConfig cfg, OrbbecModelConfig const& modelConfig) {
     auto attrs = cfg.attributes();
 
-    if (!attrs.count("serial_number")) {
+    if (!attrs.count(kAttrSerialNumber)) {
         throw std::invalid_argument("serial_number is a required argument");
     }
 
-    if (!attrs["serial_number"].get<std::string>()) {
+    if (!attrs[kAttrSerialNumber].get<std::string>()) {
         throw std::invalid_argument("serial_number must be a string");
     }
 
     // We already established this is a string, so it's safe to call this
-    std::string const serial = attrs["serial_number"].get_unchecked<std::string>();
+    std::string const serial = attrs[kAttrSerialNumber].get_unchecked<std::string>();
     if (serial.empty()) {
         throw std::invalid_argument("serial_number must be a non-empty string");
     }
 
-    if (attrs.count("sensors")) {
-        auto sensors = attrs["sensors"].get<viam::sdk::ProtoStruct>();
+    if (attrs.count(kAttrSensors)) {
+        auto sensors = attrs[kAttrSensors].get<viam::sdk::ProtoStruct>();
         if (!sensors) {
             throw std::invalid_argument("sensors must be a struct");
         }
@@ -979,9 +977,9 @@ std::vector<std::string> Orbbec::validateOrbbecModel(vsdk::ResourceConfig cfg, O
             }
         }
         auto color_width_uint32 =
-            static_cast<std::uint32_t>(*sensors->at("color").get<viam::sdk::ProtoStruct>()->at("width").get<double>());
+            static_cast<std::uint32_t>(*sensors->at(kColorSourceName).get<viam::sdk::ProtoStruct>()->at(kAttrWidth).get<double>());
         auto color_height_uint32 =
-            static_cast<std::uint32_t>(*sensors->at("color").get<viam::sdk::ProtoStruct>()->at("height").get<double>());
+            static_cast<std::uint32_t>(*sensors->at(kColorSourceName).get<viam::sdk::ProtoStruct>()->at(kAttrHeight).get<double>());
         if (modelConfig.color_to_depth_supported_resolutions.count({color_width_uint32, color_height_uint32}) == 0) {
             std::ostringstream buffer;
             buffer << "color resolution must be one of: ";
@@ -992,9 +990,9 @@ std::vector<std::string> Orbbec::validateOrbbecModel(vsdk::ResourceConfig cfg, O
             throw std::invalid_argument(buffer.str());
         }
         auto depth_width_uint32 =
-            static_cast<std::uint32_t>(*sensors->at("depth").get<viam::sdk::ProtoStruct>()->at("width").get<double>());
+            static_cast<std::uint32_t>(*sensors->at(kDepthSourceName).get<viam::sdk::ProtoStruct>()->at(kAttrWidth).get<double>());
         auto depth_height_uint32 =
-            static_cast<std::uint32_t>(*sensors->at("depth").get<viam::sdk::ProtoStruct>()->at("height").get<double>());
+            static_cast<std::uint32_t>(*sensors->at(kDepthSourceName).get<viam::sdk::ProtoStruct>()->at(kAttrHeight).get<double>());
         if (modelConfig.color_to_depth_supported_resolutions.at({color_width_uint32, color_height_uint32})
                 .count({depth_width_uint32, depth_height_uint32}) == 0) {
             std::ostringstream buffer;
@@ -1025,8 +1023,8 @@ std::vector<std::string> Orbbec::validateGemini335Le(vsdk::ResourceConfig cfg) {
 
 std::string getSerialNumber(const vsdk::ResourceConfig& cfg) {
     auto attrs = cfg.attributes();
-    if (attrs.count("serial_number")) {
-        auto serial = attrs.at("serial_number").get<std::string>();
+    if (attrs.count(kAttrSerialNumber)) {
+        auto serial = attrs.at(kAttrSerialNumber).get<std::string>();
         if (serial) {
             return *serial;
         }
@@ -1721,24 +1719,24 @@ std::vector<vsdk::GeometryConfig> Orbbec::get_geometries(const vsdk::ProtoStruct
 std::unique_ptr<orbbec::ObResourceConfig> Orbbec::configure(vsdk::Dependencies dependencies, vsdk::ResourceConfig configuration) {
     auto attrs = configuration.attributes();
     std::string serial_number_from_config;
-    const std::string* serial_val = attrs["serial_number"].get<std::string>();
+    const std::string* serial_val = attrs[kAttrSerialNumber].get<std::string>();
     serial_number_from_config = *serial_val;
 
     std::optional<DeviceResolution> dev_res = std::nullopt;
     std::optional<DeviceFormat> dev_fmt = std::nullopt;
-    if (attrs.count("sensors")) {
+    if (attrs.count(kAttrSensors)) {
         VIAM_SDK_LOG(info) << "[configure] sensors specified in config";
-        auto sensors = attrs["sensors"].get<viam::sdk::ProtoStruct>();
+        auto sensors = attrs[kAttrSensors].get<viam::sdk::ProtoStruct>();
 
-        auto const color_height = sensors->at("color").get<viam::sdk::ProtoStruct>()->at("height").get_unchecked<double>();
-        auto const color_width = sensors->at("color").get<viam::sdk::ProtoStruct>()->at("width").get_unchecked<double>();
+        auto const color_height = sensors->at(kColorSourceName).get<viam::sdk::ProtoStruct>()->at(kAttrHeight).get_unchecked<double>();
+        auto const color_width = sensors->at(kColorSourceName).get<viam::sdk::ProtoStruct>()->at(kAttrWidth).get_unchecked<double>();
         auto const color_res = Resolution{static_cast<uint32_t>(color_width), static_cast<uint32_t>(color_height)};
-        auto const color_format = sensors->at("color").get<viam::sdk::ProtoStruct>()->at("format").get_unchecked<std::string>();
+        auto const color_format = sensors->at(kColorSourceName).get<viam::sdk::ProtoStruct>()->at(kAttrFormat).get_unchecked<std::string>();
 
-        auto const depth_height = sensors->at("depth").get<viam::sdk::ProtoStruct>()->at("height").get_unchecked<double>();
-        auto const depth_width = sensors->at("depth").get<viam::sdk::ProtoStruct>()->at("width").get_unchecked<double>();
+        auto const depth_height = sensors->at(kDepthSourceName).get<viam::sdk::ProtoStruct>()->at(kAttrHeight).get_unchecked<double>();
+        auto const depth_width = sensors->at(kDepthSourceName).get<viam::sdk::ProtoStruct>()->at(kAttrWidth).get_unchecked<double>();
         auto const depth_res = Resolution{static_cast<uint32_t>(depth_width), static_cast<uint32_t>(depth_height)};
-        auto const depth_format = sensors->at("depth").get<viam::sdk::ProtoStruct>()->at("format").get_unchecked<std::string>();
+        auto const depth_format = sensors->at(kDepthSourceName).get<viam::sdk::ProtoStruct>()->at(kAttrFormat).get_unchecked<std::string>();
 
         dev_res = DeviceResolution{color_res, depth_res};
         dev_fmt = DeviceFormat{color_format, depth_format};
