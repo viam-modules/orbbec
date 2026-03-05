@@ -19,5 +19,11 @@
     }
   ],
   "entrypoint": "bin/orbbec-module",
-  "first_run": "./first_run.sh"
+  "first_run": "./first_run.sh",
+  "build": {
+    "setup": "bin/setup.sh",
+    "build": "make module.tar.gz",
+    "path": "module.tar.gz",
+    "arch": ["linux/amd64", "linux/arm64", "darwin/arm64"]
+  }
 }

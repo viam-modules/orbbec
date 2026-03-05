@@ -38,3 +38,4 @@ conan build . \
       -s:a build_type=Release \
       -s:a "&:build_type=RelWithDebInfo" \
       -s:a compiler.cppstd=17
+
