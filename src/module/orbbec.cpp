@@ -1484,7 +1484,8 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
             const std::lock_guard<std::mutex> lock(devices_by_serial_mu());
             auto search = devices_by_serial().find(serial_number);
             if (search == devices_by_serial().end()) {
-                throw std::invalid_argument("device is not connected");
+                VIAM_RESOURCE_LOG(error) << "[do_command] device is not connected";
+                return vsdk::ProtoStruct{{"error", std::string("device is not connected")}};
             }
 
             std::unique_ptr<ViamOBDevice>& dev = search->second;
@@ -1573,6 +1574,9 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
                     return device_control::createModuleConfig<ViamOBDevice, ob::VideoStreamProfile>(dev);
                 } else if (key == "call_get_properties") {
                     call_get_properties = true;
+                } else {
+                    VIAM_RESOURCE_LOG(error) << "[do_command] unknown command: " << key;
+                    return vsdk::ProtoStruct{{"error", "unknown command: " + key}};
                 }
             }
         }  // unlock devices_by_serial_mu_
@@ -1601,6 +1605,7 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
         }
     } catch (const std::exception& e) {
         VIAM_RESOURCE_LOG(error) << service_name << ": exception caught: " << e.what();
+        return vsdk::ProtoStruct{{"error", std::string(e.what())}};
     }
     return vsdk::ProtoStruct{};
 }
