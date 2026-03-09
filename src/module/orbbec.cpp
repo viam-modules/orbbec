@@ -1471,6 +1471,9 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
 }
 
 vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
+    if (command.empty()) {
+        return vsdk::ProtoStruct{{"error", std::string("empty command")}};
+    }
     bool call_get_properties = false;
     try {
         constexpr char firmware_key[] = "update_firmware";
