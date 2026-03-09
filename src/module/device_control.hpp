@@ -253,11 +253,13 @@ viam::sdk::ProtoStruct setDeviceProperties(std::shared_ptr<DeviceT> device,
         return {{"error", "properties must be a struct"}};
     }
     std::unordered_set<std::string> writable_properties;
+    std::unordered_set<std::string> seen_properties;
     auto const& properties_map = properties.template get_unchecked<viam::sdk::ProtoStruct>();
     int const supportedPropertyCount = device->getSupportedPropertyCount();
     for (int i = 0; i < supportedPropertyCount; i++) {
         OBPropertyItem property_item = device->getSupportedProperty(i);
         if (properties_map.count(property_item.name) > 0) {
+            seen_properties.insert(property_item.name);
             if (property_item.permission == OB_PERMISSION_DENY || property_item.permission == OB_PERMISSION_READ) {
                 std::stringstream error_ss;
                 error_ss << "Property " << property_item.name << " is not writable, skipping.";
@@ -299,21 +301,9 @@ viam::sdk::ProtoStruct setDeviceProperties(std::shared_ptr<DeviceT> device,
             }
         }
     }
-    // Check for any user-supplied properties that weren't found in device's supported properties
     for (auto const& [name, _] : properties_map) {
-        if (writable_properties.count(name) == 0) {
-            // Check if it's unsupported (not found) vs unwritable (handled above)
-            bool found = false;
-            for (int i = 0; i < supportedPropertyCount; i++) {
-                OBPropertyItem property_item = device->getSupportedProperty(i);
-                if (property_item.name == name) {
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
-                return {{"error", "property not supported: " + name}};
-            }
+        if (seen_properties.count(name) == 0) {
+            return {{"error", "property not supported: " + name}};
         }
     }
     return getDeviceProperties(device, command, writable_properties);
