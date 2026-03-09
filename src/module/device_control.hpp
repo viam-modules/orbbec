@@ -225,7 +225,7 @@ viam::sdk::ProtoStruct setDeviceProperty(std::shared_ptr<DeviceT> device,
         }
     }
 
-    return {};
+    return {{"error", "property not supported: " + property_map.begin()->first}};
 }
 
 // Get property list
@@ -296,6 +296,23 @@ viam::sdk::ProtoStruct setDeviceProperties(std::shared_ptr<DeviceT> device,
                 error_ss << "Failed to set property " << property_item.name << ": " << e.what();
                 VIAM_SDK_LOG(error) << error_ss.str();
                 return {{"error", error_ss.str()}};
+            }
+        }
+    }
+    // Check for any user-supplied properties that weren't found in device's supported properties
+    for (auto const& [name, _] : properties_map) {
+        if (writable_properties.count(name) == 0) {
+            // Check if it's unsupported (not found) vs unwritable (handled above)
+            bool found = false;
+            for (int i = 0; i < supportedPropertyCount; i++) {
+                OBPropertyItem property_item = device->getSupportedProperty(i);
+                if (property_item.name == name) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                return {{"error", "property not supported: " + name}};
             }
         }
     }
