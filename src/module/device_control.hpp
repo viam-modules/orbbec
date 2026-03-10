@@ -225,7 +225,7 @@ viam::sdk::ProtoStruct setDeviceProperty(std::shared_ptr<DeviceT> device,
         }
     }
 
-    return {};
+    return {{"error", "property not supported: " + property_map.begin()->first}};
 }
 
 // Get property list
@@ -253,11 +253,13 @@ viam::sdk::ProtoStruct setDeviceProperties(std::shared_ptr<DeviceT> device,
         return {{"error", "properties must be a struct"}};
     }
     std::unordered_set<std::string> writable_properties;
+    std::unordered_set<std::string> seen_properties;
     auto const& properties_map = properties.template get_unchecked<viam::sdk::ProtoStruct>();
     int const supportedPropertyCount = device->getSupportedPropertyCount();
     for (int i = 0; i < supportedPropertyCount; i++) {
         OBPropertyItem property_item = device->getSupportedProperty(i);
         if (properties_map.count(property_item.name) > 0) {
+            seen_properties.insert(property_item.name);
             if (property_item.permission == OB_PERMISSION_DENY || property_item.permission == OB_PERMISSION_READ) {
                 std::stringstream error_ss;
                 error_ss << "Property " << property_item.name << " is not writable, skipping.";
@@ -297,6 +299,11 @@ viam::sdk::ProtoStruct setDeviceProperties(std::shared_ptr<DeviceT> device,
                 VIAM_SDK_LOG(error) << error_ss.str();
                 return {{"error", error_ss.str()}};
             }
+        }
+    }
+    for (auto const& [name, _] : properties_map) {
+        if (seen_properties.count(name) == 0) {
+            return {{"error", "property not supported: " + name}};
         }
     }
     return getDeviceProperties(device, command, writable_properties);
