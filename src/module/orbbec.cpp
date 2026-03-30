@@ -57,6 +57,8 @@ const std::string kColorMimeTypeJPEG = "image/jpeg";
 const std::string kColorMimeTypePNG = "image/png";
 const std::string kDepthSourceName = "depth";
 const std::string kDepthMimeTypeViamDep = "image/vnd.viam.dep";
+const std::string kDepthVisualSourceName = "depth_visual";
+const std::string kIRSourceName = "ir";
 const std::string kPcdMimeType = "pointcloud/pcd";
 // If the firmwareUrl is changed to a new version, also change the minFirmwareVer const.
 constexpr char service_name[] = "viam_orbbec";
@@ -301,6 +303,51 @@ void validateDepthFrame(std::shared_ptr<ob::Frame> depth,
     } else if (frameFormat != modelConfig.default_depth_format) {
         throw std::runtime_error(formatError("depth format mismatch, expected ", modelConfig.default_depth_format, " got ", frameFormat));
     }
+}
+
+// Validate IR frame timestamp
+void validateIRFrame(std::shared_ptr<ob::Frame> ir) {
+    if (ir == nullptr) {
+        throw std::runtime_error("no IR frame");
+    }
+    uint64_t nowUs = getNowUs();
+    uint64_t diff = timeSinceFrameUs(nowUs, getBestTimestampUs(ir));
+    if (diff > maxFrameAgeUs) {
+        throw std::runtime_error(formatError("no recent IR frame: check connection, diff: ", diff, "us"));
+    }
+}
+
+// Encode IR frame to raw_image as a grayscale PNG
+vsdk::Camera::raw_image encodeIRFrame(std::shared_ptr<ob::Frame> ir) {
+    vsdk::Camera::raw_image image;
+    image.source_name = kIRSourceName;
+    image.mime_type = kColorMimeTypePNG;
+
+    auto irVid = ir->as<ob::VideoFrame>();
+    if (!irVid) {
+        throw std::runtime_error("failed to cast IR frame to VideoFrame");
+    }
+    std::uint8_t* irData = (std::uint8_t*)ir->getData();
+    if (irData == nullptr) {
+        throw std::runtime_error("IR data is null");
+    }
+    uint32_t width = irVid->getWidth();
+    uint32_t height = irVid->getHeight();
+
+    if (ir->getFormat() == OB_FORMAT_Y8) {
+        image.bytes = encoding::encode_grayscale_to_png(irData, width, height);
+    } else if (ir->getFormat() == OB_FORMAT_Y16) {
+        // Normalize 16-bit IR to 8-bit by taking the high byte
+        std::vector<std::uint8_t> gray8(width * height);
+        const uint16_t* src = reinterpret_cast<const uint16_t*>(irData);
+        for (uint32_t i = 0; i < width * height; i++) {
+            gray8[i] = static_cast<std::uint8_t>(src[i] >> 8);
+        }
+        image.bytes = encoding::encode_grayscale_to_png(gray8.data(), width, height);
+    } else {
+        throw std::runtime_error(formatError("unsupported IR format: ", ob::TypeHelper::convertOBFormatTypeToString(ir->getFormat())));
+    }
+    return image;
 }
 
 // Encode color frame to raw_image
@@ -650,12 +697,8 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
     return nullptr;
 }
 
-auto frameCallback(const std::string& serialNumber) {
-    return [serialNumber](std::shared_ptr<ob::FrameSet> frameSet) {
-        if (frameSet->getCount() != 2) {
-            std::cerr << "got non 2 frame count: " << frameSet->getCount() << "\n";
-            return;
-        }
+auto frameCallback(const std::string& serialNumber, bool hasIR, OBFrameType irFrameType) {
+    return [serialNumber, hasIR, irFrameType](std::shared_ptr<ob::FrameSet> frameSet) {
         std::shared_ptr<ob::Frame> color = frameSet->getFrame(OB_FRAME_COLOR);
         if (color == nullptr) {
             std::cerr << "no color frame\n" << frameSet->getCount() << "\n";
@@ -679,6 +722,16 @@ auto frameCallback(const std::string& serialNumber) {
         if (diff > maxFrameAgeUs) {
             std::cerr << "depth frame is " << diff << "us older than now, nowUs: " << nowUs << " frameTimeUs " << getBestTimestampUs(depth)
                       << "\n";
+        }
+        if (hasIR) {
+            std::shared_ptr<ob::Frame> ir = frameSet->getFrame(irFrameType);
+            if (ir != nullptr) {
+                diff = timeSinceFrameUs(nowUs, getBestTimestampUs(ir));
+                if (diff > maxFrameAgeUs) {
+                    std::cerr << "IR frame is " << diff << "us older than now, nowUs: " << nowUs << " frameTimeUs "
+                              << getBestTimestampUs(ir) << "\n";
+                }
+            }
         }
 
         auto it = frame_set_by_serial().find(serialNumber);
@@ -828,6 +881,35 @@ void configureDevice(std::string serialNumber, OrbbecModelConfig const& modelCon
         buffer << service_name << ": unable to configure device " << serialNumber << " - no valid stream configuration found";
         throw std::runtime_error(buffer.str());
     }
+
+    // Always try to enable the IR stream alongside color and depth.
+    // Try OB_SENSOR_IR first (Astra2), fall back to OB_SENSOR_IR_LEFT (Gemini 335Le stereo).
+    bool actuallyEnabledIR = false;
+    struct IRCandidate {
+        OBSensorType sensor;
+        OBFrameType frame;
+    };
+    for (auto const& candidate : {IRCandidate{OB_SENSOR_IR, OB_FRAME_IR}, IRCandidate{OB_SENSOR_IR_LEFT, OB_FRAME_IR_LEFT}}) {
+        try {
+            auto irStreamProfiles = my_dev->pipe->getStreamProfileList(candidate.sensor);
+            if (irStreamProfiles == nullptr || irStreamProfiles->getCount() == 0) {
+                continue;
+            }
+            config->enableStream(irStreamProfiles->getProfile(0));
+            actuallyEnabledIR = true;
+            my_dev->irFrameType = candidate.frame;
+            VIAM_SDK_LOG(info) << "[configureDevice] IR stream enabled for device " << serialNumber << " (sensor=" << candidate.sensor
+                               << " frameType=" << candidate.frame << ")";
+            break;
+        } catch (const std::exception& e) {
+            VIAM_SDK_LOG(debug) << "[configureDevice] IR sensor " << candidate.sensor << " not available for device " << serialNumber
+                                << ": " << e.what();
+        }
+    }
+    if (!actuallyEnabledIR) {
+        VIAM_SDK_LOG(info) << "[configureDevice] No IR sensor found for device " << serialNumber << ", IR stream not available";
+    }
+    my_dev->enableIR = actuallyEnabledIR;
     my_dev->config = config;
 }
 
@@ -859,7 +941,7 @@ void startDevice(std::string serialNumber, OrbbecModelConfig const& modelConfig)
     }
 
     // Start the pipeline with the configuration
-    my_dev->pipe->start(my_dev->config, frameCallback(serialNumber));
+    my_dev->pipe->start(my_dev->config, frameCallback(serialNumber, my_dev->enableIR, my_dev->irFrameType));
     my_dev->started = true;
     VIAM_SDK_LOG(info) << "Started pipeline for device " << serialNumber;
 }
@@ -1083,6 +1165,19 @@ Orbbec::Orbbec(vsdk::Dependencies deps, vsdk::ResourceConfig cfg, std::shared_pt
     }
 
     {
+        auto attrs = cfg.attributes();
+        if (attrs.count("visible_stream_source") > 0 && attrs.at("visible_stream_source").is_a<std::string>()) {
+            visible_stream_source_ = attrs.at("visible_stream_source").get_unchecked<std::string>();
+        }
+        if (attrs.count("depth_min_mm") > 0 && attrs.at("depth_min_mm").is_a<double>()) {
+            depth_min_mm_ = static_cast<float>(attrs.at("depth_min_mm").get_unchecked<double>());
+        }
+        if (attrs.count("depth_max_mm") > 0 && attrs.at("depth_max_mm").is_a<double>()) {
+            depth_max_mm_ = static_cast<float>(attrs.at("depth_max_mm").get_unchecked<double>());
+        }
+    }
+
+    {
         std::lock_guard<std::mutex> lock(devices_by_serial_mu());
         auto search = devices_by_serial().find(serial_number_);
         if (search != devices_by_serial().end()) {
@@ -1189,6 +1284,21 @@ void Orbbec::reconfigure(const vsdk::Dependencies& deps, const vsdk::ResourceCon
         throw std::runtime_error("Failed to detect Orbbec model configuration during reconfigure");
     }
 
+    {
+        auto attrs = cfg.attributes();
+        if (attrs.count("visible_stream_source") > 0 && attrs.at("visible_stream_source").is_a<std::string>()) {
+            visible_stream_source_ = attrs.at("visible_stream_source").get_unchecked<std::string>();
+        } else {
+            visible_stream_source_ = kColorSourceName;
+        }
+        if (attrs.count("depth_min_mm") > 0 && attrs.at("depth_min_mm").is_a<double>()) {
+            depth_min_mm_ = static_cast<float>(attrs.at("depth_min_mm").get_unchecked<double>());
+        }
+        if (attrs.count("depth_max_mm") > 0 && attrs.at("depth_max_mm").is_a<double>()) {
+            depth_max_mm_ = static_cast<float>(attrs.at("depth_max_mm").get_unchecked<double>());
+        }
+    }
+
     configureDevice(new_serial_number, model_config_.value());
     startDevice(new_serial_number, model_config_.value());
     {
@@ -1220,9 +1330,14 @@ vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::Pro
             }
             fs = search->second;
         }
-        std::shared_ptr<ob::Frame> color = fs->getFrame(OB_FRAME_COLOR);
+        std::string source_name = kColorSourceName;
+        auto extra_it = extra.find("source_name");
+        if (extra_it != extra.end() && extra_it->second.is_a<std::string>()) {
+            source_name = extra_it->second.get_unchecked<std::string>();
+        }
 
         std::optional<DeviceFormat> res_format_opt;
+        OBFrameType irFrameType = OB_FRAME_IR;
         {
             std::lock_guard<std::mutex> lock(config_by_serial_mu());
             if (config_by_serial().count(serial_number) == 0) {
@@ -1230,7 +1345,41 @@ vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::Pro
             }
             res_format_opt = config_by_serial().at(serial_number).device_format;
         }
+        {
+            std::lock_guard<std::mutex> lock(devices_by_serial_mu());
+            auto search = devices_by_serial().find(serial_number);
+            if (search != devices_by_serial().end()) {
+                irFrameType = search->second->irFrameType;
+            }
+        }
 
+        if (source_name == kDepthVisualSourceName) {
+            std::shared_ptr<ob::Frame> depth = fs->getFrame(OB_FRAME_DEPTH);
+            validateDepthFrame(depth, res_format_opt, *model_config_);
+            unsigned char* depthData = (unsigned char*)depth->getData();
+            if (depthData == nullptr) {
+                throw std::runtime_error("[get_image] depth data is null");
+            }
+            auto depthVid = depth->as<ob::VideoFrame>();
+            float valueScale = depth->as<ob::DepthFrame>()->getValueScale();
+            vsdk::Camera::raw_image response;
+            response.source_name = kDepthVisualSourceName;
+            response.mime_type = kColorMimeTypePNG;
+            response.bytes = encoding::encode_depth_to_png(
+                depthData, depthVid->getWidth(), depthVid->getHeight(), valueScale, depth_min_mm_, depth_max_mm_);
+            VIAM_RESOURCE_LOG(debug) << "[get_image] end";
+            return response;
+        }
+
+        if (source_name == kIRSourceName) {
+            std::shared_ptr<ob::Frame> ir = fs->getFrame(irFrameType);
+            validateIRFrame(ir);
+            vsdk::Camera::raw_image response = encodeIRFrame(ir);
+            VIAM_RESOURCE_LOG(debug) << "[get_image] end";
+            return response;
+        }
+
+        std::shared_ptr<ob::Frame> color = fs->getFrame(OB_FRAME_COLOR);
         validateColorFrame(color, res_format_opt, *model_config_);
         vsdk::Camera::raw_image response = encodeColorFrame(color);
         VIAM_RESOURCE_LOG(debug) << "[get_image] end";
@@ -1338,6 +1487,17 @@ vsdk::Camera::properties Orbbec::get_properties() {
 vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filter_source_names, const vsdk::ProtoStruct& extra) {
     try {
         VIAM_RESOURCE_LOG(debug) << "[get_images] start";
+        {
+            std::ostringstream filter_log;
+            filter_log << "[get_images] filter_source_names: [";
+            for (size_t i = 0; i < filter_source_names.size(); i++) {
+                filter_log << filter_source_names[i];
+                if (i + 1 < filter_source_names.size())
+                    filter_log << ", ";
+            }
+            filter_log << "]";
+            VIAM_RESOURCE_LOG(info) << filter_log.str();
+        }
         std::string serial_number;
         {
             const std::lock_guard<std::mutex> lock(serial_number_mu_);
@@ -1363,10 +1523,14 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
 
         bool should_process_color = false;
         bool should_process_depth = false;
+        bool should_process_depth_visual = false;
+        bool should_process_ir = false;
 
         if (filter_source_names.empty()) {
             should_process_color = true;
             should_process_depth = true;
+            should_process_depth_visual = true;
+            should_process_ir = true;
         } else {
             for (const auto& name : filter_source_names) {
                 if (name == kColorSourceName) {
@@ -1375,12 +1539,19 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
                 if (name == kDepthSourceName) {
                     should_process_depth = true;
                 }
+                if (name == kDepthVisualSourceName) {
+                    should_process_depth_visual = true;
+                }
+                if (name == kIRSourceName) {
+                    should_process_ir = true;
+                }
             }
         }
 
         vsdk::Camera::image_collection response;
         std::shared_ptr<ob::Frame> color = nullptr;
         std::shared_ptr<ob::Frame> depth = nullptr;
+        std::shared_ptr<ob::Frame> ir = nullptr;
         uint64_t nowUs = getNowUs();
         std::optional<DeviceFormat> device_format_opt;
         {
@@ -1391,30 +1562,92 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
             device_format_opt = config_by_serial().at(serial_number).device_format;
         }
 
-        if (should_process_color) {
-            color = fs->getFrame(OB_FRAME_COLOR);
-            validateColorFrame(color, device_format_opt, *model_config_);
-
-            vsdk::Camera::raw_image color_image = encodeColorFrame(color);
-            color_image.source_name = kColorSourceName;
-            response.images.emplace_back(std::move(color_image));
+        OBFrameType irFrameType = OB_FRAME_IR;
+        {
+            std::lock_guard<std::mutex> lock(devices_by_serial_mu());
+            auto search = devices_by_serial().find(serial_number);
+            if (search != devices_by_serial().end()) {
+                irFrameType = search->second->irFrameType;
+            }
         }
 
-        if (should_process_depth) {
+        bool const visible_is_ir = visible_stream_source_ == kIRSourceName;
+        bool const visible_is_depth = visible_stream_source_ == kDepthSourceName;
+
+        // Fetch only the hardware frames we actually need.
+        bool const need_color = should_process_color && !visible_is_ir && !visible_is_depth;
+        bool const need_depth =
+            should_process_depth || (should_process_depth_visual && !visible_is_ir) || (should_process_color && visible_is_depth);
+        bool const need_ir = should_process_ir || (should_process_color && visible_is_ir) || (should_process_depth_visual && visible_is_ir);
+
+        if (need_color) {
+            color = fs->getFrame(OB_FRAME_COLOR);
+            validateColorFrame(color, device_format_opt, *model_config_);
+        }
+
+        unsigned char* depthData = nullptr;
+        std::shared_ptr<ob::VideoFrame> depthVid = nullptr;
+        float depthValueScale = 0.0f;
+        if (need_depth) {
             depth = fs->getFrame(OB_FRAME_DEPTH);
             validateDepthFrame(depth, device_format_opt, *model_config_);
-
-            unsigned char* depthData = (unsigned char*)depth->getData();
+            depthData = (unsigned char*)depth->getData();
             if (depthData == nullptr) {
                 throw std::runtime_error("[get_images] depth data is null");
             }
-            auto depthVid = depth->as<ob::VideoFrame>();
+            depthVid = depth->as<ob::VideoFrame>();
+            depthValueScale = depth->as<ob::DepthFrame>()->getValueScale();
+        }
 
-            vsdk::Camera::raw_image depth_image;
-            depth_image.source_name = kDepthSourceName;
-            depth_image.mime_type = kDepthMimeTypeViamDep;
-            depth_image.bytes = encoding::encode_to_depth_raw(depthData, depthVid->getWidth(), depthVid->getHeight());
-            response.images.emplace_back(std::move(depth_image));
+        if (need_ir) {
+            ir = fs->getFrame(irFrameType);
+            validateIRFrame(ir);
+        }
+
+        // Emit each requested output source independently.
+        if (should_process_color) {
+            vsdk::Camera::raw_image img;
+            img.source_name = kColorSourceName;
+            if (visible_is_ir) {
+                img = encodeIRFrame(ir);
+                img.source_name = kColorSourceName;
+            } else if (visible_is_depth) {
+                img.mime_type = kColorMimeTypePNG;
+                img.bytes = encoding::encode_depth_to_png(
+                    depthData, depthVid->getWidth(), depthVid->getHeight(), depthValueScale, depth_min_mm_, depth_max_mm_);
+            } else {
+                img = encodeColorFrame(color);
+                img.source_name = kColorSourceName;
+            }
+            response.images.emplace_back(std::move(img));
+        }
+
+        if (should_process_depth) {
+            vsdk::Camera::raw_image img;
+            img.source_name = kDepthSourceName;
+            img.mime_type = kDepthMimeTypeViamDep;
+            img.bytes = encoding::encode_to_depth_raw(depthData, depthVid->getWidth(), depthVid->getHeight());
+            response.images.emplace_back(std::move(img));
+        }
+
+        if (should_process_depth_visual) {
+            vsdk::Camera::raw_image img;
+            img.source_name = kDepthVisualSourceName;
+            if (visible_is_ir) {
+                img = encodeIRFrame(ir);
+                img.source_name = kDepthVisualSourceName;
+            } else {
+                img.mime_type = kColorMimeTypePNG;
+                img.bytes = encoding::encode_depth_to_png(
+                    depthData, depthVid->getWidth(), depthVid->getHeight(), depthValueScale, depth_min_mm_, depth_max_mm_);
+            }
+            response.images.emplace_back(std::move(img));
+        }
+
+        if (should_process_ir) {
+            vsdk::Camera::raw_image img = encodeIRFrame(ir);
+            img.source_name = kIRSourceName;
+            response.images.emplace_back(std::move(img));
         }
 
         if (response.images.empty()) {
@@ -1424,33 +1657,37 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
 
         uint64_t const colorTSUs = color ? getBestTimestampUs(color) : 0;
         uint64_t const depthTSUs = depth ? getBestTimestampUs(depth) : 0;
-        uint64_t const timeDiff = (colorTSUs > depthTSUs) ? colorTSUs - depthTSUs : depthTSUs - colorTSUs;
+        uint64_t const irTSUs = ir ? getBestTimestampUs(ir) : 0;
         uint64_t timestampUs = 0;
 
-        if (colorTSUs > 0 && depthTSUs > 0 && timeDiff > maxFrameSetTimeDiffUs) {
-            // Always log at debug level
-            VIAM_RESOURCE_LOG(debug) << "color and depth timestamps differ, "
-                                     << "color: " << colorTSUs << " depth: " << depthTSUs << ", diff: " << timeDiff << "us";
+        // Use the oldest non-zero timestamp among the frames we actually fetched
+        if (colorTSUs > 0 && depthTSUs > 0) {
+            uint64_t const timeDiff = (colorTSUs > depthTSUs) ? colorTSUs - depthTSUs : depthTSUs - colorTSUs;
+            if (timeDiff > maxFrameSetTimeDiffUs) {
+                // Always log at debug level
+                VIAM_RESOURCE_LOG(debug) << "color and depth timestamps differ, "
+                                         << "color: " << colorTSUs << " depth: " << depthTSUs << ", diff: " << timeDiff << "us";
 
-            // Throttled info-level logging
-            uint64_t lastTimestampLogTime = 0;
-            {
-                std::lock_guard<std::mutex> lock(devices_by_serial_mu());
-                auto search = devices_by_serial().find(serial_number);
-                if (search != devices_by_serial().end()) {
-                    lastTimestampLogTime = search->second->lastTimestampLogTime;
-                }
-            }
-            uint64_t nowUs =
-                std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-            if (nowUs - lastTimestampLogTime > timestampWarningLogIntervalUs) {
-                VIAM_RESOURCE_LOG(warn) << "color and depth timestamps differ by " << timeDiff << "us, using older timestamp. "
-                                        << "(This warning throttled to once per 60s; see debug for all occurrences)";
+                // Throttled info-level logging
+                uint64_t lastTimestampLogTime = 0;
                 {
                     std::lock_guard<std::mutex> lock(devices_by_serial_mu());
                     auto search = devices_by_serial().find(serial_number);
                     if (search != devices_by_serial().end()) {
-                        search->second->lastTimestampLogTime = nowUs;
+                        lastTimestampLogTime = search->second->lastTimestampLogTime;
+                    }
+                }
+                uint64_t nowUs =
+                    std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+                if (nowUs - lastTimestampLogTime > timestampWarningLogIntervalUs) {
+                    VIAM_RESOURCE_LOG(warn) << "color and depth timestamps differ by " << timeDiff << "us, using older timestamp. "
+                                            << "(This warning throttled to once per 60s; see debug for all occurrences)";
+                    {
+                        std::lock_guard<std::mutex> lock(devices_by_serial_mu());
+                        auto search = devices_by_serial().find(serial_number);
+                        if (search != devices_by_serial().end()) {
+                            search->second->lastTimestampLogTime = nowUs;
+                        }
                     }
                 }
             }
@@ -1458,8 +1695,10 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
             timestampUs = (colorTSUs > depthTSUs) ? depthTSUs : colorTSUs;
         } else if (colorTSUs > 0) {
             timestampUs = colorTSUs;
-        } else {
+        } else if (depthTSUs > 0) {
             timestampUs = depthTSUs;
+        } else if (irTSUs > 0) {
+            timestampUs = irTSUs;
         }
 
         std::chrono::microseconds latestTimestampUs(timestampUs);
@@ -1523,7 +1762,7 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
                         buffer << "firmware update failed: " << e.what();
                         VIAM_RESOURCE_LOG(error) << buffer.str();
                         resp.emplace(firmware_key, buffer.str());
-                        dev->pipe->start(dev->config, frameCallback(serial_number));
+                        dev->pipe->start(dev->config, frameCallback(serial_number, dev->enableIR, dev->irFrameType));
                         dev->started = true;
                     }
 // macOS has a bug where the device changed callback is not called on reboot, so user must manually reboot the device
@@ -1664,10 +1903,12 @@ vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const v
 
         // If we have any post process depth filters configured, apply them now
         if (my_dev->applyEnabledPostProcessDepthFilters && my_dev->postProcessDepthFilters.size() > 0) {
+            VIAM_RESOURCE_LOG(debug) << "[get_point_cloud] applying post process depth filters";
             for (auto& filter : my_dev->postProcessDepthFilters) {
                 depth = filter->process(depth);
             }
             fs->pushFrame(depth);
+            VIAM_RESOURCE_LOG(debug) << "[get_point_cloud] post process depth filters applied, fs frames size: " << fs->frameCount();
         }
 
         std::vector<unsigned char> data;

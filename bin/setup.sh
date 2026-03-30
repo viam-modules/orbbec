@@ -20,7 +20,7 @@ if [[ ${OS} == "darwin" ]]; then
 elif  [[ ${OS} == "linux" ]]; then
     echo "Detected Linux"
     # NOTE: this is written under the assumption that it will be built in canon
-    sudo apt -y update && sudo apt -y upgrade && sudo apt install -y cmake python3.11 python3.11-venv wget
+    sudo apt -y update && sudo apt -y upgrade && sudo apt install -y cmake python3 python3-venv wget
 else
     echo "Unsupported OS: ${OS}"
     exit 1

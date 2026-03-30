@@ -130,6 +130,8 @@ struct ViamOBDevice {
     std::vector<std::shared_ptr<ob::Filter>> postProcessDepthFilters{};
     bool applyEnabledPostProcessDepthFilters{};
     bool dumpPCLFiles{};
+    bool enableIR{};
+    OBFrameType irFrameType{OB_FRAME_IR};
     uint64_t lastTimestampLogTime{};
 };
 
@@ -160,6 +162,9 @@ class Orbbec final : public viam::sdk::Camera, public viam::sdk::Reconfigurable 
     std::mutex serial_number_mu_;
     std::string serial_number_;
     std::optional<OrbbecModelConfig> model_config_;
+    std::string visible_stream_source_ = "color";
+    float depth_min_mm_ = 0.0f;
+    float depth_max_mm_ = 3000.0f;
     static std::unique_ptr<ObResourceConfig> configure(viam::sdk::Dependencies deps, viam::sdk::ResourceConfig cfg);
     static void validate_sensor(std::pair<std::string, viam::sdk::ProtoValue> const& sensor_pair, const OrbbecModelConfig& modelConfig);
 
