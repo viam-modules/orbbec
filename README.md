@@ -40,7 +40,8 @@ The following attributes are available for the Astra 2 model:
 | Name          | Type   | Inclusion | Description                |
 |---------------|--------|-----------|----------------------------|
 | `serial_number` | string | **Required** | The serial number of the specific Orbbec camera to use. This number is printed on the device. The serial number of each plugged-in and available orbbec camera will be logged on module startup.  |
-|`sensors` | struct | **Optional** | The configuration of the color and depth sensors |
+| `sensors` | struct | **Optional** | The configuration of the color and depth sensors |
+| `visible_stream_source` | string | **Optional** | Which image to show in the live video stream: `color` (default), `depth`, or `ir` |
 
 #### `sensor` attributes:
 | Name | Type | Inclusion | Description |
@@ -97,7 +98,8 @@ The following attributes are available for the Gemini 335Le model:
 | Name          | Type   | Inclusion | Description                |
 |---------------|--------|-----------|----------------------------|
 | `serial_number` | string | **Required** | The serial number of the specific Orbbec camera to use. This number is printed on the device. The serial number of each plugged-in and available orbbec camera will be logged on module startup.  |
-|`sensors` | struct | **Optional** | The configuration of the color and depth sensors |
+| `sensors` | struct | **Optional** | The configuration of the color and depth sensors |
+| `visible_stream_source` | string | **Optional** | Which image to show in the live video stream: `color` (default), `depth`, or `ir` |
 
 #### `sensor` attributes:
 | Name | Type | Inclusion | Description |
@@ -124,14 +126,26 @@ The following attributes are available for the Gemini 335Le model:
 
 ## `get_images` Source Names
 
-`get_images` supports two source names for use with `filter_source_names`:
+`get_images` supports the following source names for use with `filter_source_names`:
 
 | Source Name | MIME Type | Description |
 |-------------|-----------|-------------|
 | `color` | `image/jpeg` or `image/png` | Color image from the RGB sensor |
-| `depth` | `image/vnd.viam.dep` | Depth map from the depth sensor |
+| `depth` | `image/vnd.viam.dep` | Raw depth map from the depth sensor |
+| `depth_visual` | `image/png` | Depth image colorized with a JET colormap, suitable for display |
+| `ir` | `image/png` | Grayscale image from the IR sensor |
 
-If `filter_source_names` is empty, both `color` and `depth` images are returned. If populated, only the matching source names are returned. Unrecognized names are ignored.
+If `filter_source_names` is empty, all four images are returned. If populated, only the matching source names are returned. Unrecognized names are ignored.
+
+### `visible_stream_source`
+
+The `visible_stream_source` attribute controls which image fills the "visible" slot shown in live video streams. It can be set on either camera model.
+
+| Value | Description |
+|-------|-------------|
+| `color` | *(default)* Color image from the RGB sensor |
+| `depth` | Colorized depth image served as `color` |
+| `ir` | IR image served as both `color` and `depth_visual` |
 
 ## Attributes
 A call to get_attributes will return the camera attributes in [this struct](https://github.com/viamrobotics/viam-cpp-sdk/blob/43deea420f572e6b61b6fbd519e09b2520f05676/src/viam/sdk/components/camera.hpp#L58)
