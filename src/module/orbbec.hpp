@@ -72,12 +72,24 @@ struct ObResourceConfig {
     std::string serial_number;
     std::optional<DeviceResolution> device_resolution;
     std::optional<DeviceFormat> device_format;
+    std::optional<OBCameraIntrinsic> intrinsics_override;
+    std::optional<OBCameraDistortion> distortion_override;
+    std::optional<OBExtrinsic> extrinsic_override;
 
     explicit ObResourceConfig(std::string const& serial_number,
                               std::string const& resource_name,
                               std::optional<DeviceResolution> device_resolution,
-                              std::optional<DeviceFormat> device_format)
-        : serial_number(serial_number), resource_name(resource_name), device_resolution(device_resolution), device_format(device_format) {}
+                              std::optional<DeviceFormat> device_format,
+                              std::optional<OBCameraIntrinsic> intrinsics_override,
+                              std::optional<OBCameraDistortion> distortion_override,
+                              std::optional<OBExtrinsic> extrinsic_override = std::nullopt)
+        : serial_number(serial_number),
+          resource_name(resource_name),
+          device_resolution(device_resolution),
+          device_format(device_format),
+          intrinsics_override(intrinsics_override),
+          distortion_override(distortion_override),
+          extrinsic_override(extrinsic_override) {}
     std::string to_string() const {
         std::ostringstream os;
         os << "(resource_name=" << resource_name << ", serial_number=" << serial_number;
@@ -90,6 +102,19 @@ struct ObResourceConfig {
             os << ", device_format=" << device_format->to_string();
         } else {
             os << ", device_format=nullopt";
+        }
+        if (intrinsics_override.has_value()) {
+            os << ", intrinsics_override=(fx=" << intrinsics_override->fx << ", fy=" << intrinsics_override->fy
+               << ", cx=" << intrinsics_override->cx << ", cy=" << intrinsics_override->cy << ")";
+        }
+        if (distortion_override.has_value()) {
+            os << ", distortion_override=(k1=" << distortion_override->k1 << ", k2=" << distortion_override->k2
+               << ", k3=" << distortion_override->k3 << ", p1=" << distortion_override->p1 << ", p2=" << distortion_override->p2 << ")";
+        }
+        if (extrinsic_override.has_value()) {
+            os << ", extrinsic_override=(rot=[" << extrinsic_override->rot[0] << "," << extrinsic_override->rot[1] << ","
+               << extrinsic_override->rot[2] << ",...], trans=[" << extrinsic_override->trans[0] << "," << extrinsic_override->trans[1]
+               << "," << extrinsic_override->trans[2] << "])";
         }
         os << ")";
         return os.str();

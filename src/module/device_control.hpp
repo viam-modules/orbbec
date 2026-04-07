@@ -572,6 +572,32 @@ viam::sdk::ProtoStruct getCameraParams(std::shared_ptr<PipelineT> pipe) {
         }
     }
 
+    // Add the depth-to-color extrinsic transform from OBCameraParam.
+    // OBD2CTransform contains rot[9] (3x3 rotation, row-major) and trans[3] (mm).
+    try {
+        auto cameraParam = pipe->getCameraParam();
+        auto const& transform = cameraParam.transform;
+
+        viam::sdk::ProtoStruct rotation_struct;
+        const char* rot_names[] = {"r00", "r01", "r02", "r10", "r11", "r12", "r20", "r21", "r22"};
+        for (int i = 0; i < 9; i++) {
+            rotation_struct[rot_names[i]] = static_cast<double>(transform.rot[i]);
+        }
+
+        viam::sdk::ProtoStruct translation_struct;
+        translation_struct["x"] = static_cast<double>(transform.trans[0]);
+        translation_struct["y"] = static_cast<double>(transform.trans[1]);
+        translation_struct["z"] = static_cast<double>(transform.trans[2]);
+
+        viam::sdk::ProtoStruct extrinsic_struct;
+        extrinsic_struct["rotation"] = rotation_struct;
+        extrinsic_struct["translation_mm"] = translation_struct;
+        result["depth_to_color_extrinsic"] = extrinsic_struct;
+    } catch (const std::exception& e) {
+        VIAM_SDK_LOG(error) << "[getCameraParams] failed to get depth-to-color extrinsic: " << e.what();
+        result["depth_to_color_extrinsic"] = viam::sdk::ProtoStruct{{"error", std::string(e.what())}};
+    }
+
     return result;
 }
 

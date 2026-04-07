@@ -334,19 +334,35 @@ vsdk::Camera::raw_image encodeIRFrame(std::shared_ptr<ob::Frame> ir) {
     uint32_t width = irVid->getWidth();
     uint32_t height = irVid->getHeight();
 
+    uint32_t n = width * height;
+    std::vector<std::uint8_t> gray8(n);
+
     if (ir->getFormat() == OB_FORMAT_Y8) {
-        image.bytes = encoding::encode_grayscale_to_png(irData, width, height);
-    } else if (ir->getFormat() == OB_FORMAT_Y16) {
-        // Normalize 16-bit IR to 8-bit by taking the high byte
-        std::vector<std::uint8_t> gray8(width * height);
-        const uint16_t* src = reinterpret_cast<const uint16_t*>(irData);
-        for (uint32_t i = 0; i < width * height; i++) {
-            gray8[i] = static_cast<std::uint8_t>(src[i] >> 8);
+        // Normalize 8-bit IR to full range — ambient IR with projector off gives very low values.
+        const uint8_t* src = irData;
+        uint8_t min_val = *std::min_element(src, src + n);
+        uint8_t max_val = *std::max_element(src, src + n);
+        uint8_t range = max_val - min_val;
+        VIAM_SDK_LOG(debug) << "[encodeIRFrame] Y8  min=" << (int)min_val << " max=" << (int)max_val;
+        for (uint32_t i = 0; i < n; i++) {
+            gray8[i] = range > 0 ? static_cast<std::uint8_t>(255U * (src[i] - min_val) / range) : 0;
         }
-        image.bytes = encoding::encode_grayscale_to_png(gray8.data(), width, height);
+    } else if (ir->getFormat() == OB_FORMAT_Y16) {
+        // Normalize 16-bit IR to full 8-bit range using min/max stretch.
+        // The Astra2 IR sensor outputs values in a sub-byte range (e.g. 10-bit),
+        // so a naive >> 8 shift produces a nearly black image.
+        const uint16_t* src = reinterpret_cast<const uint16_t*>(irData);
+        uint16_t min_val = *std::min_element(src, src + n);
+        uint16_t max_val = *std::max_element(src, src + n);
+        uint16_t range = max_val - min_val;
+        VIAM_SDK_LOG(debug) << "[encodeIRFrame] Y16 min=" << min_val << " max=" << max_val;
+        for (uint32_t i = 0; i < n; i++) {
+            gray8[i] = range > 0 ? static_cast<std::uint8_t>(255UL * (src[i] - min_val) / range) : 0;
+        }
     } else {
         throw std::runtime_error(formatError("unsupported IR format: ", ob::TypeHelper::convertOBFormatTypeToString(ir->getFormat())));
     }
+    image.bytes = encoding::encode_grayscale_to_png(gray8.data(), width, height);
     return image;
 }
 
@@ -777,6 +793,23 @@ void configureDevice(std::string serialNumber, OrbbecModelConfig const& modelCon
         VIAM_SDK_LOG(info) << "[configureDevice] Global timestamp not supported for device " << serialNumber;
     }
 
+    // Check on-chip calibration health (range [0.0, 1.5]; higher is better)
+    if (my_dev->device->isPropertySupported(OB_PROP_ON_CHIP_CALIBRATION_HEALTH_CHECK_FLOAT, OB_PERMISSION_READ)) {
+        try {
+            float health = my_dev->device->getFloatProperty(OB_PROP_ON_CHIP_CALIBRATION_HEALTH_CHECK_FLOAT);
+            if (health < 1.0f) {
+                VIAM_SDK_LOG(warn) << "[configureDevice] On-chip calibration health check for device " << serialNumber << ": " << health
+                                   << " (below 1.0, calibration may be degraded)";
+            } else {
+                VIAM_SDK_LOG(info) << "[configureDevice] On-chip calibration health check for device " << serialNumber << ": " << health;
+            }
+        } catch (const std::exception& e) {
+            VIAM_SDK_LOG(warn) << "[configureDevice] Failed to read calibration health for device " << serialNumber << ": " << e.what();
+        }
+    } else {
+        VIAM_SDK_LOG(info) << "[configureDevice] On-chip calibration health check not supported for device " << serialNumber;
+    }
+
     // Initialize fields if not already set
     if (!my_dev->pipe) {
         my_dev->pipe = std::make_shared<ob::Pipeline>(my_dev->device);
@@ -865,6 +898,49 @@ void configureDevice(std::string serialNumber, OrbbecModelConfig const& modelCon
             }
         }
 
+        // Apply runtime intrinsics/distortion override if configured.
+        // This overrides the device's stored calibration in-process without writing to flash.
+        if (colorProfile != nullptr) {
+            std::optional<OBCameraIntrinsic> intrinsics_override;
+            std::optional<OBCameraDistortion> distortion_override;
+            {
+                std::lock_guard<std::mutex> configLock(config_by_serial_mu());
+                if (config_by_serial().count(serialNumber) > 0) {
+                    intrinsics_override = config_by_serial().at(serialNumber).intrinsics_override;
+                    distortion_override = config_by_serial().at(serialNumber).distortion_override;
+                }
+            }
+            if (intrinsics_override.has_value()) {
+                OBCameraIntrinsic intr = *intrinsics_override;
+                intr.width = static_cast<int16_t>(colorProfile->getWidth());
+                intr.height = static_cast<int16_t>(colorProfile->getHeight());
+                colorProfile->setIntrinsic(intr);
+                VIAM_SDK_LOG(info) << "[configureDevice] Applied intrinsics override for device " << serialNumber << ": fx=" << intr.fx
+                                   << " fy=" << intr.fy << " cx=" << intr.cx << " cy=" << intr.cy;
+            }
+            if (distortion_override.has_value()) {
+                colorProfile->setDistortion(*distortion_override);
+                VIAM_SDK_LOG(info) << "[configureDevice] Applied distortion override for device " << serialNumber;
+            }
+        }
+
+        // Apply depth→color extrinsic override if configured.
+        if (depthProfile != nullptr && colorProfile != nullptr) {
+            std::optional<OBExtrinsic> extrinsic_override;
+            {
+                std::lock_guard<std::mutex> configLock(config_by_serial_mu());
+                if (config_by_serial().count(serialNumber) > 0) {
+                    extrinsic_override = config_by_serial().at(serialNumber).extrinsic_override;
+                }
+            }
+            if (extrinsic_override.has_value()) {
+                depthProfile->bindExtrinsicTo(colorProfile, *extrinsic_override);
+                VIAM_SDK_LOG(info) << "[configureDevice] Applied extrinsic override for device " << serialNumber << ": trans=["
+                                   << extrinsic_override->trans[0] << ", " << extrinsic_override->trans[1] << ", "
+                                   << extrinsic_override->trans[2] << "]";
+            }
+        }
+
         if (colorProfile != nullptr && depthProfile != nullptr && colorProfile->getFps() == depthProfile->getFps()) {
             // Set multi-device sync mode to standalone to avoid depth/color timestamp differences
             auto curConfig = my_dev->device->getMultiDeviceSyncConfig();
@@ -906,7 +982,11 @@ void configureDevice(std::string serialNumber, OrbbecModelConfig const& modelCon
                                 << ": " << e.what();
         }
     }
-    if (!actuallyEnabledIR) {
+    if (actuallyEnabledIR) {
+        // IR is supplementary — don't let it block frameset emission. Color+depth are already
+        // synchronized by hardware D2C alignment, so COLOR_FRAME_REQUIRE is sufficient.
+        config->setFrameAggregateOutputMode(OB_FRAME_AGGREGATE_OUTPUT_COLOR_FRAME_REQUIRE);
+    } else {
         VIAM_SDK_LOG(info) << "[configureDevice] No IR sensor found for device " << serialNumber << ", IR stream not available";
     }
     my_dev->enableIR = actuallyEnabledIR;
@@ -1574,11 +1654,11 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
         bool const visible_is_ir = visible_stream_source_ == kIRSourceName;
         bool const visible_is_depth = visible_stream_source_ == kDepthSourceName;
 
-        // Fetch only the hardware frames we actually need.
-        bool const need_color = should_process_color && !visible_is_ir && !visible_is_depth;
-        bool const need_depth =
-            should_process_depth || (should_process_depth_visual && !visible_is_ir) || (should_process_color && visible_is_depth);
-        bool const need_ir = should_process_ir || (should_process_color && visible_is_ir) || (should_process_depth_visual && visible_is_ir);
+        // Fetch frames. IR is best-effort: the pipeline may emit framesets without it
+        // (OB_FRAME_AGGREGATE_OUTPUT_COLOR_FRAME_REQUIRE), so we never throw when it's absent.
+        bool const need_color = should_process_color && !visible_is_depth;
+        bool const need_depth = should_process_depth || should_process_depth_visual || (should_process_color && visible_is_depth);
+        bool const need_ir = should_process_ir || (visible_is_ir && (should_process_color || should_process_depth_visual));
 
         if (need_color) {
             color = fs->getFrame(OB_FRAME_COLOR);
@@ -1601,14 +1681,17 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
 
         if (need_ir) {
             ir = fs->getFrame(irFrameType);
-            validateIRFrame(ir);
+            if (ir != nullptr) {
+                validateIRFrame(ir);
+            }
         }
 
         // Emit each requested output source independently.
+        // When visible_is_ir, use IR if available; otherwise fall back to the natural stream.
         if (should_process_color) {
             vsdk::Camera::raw_image img;
             img.source_name = kColorSourceName;
-            if (visible_is_ir) {
+            if (visible_is_ir && ir != nullptr) {
                 img = encodeIRFrame(ir);
                 img.source_name = kColorSourceName;
             } else if (visible_is_depth) {
@@ -1633,7 +1716,7 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
         if (should_process_depth_visual) {
             vsdk::Camera::raw_image img;
             img.source_name = kDepthVisualSourceName;
-            if (visible_is_ir) {
+            if (visible_is_ir && ir != nullptr) {
                 img = encodeIRFrame(ir);
                 img.source_name = kDepthVisualSourceName;
             } else {
@@ -1645,9 +1728,13 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
         }
 
         if (should_process_ir) {
-            vsdk::Camera::raw_image img = encodeIRFrame(ir);
-            img.source_name = kIRSourceName;
-            response.images.emplace_back(std::move(img));
+            if (ir != nullptr) {
+                vsdk::Camera::raw_image img = encodeIRFrame(ir);
+                img.source_name = kIRSourceName;
+                response.images.emplace_back(std::move(img));
+            } else {
+                VIAM_RESOURCE_LOG(debug) << "[get_images] IR frame not available in this frameset";
+            }
         }
 
         if (response.images.empty()) {
@@ -1814,6 +1901,13 @@ vsdk::ProtoStruct Orbbec::do_command(const vsdk::ProtoStruct& command) {
                     return device_control::createModuleConfig<ViamOBDevice, ob::VideoStreamProfile>(dev);
                 } else if (key == "call_get_properties") {
                     call_get_properties = true;
+                } else if (key == "calibration_health") {
+                    if (dev->device->isPropertySupported(OB_PROP_ON_CHIP_CALIBRATION_HEALTH_CHECK_FLOAT, OB_PERMISSION_READ)) {
+                        float health = dev->device->getFloatProperty(OB_PROP_ON_CHIP_CALIBRATION_HEALTH_CHECK_FLOAT);
+                        return vsdk::ProtoStruct{{"calibration_health", static_cast<double>(health)}};
+                    } else {
+                        return vsdk::ProtoStruct{{"calibration_health", std::string("not supported")}};
+                    }
                 }
             }
         }  // unlock devices_by_serial_mu_
@@ -1986,7 +2080,63 @@ std::unique_ptr<orbbec::ObResourceConfig> Orbbec::configure(vsdk::Dependencies d
     } else {
         VIAM_SDK_LOG(info) << "[configure] no sensors specified in config, using defaults";
     }
-    auto native_config = std::make_unique<orbbec::ObResourceConfig>(serial_number_from_config, configuration.name(), dev_res, dev_fmt);
+
+    std::optional<OBCameraIntrinsic> intrinsics_override = std::nullopt;
+    if (attrs.count("intrinsics_override")) {
+        auto intr = attrs["intrinsics_override"].get<viam::sdk::ProtoStruct>();
+        OBCameraIntrinsic i{};
+        i.fx = static_cast<float>(intr->at("fx").get_unchecked<double>());
+        i.fy = static_cast<float>(intr->at("fy").get_unchecked<double>());
+        i.cx = static_cast<float>(intr->at("cx").get_unchecked<double>());
+        i.cy = static_cast<float>(intr->at("cy").get_unchecked<double>());
+        intrinsics_override = i;
+    }
+
+    std::optional<OBCameraDistortion> distortion_override = std::nullopt;
+    if (attrs.count("distortion_override")) {
+        auto dist = attrs["distortion_override"].get<viam::sdk::ProtoStruct>();
+        OBCameraDistortion d{};
+        auto getf = [&](const std::string& key) -> float {
+            return dist->count(key) ? static_cast<float>(dist->at(key).get_unchecked<double>()) : 0.0f;
+        };
+        d.k1 = getf("k1");
+        d.k2 = getf("k2");
+        d.k3 = getf("k3");
+        d.k4 = getf("k4");
+        d.k5 = getf("k5");
+        d.k6 = getf("k6");
+        d.p1 = getf("p1");
+        d.p2 = getf("p2");
+        d.model = OB_DISTORTION_BROWN_CONRADY_K6;
+        distortion_override = d;
+    }
+
+    std::optional<OBExtrinsic> extrinsic_override = std::nullopt;
+    if (attrs.count("extrinsic_override")) {
+        auto ext = attrs["extrinsic_override"].get<viam::sdk::ProtoStruct>();
+        OBExtrinsic e{};
+        // rot: list of 9 floats (row-major rotation matrix), trans: list of 3 floats (mm)
+        auto getf = [&](const std::string& key, int idx) -> float {
+            if (!ext->count(key))
+                return 0.0f;
+            const auto& val = ext->at(key);
+            if (val.is_a<std::vector<viam::sdk::ProtoValue>>()) {
+                const auto& vec = val.get_unchecked<std::vector<viam::sdk::ProtoValue>>();
+                if (idx < static_cast<int>(vec.size())) {
+                    return static_cast<float>(vec[idx].get_unchecked<double>());
+                }
+            }
+            return 0.0f;
+        };
+        for (int i = 0; i < 9; i++)
+            e.rot[i] = getf("rot", i);
+        for (int i = 0; i < 3; i++)
+            e.trans[i] = getf("trans", i);
+        extrinsic_override = e;
+    }
+
+    auto native_config = std::make_unique<orbbec::ObResourceConfig>(
+        serial_number_from_config, configuration.name(), dev_res, dev_fmt, intrinsics_override, distortion_override, extrinsic_override);
     VIAM_SDK_LOG(info) << "[configure] configured: " << native_config->to_string();
     return native_config;
 }
