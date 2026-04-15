@@ -152,5 +152,122 @@ func TestCameraServer(t *testing.T) {
 			test.That(t, props.SupportsPCD, test.ShouldBeTrue)
 			test.That(t, props.IntrinsicParams, test.ShouldNotBeNil)
 		})
+
+		t.Run("DoCommand get_device_properties", func(t *testing.T) {
+			resp, err := cam.DoCommand(timeoutCtx, map[string]interface{}{
+				"get_device_properties": "",
+			})
+			test.That(t, err, test.ShouldBeNil)
+			test.That(t, resp, test.ShouldNotBeNil)
+			_, hasError := resp["error"]
+			test.That(t, hasError, test.ShouldBeFalse)
+		})
+
+		t.Run("DoCommand set_device_property and verify", func(t *testing.T) {
+			// Get a writable property to test with
+			resp, err := cam.DoCommand(timeoutCtx, map[string]interface{}{
+				"get_device_property": "OB_PROP_COLOR_BRIGHTNESS_INT",
+			})
+			test.That(t, err, test.ShouldBeNil)
+			test.That(t, resp, test.ShouldNotBeNil)
+			originalValue, ok := resp["current"].(float64)
+			test.That(t, ok, test.ShouldBeTrue)
+
+			// Set to a new value
+			newValue := originalValue + 1
+			resp, err = cam.DoCommand(timeoutCtx, map[string]interface{}{
+				"set_device_property": map[string]interface{}{
+					"OB_PROP_COLOR_BRIGHTNESS_INT": newValue,
+				},
+			})
+			test.That(t, err, test.ShouldBeNil)
+			_, hasError := resp["error"]
+			test.That(t, hasError, test.ShouldBeFalse)
+
+			// Verify the value was set
+			resp, err = cam.DoCommand(timeoutCtx, map[string]interface{}{
+				"get_device_property": "OB_PROP_COLOR_BRIGHTNESS_INT",
+			})
+			test.That(t, err, test.ShouldBeNil)
+			updatedValue, ok := resp["current"].(float64)
+			test.That(t, ok, test.ShouldBeTrue)
+			test.That(t, updatedValue, test.ShouldEqual, newValue)
+
+			// Restore original value
+			_, err = cam.DoCommand(timeoutCtx, map[string]interface{}{
+				"set_device_property": map[string]interface{}{
+					"OB_PROP_COLOR_BRIGHTNESS_INT": originalValue,
+				},
+			})
+			test.That(t, err, test.ShouldBeNil)
+		})
+
+		t.Run("DoCommand set_device_properties and verify", func(t *testing.T) {
+			// Get current values for two writable properties
+			resp, err := cam.DoCommand(timeoutCtx, map[string]interface{}{
+				"get_device_property": "OB_PROP_COLOR_BRIGHTNESS_INT",
+			})
+			test.That(t, err, test.ShouldBeNil)
+			originalBrightness, ok := resp["current"].(float64)
+			test.That(t, ok, test.ShouldBeTrue)
+
+			resp, err = cam.DoCommand(timeoutCtx, map[string]interface{}{
+				"get_device_property": "OB_PROP_COLOR_CONTRAST_INT",
+			})
+			test.That(t, err, test.ShouldBeNil)
+			originalContrast, ok := resp["current"].(float64)
+			test.That(t, ok, test.ShouldBeTrue)
+
+			// Set both properties at once
+			newBrightness := originalBrightness + 1
+			newContrast := originalContrast + 1
+			resp, err = cam.DoCommand(timeoutCtx, map[string]interface{}{
+				"set_device_properties": map[string]interface{}{
+					"OB_PROP_COLOR_BRIGHTNESS_INT": map[string]interface{}{"current": newBrightness},
+					"OB_PROP_COLOR_CONTRAST_INT":   map[string]interface{}{"current": newContrast},
+				},
+			})
+			test.That(t, err, test.ShouldBeNil)
+			_, hasError := resp["error"]
+			test.That(t, hasError, test.ShouldBeFalse)
+
+			// Verify both values were set
+			resp, err = cam.DoCommand(timeoutCtx, map[string]interface{}{
+				"get_device_property": "OB_PROP_COLOR_BRIGHTNESS_INT",
+			})
+			test.That(t, err, test.ShouldBeNil)
+			updatedBrightness, ok := resp["current"].(float64)
+			test.That(t, ok, test.ShouldBeTrue)
+			test.That(t, updatedBrightness, test.ShouldEqual, newBrightness)
+
+			resp, err = cam.DoCommand(timeoutCtx, map[string]interface{}{
+				"get_device_property": "OB_PROP_COLOR_CONTRAST_INT",
+			})
+			test.That(t, err, test.ShouldBeNil)
+			updatedContrast, ok := resp["current"].(float64)
+			test.That(t, ok, test.ShouldBeTrue)
+			test.That(t, updatedContrast, test.ShouldEqual, newContrast)
+
+			// Restore original values
+			_, err = cam.DoCommand(timeoutCtx, map[string]interface{}{
+				"set_device_properties": map[string]interface{}{
+					"OB_PROP_COLOR_BRIGHTNESS_INT": map[string]interface{}{"current": originalBrightness},
+					"OB_PROP_COLOR_CONTRAST_INT":   map[string]interface{}{"current": originalContrast},
+				},
+			})
+			test.That(t, err, test.ShouldBeNil)
+		})
+
+		t.Run("DoCommand set_device_property unsupported property", func(t *testing.T) {
+			resp, err := cam.DoCommand(timeoutCtx, map[string]interface{}{
+				"set_device_property": map[string]interface{}{
+					"NonExistentProperty": 42,
+				},
+			})
+			test.That(t, err, test.ShouldBeNil)
+			errMsg, hasError := resp["error"]
+			test.That(t, hasError, test.ShouldBeTrue)
+			test.That(t, errMsg, test.ShouldContainSubstring, "not supported")
+		})
 	})
 }
