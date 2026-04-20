@@ -1,4 +1,5 @@
 #pragma once
+#include <optional>
 #include <type_traits>
 
 #include <viam/sdk/common/proto_value.hpp>
@@ -7,15 +8,23 @@
 
 namespace device_control {
 
-template <typename T, typename DeviceT>
-void setTypedProperty(std::shared_ptr<DeviceT>& device, OBPropertyID id, T value) {
-    if constexpr (std::is_same_v<T, int>) {
-        device->setIntProperty(id, value);
-    } else if constexpr (std::is_same_v<T, float>) {
-        device->setFloatProperty(id, value);
-    } else if constexpr (std::is_same_v<T, bool>) {
-        device->setBoolProperty(id, value);
+template <typename T, typename ProtoT, typename DeviceT>
+std::optional<viam::sdk::ProtoStruct> validateAndSetProperty(std::shared_ptr<DeviceT>& device,
+                                                             OBPropertyID id,
+                                                             viam::sdk::ProtoValue const& val,
+                                                             std::string const& type_name) {
+    if (!val.is_a<ProtoT>()) {
+        return viam::sdk::ProtoStruct{{"error", "Invalid type for " + type_name + " property"}};
     }
+    T typed_value = val.get_unchecked<ProtoT>();
+    if constexpr (std::is_same_v<T, int>) {
+        device->setIntProperty(id, typed_value);
+    } else if constexpr (std::is_same_v<T, float>) {
+        device->setFloatProperty(id, typed_value);
+    } else if constexpr (std::is_same_v<T, bool>) {
+        device->setBoolProperty(id, typed_value);
+    }
+    return std::nullopt;
 }
 
 inline double depthPrecisionLevelToUnit(OBDepthPrecisionLevel precision) {
@@ -220,27 +229,17 @@ viam::sdk::ProtoStruct setDeviceProperty(std::shared_ptr<DeviceT> device,
             }
             try {
                 auto const& val = property_map.begin()->second;
+                std::optional<viam::sdk::ProtoStruct> err;
                 if (property_item.type == OB_INT_PROPERTY) {
-                    if (!val.is_a<double>()) {
-                        return {{"error", "Invalid type for int property"}};
-                    }
-                    int int_value = val.get_unchecked<double>();
-                    setTypedProperty(device, property_item.id, int_value);
+                    err = validateAndSetProperty<int, double>(device, property_item.id, val, "int");
                 } else if (property_item.type == OB_FLOAT_PROPERTY) {
-                    if (!val.is_a<double>()) {
-                        return {{"error", "Invalid type for float property"}};
-                    }
-                    float float_value = val.get_unchecked<double>();
-                    setTypedProperty(device, property_item.id, float_value);
+                    err = validateAndSetProperty<float, double>(device, property_item.id, val, "float");
                 } else if (property_item.type == OB_BOOL_PROPERTY) {
-                    if (!val.is_a<bool>()) {
-                        return {{"error", "Invalid type for bool property"}};
-                    }
-                    bool bool_value = val.get_unchecked<bool>();
-                    setTypedProperty(device, property_item.id, bool_value);
+                    err = validateAndSetProperty<bool, bool>(device, property_item.id, val, "bool");
                 } else {
                     return {{"error", "Unsupported property type"}};
                 }
+                if (err) return *err;
                 VIAM_SDK_LOG(debug) << "[setDeviceProperty] Set property " << property_item.name;
             } catch (ob::Error& e) {
                 std::stringstream error_ss;
