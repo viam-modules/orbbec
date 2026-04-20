@@ -1,9 +1,31 @@
 #pragma once
+#include <optional>
+#include <type_traits>
+
 #include <viam/sdk/common/proto_value.hpp>
 
 #include "orbbec.hpp"
 
 namespace device_control {
+
+template <typename T, typename ProtoT, typename DeviceT>
+std::optional<viam::sdk::ProtoStruct> validateAndSetProperty(std::shared_ptr<DeviceT>& device,
+                                                             OBPropertyID id,
+                                                             viam::sdk::ProtoValue const& val,
+                                                             std::string const& type_name) {
+    if (!val.is_a<ProtoT>()) {
+        return viam::sdk::ProtoStruct{{"error", "Invalid type for " + type_name + " property"}};
+    }
+    T typed_value = val.get_unchecked<ProtoT>();
+    if constexpr (std::is_same_v<T, int>) {
+        device->setIntProperty(id, typed_value);
+    } else if constexpr (std::is_same_v<T, float>) {
+        device->setFloatProperty(id, typed_value);
+    } else if constexpr (std::is_same_v<T, bool>) {
+        device->setBoolProperty(id, typed_value);
+    }
+    return std::nullopt;
+}
 
 inline double depthPrecisionLevelToUnit(OBDepthPrecisionLevel precision) {
     switch (precision) {
@@ -199,27 +221,32 @@ viam::sdk::ProtoStruct setDeviceProperty(std::shared_ptr<DeviceT> device,
     for (uint32_t i = 0; i < size; i++) {
         OBPropertyItem property_item = device->getSupportedProperty(i);
         if (property_item.name == property_map.begin()->first) {
-            // Set the property value
-            if (property_item.type == OB_INT_PROPERTY) {
-                if (!property_map.begin()->second.is_a<double>()) {
-                    return {{"error", "Invalid type for int property"}};
+            if (property_item.permission == OB_PERMISSION_DENY || property_item.permission == OB_PERMISSION_READ) {
+                std::stringstream error_ss;
+                error_ss << "Property " << property_item.name << " is not writable.";
+                VIAM_SDK_LOG(warn) << error_ss.str();
+                return {{"error", error_ss.str()}};
+            }
+            try {
+                auto const& val = property_map.begin()->second;
+                std::optional<viam::sdk::ProtoStruct> err;
+                if (property_item.type == OB_INT_PROPERTY) {
+                    err = validateAndSetProperty<int, double>(device, property_item.id, val, "int");
+                } else if (property_item.type == OB_FLOAT_PROPERTY) {
+                    err = validateAndSetProperty<float, double>(device, property_item.id, val, "float");
+                } else if (property_item.type == OB_BOOL_PROPERTY) {
+                    err = validateAndSetProperty<bool, bool>(device, property_item.id, val, "bool");
+                } else {
+                    return {{"error", "Unsupported property type"}};
                 }
-                int int_value = property_map.begin()->second.get_unchecked<double>();
-                device->setIntProperty(property_item.id, int_value);
-            } else if (property_item.type == OB_FLOAT_PROPERTY) {
-                if (!property_map.begin()->second.is_a<double>()) {
-                    return {{"error", "Invalid type for float property"}};
-                }
-                float float_value = property_map.begin()->second.get_unchecked<double>();
-                device->setFloatProperty(property_item.id, float_value);
-            } else if (property_item.type == OB_BOOL_PROPERTY) {
-                if (!property_map.begin()->second.is_a<bool>()) {
-                    return {{"error", "Invalid type for bool property"}};
-                }
-                bool bool_value = property_map.begin()->second.get_unchecked<bool>();
-                device->setBoolProperty(property_item.id, bool_value);
-            } else {
-                return {{"error", "Unsupported property type"}};
+                if (err)
+                    return *err;
+                VIAM_SDK_LOG(debug) << "[setDeviceProperty] Set property " << property_item.name;
+            } catch (ob::Error& e) {
+                std::stringstream error_ss;
+                error_ss << "Failed to set property " << property_item.name << ": " << e.what();
+                VIAM_SDK_LOG(error) << error_ss.str();
+                return {{"error", error_ss.str()}};
             }
             return getDeviceProperty(device, property_item.name, command);
         }
@@ -252,60 +279,34 @@ viam::sdk::ProtoStruct setDeviceProperties(std::shared_ptr<DeviceT> device,
     if (!properties.template is_a<viam::sdk::ProtoStruct>()) {
         return {{"error", "properties must be a struct"}};
     }
-    std::unordered_set<std::string> writable_properties;
-    std::unordered_set<std::string> seen_properties;
     auto const& properties_map = properties.template get_unchecked<viam::sdk::ProtoStruct>();
-    int const supportedPropertyCount = device->getSupportedPropertyCount();
-    for (int i = 0; i < supportedPropertyCount; i++) {
-        OBPropertyItem property_item = device->getSupportedProperty(i);
-        if (properties_map.count(property_item.name) > 0) {
-            seen_properties.insert(property_item.name);
-            if (property_item.permission == OB_PERMISSION_DENY || property_item.permission == OB_PERMISSION_READ) {
-                std::stringstream error_ss;
-                error_ss << "Property " << property_item.name << " is not writable, skipping.";
-                VIAM_SDK_LOG(warn) << error_ss.str();
-                return {{"error", error_ss.str()}};
-                continue;
-            }
-            try {
-                auto const& value_struct = properties_map.at(property_item.name).get<viam::sdk::ProtoStruct>();
-                if (!value_struct) {
-                    std::stringstream error_ss;
-                    error_ss << "Value for property " << property_item.name << " is not a struct, skipping.";
-                    VIAM_SDK_LOG(warn) << error_ss.str();
-                }
-                auto const& value = value_struct->at("current");
-                writable_properties.insert(property_item.name);
-                if (property_item.type == OB_INT_PROPERTY && value.is_a<double>()) {
-                    int int_value = static_cast<int>(value.get_unchecked<double>());
-                    device->setIntProperty(property_item.id, int_value);
-                    VIAM_SDK_LOG(info) << "[setDeviceProperties] Set int property " << property_item.name << " to " << int_value;
-                } else if (property_item.type == OB_FLOAT_PROPERTY && value.is_a<double>()) {
-                    double float_value = value.get_unchecked<double>();
-                    device->setFloatProperty(property_item.id, float_value);
-                    VIAM_SDK_LOG(info) << "[setDeviceProperties] Set float property " << property_item.name << " to " << float_value;
-                } else if (property_item.type == OB_BOOL_PROPERTY && value.is_a<bool>()) {
-                    bool bool_value = value.get_unchecked<bool>();
-                    device->setBoolProperty(property_item.id, bool_value);
-                    VIAM_SDK_LOG(info) << "[setDeviceProperties] Set bool property " << property_item.name << " to "
-                                       << (bool_value ? "true" : "false");
-                } else {
-                    VIAM_SDK_LOG(warn) << "[setDeviceProperties] Type mismatch or unsupported type for property " << property_item.name
-                                       << ", skipping.";
-                }
-            } catch (ob::Error& e) {
-                std::stringstream error_ss;
-                error_ss << "Failed to set property " << property_item.name << ": " << e.what();
-                VIAM_SDK_LOG(error) << error_ss.str();
-                return {{"error", error_ss.str()}};
-            }
+    std::unordered_set<std::string> writable_properties;
+
+    for (auto const& [name, entry] : properties_map) {
+        auto const& value_struct = entry.template get<viam::sdk::ProtoStruct>();
+        if (!value_struct) {
+            std::stringstream error_ss;
+            error_ss << "Value for property " << name << " is not a struct.";
+            VIAM_SDK_LOG(warn) << error_ss.str();
+            return {{"error", error_ss.str()}};
         }
-    }
-    for (auto const& [name, _] : properties_map) {
-        if (seen_properties.count(name) == 0) {
-            return {{"error", "property not supported: " + name}};
+        if (value_struct->count("current") == 0) {
+            std::stringstream error_ss;
+            error_ss << "Value for property " << name << " is missing 'current' field.";
+            VIAM_SDK_LOG(warn) << error_ss.str();
+            return {{"error", error_ss.str()}};
         }
+        auto const& value = value_struct->at("current");
+
+        viam::sdk::ProtoStruct single_property;
+        single_property[name] = value;
+        auto result = setDeviceProperty(device, viam::sdk::ProtoValue(single_property), command);
+        if (result.count("error") > 0) {
+            return result;
+        }
+        writable_properties.insert(name);
     }
+
     return getDeviceProperties(device, command, writable_properties);
 }
 
