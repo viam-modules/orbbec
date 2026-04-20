@@ -239,7 +239,8 @@ viam::sdk::ProtoStruct setDeviceProperty(std::shared_ptr<DeviceT> device,
                 } else {
                     return {{"error", "Unsupported property type"}};
                 }
-                if (err) return *err;
+                if (err)
+                    return *err;
                 VIAM_SDK_LOG(debug) << "[setDeviceProperty] Set property " << property_item.name;
             } catch (ob::Error& e) {
                 std::stringstream error_ss;
