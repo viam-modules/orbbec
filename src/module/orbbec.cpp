@@ -702,6 +702,48 @@ auto frameCallback(const std::string& serialNumber) {
     };
 }
 
+// Returns a non-empty warning string if the device is on a slow USB connection, empty otherwise.
+// On Linux, enriches the message with the actual negotiated link speed read from sysfs.
+std::string buildUsbSpeedWarning(std::shared_ptr<ob::DeviceInfo> deviceInfo) {
+    std::string connectionType = deviceInfo->getConnectionType();
+    bool isSlowConnection = (connectionType == "USB" || connectionType == "USB1.0" || connectionType == "USB1.1" ||
+                             connectionType == "USB2.0" || connectionType == "USB2.1");
+    if (!isSlowConnection) {
+        return "";
+    }
+
+    std::ostringstream msg;
+    msg << "device is connected via " << connectionType;
+
+#ifdef __linux__
+    // On Linux, the UID is "bus-port-dev" (e.g. "3-12-54"). Strip the trailing "-dev"
+    // to get the sysfs path /sys/bus/usb/devices/<bus-port>/speed which reports the
+    // actual negotiated link speed in Mbps.
+    std::string uid = deviceInfo->getUid();
+    auto lastDash = uid.rfind('-');
+    if (lastDash != std::string::npos) {
+        std::string busPort = uid.substr(0, lastDash);
+        std::ifstream speedFile("/sys/bus/usb/devices/" + busPort + "/speed");
+        if (speedFile.is_open()) {
+            std::string speed;
+            speedFile >> speed;
+            msg << ", negotiated speed: " << speed << " Mbps (path: /sys/bus/usb/devices/" << busPort << ")";
+        }
+    }
+#endif
+
+    msg << ". USB 3.0 (5000 Mbps) or higher is required for reliable operation,"
+        << " frames may not be delivered — check cable and port";
+    return msg.str();
+}
+
+void checkUsbConnectionSpeed(const std::unique_ptr<ViamOBDevice>& dev, const std::string& serialNumber) {
+    std::string warning = buildUsbSpeedWarning(dev->device->getDeviceInfo());
+    if (!warning.empty()) {
+        VIAM_SDK_LOG(warn) << "[configureDevice] Device " << serialNumber << ": " << warning;
+    }
+}
+
 void configureDevice(std::string serialNumber, OrbbecModelConfig const& modelConfig) {
     VIAM_SDK_LOG(info) << "[configureDevice] Configuring device " << serialNumber;
     std::lock_guard<std::mutex> lock(devices_by_serial_mu());
@@ -713,6 +755,8 @@ void configureDevice(std::string serialNumber, OrbbecModelConfig const& modelCon
     }
 
     std::unique_ptr<ViamOBDevice>& my_dev = search->second;
+
+    checkUsbConnectionSpeed(my_dev, serialNumber);
 
     // Enable global timestamp if supported
     if (my_dev->device->isGlobalTimestampSupported()) {
@@ -1351,7 +1395,18 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
             std::lock_guard<std::mutex> lock(frame_set_by_serial_mu());
             auto search = frame_set_by_serial().find(serial_number);
             if (search == frame_set_by_serial().end()) {
-                throw std::runtime_error("no frame yet");
+                std::string errorMsg = "no frame yet";
+                {
+                    std::lock_guard<std::mutex> devLock(devices_by_serial_mu());
+                    auto devSearch = devices_by_serial().find(serial_number);
+                    if (devSearch != devices_by_serial().end()) {
+                        std::string usbWarning = buildUsbSpeedWarning(devSearch->second->device->getDeviceInfo());
+                        if (!usbWarning.empty()) {
+                            errorMsg += ": " + usbWarning;
+                        }
+                    }
+                }
+                throw std::runtime_error(errorMsg);
             }
             fs = search->second;
         }
