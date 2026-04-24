@@ -21,6 +21,7 @@ inline const std::string kAttrFormat = "format";
 // Source name constants
 inline const std::string kColorSourceName = "color";
 inline const std::string kDepthSourceName = "depth";
+inline const std::string kIRSourceName = "infrared";
 
 struct Resolution {
     uint32_t width{};
@@ -83,12 +84,18 @@ struct ObResourceConfig {
     std::string serial_number;
     std::optional<DeviceResolution> device_resolution;
     std::optional<DeviceFormat> device_format;
+    bool stream_ir_images{false};
 
     explicit ObResourceConfig(std::string const& serial_number,
                               std::string const& resource_name,
                               std::optional<DeviceResolution> device_resolution,
-                              std::optional<DeviceFormat> device_format)
-        : serial_number(serial_number), resource_name(resource_name), device_resolution(device_resolution), device_format(device_format) {}
+                              std::optional<DeviceFormat> device_format,
+                              bool stream_ir_images = false)
+        : serial_number(serial_number),
+          resource_name(resource_name),
+          device_resolution(device_resolution),
+          device_format(device_format),
+          stream_ir_images(stream_ir_images) {}
     std::string to_string() const {
         std::ostringstream os;
         os << "(resource_name=" << resource_name << ", serial_number=" << serial_number;
@@ -102,6 +109,7 @@ struct ObResourceConfig {
         } else {
             os << ", device_format=nullopt";
         }
+        os << ", stream_ir_images=" << (stream_ir_images ? "true" : "false");
         os << ")";
         return os.str();
     }

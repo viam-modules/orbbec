@@ -650,8 +650,8 @@ std::shared_ptr<ob::Config> createHwD2CAlignConfig(std::shared_ptr<ob::Pipeline>
 
 auto frameCallback(const std::string& serialNumber) {
     return [serialNumber](std::shared_ptr<ob::FrameSet> frameSet) {
-        if (frameSet->getCount() != 2) {
-            std::cerr << "got non 2 frame count: " << frameSet->getCount() << "\n";
+        if (frameSet->getCount() < 2) {
+            std::cerr << "got unexpected frame count: " << frameSet->getCount() << "\n";
             return;
         }
         std::shared_ptr<ob::Frame> color = frameSet->getFrame(OB_FRAME_COLOR);
@@ -743,14 +743,16 @@ void configureDevice(std::string serialNumber, OrbbecModelConfig const& modelCon
         my_dev->applyEnabledPostProcessDepthFilters = false;
     }
 
-    // Get user-specified resolution/format if any
+    // Get user-specified resolution/format/stream flags if any
     std::optional<DeviceResolution> resolution_opt;
     std::optional<DeviceFormat> format_opt;
+    bool stream_ir_images = false;
     {
         std::lock_guard<std::mutex> configLock(config_by_serial_mu());
         if (config_by_serial().count(serialNumber) > 0) {
             resolution_opt = config_by_serial().at(serialNumber).device_resolution;
             format_opt = config_by_serial().at(serialNumber).device_format;
+            stream_ir_images = config_by_serial().at(serialNumber).stream_ir_images;
             VIAM_SDK_LOG(info) << "[configureDevice] Resolution from config: "
                                << (resolution_opt.has_value() ? resolution_opt->to_string() : "not specified, Format from config: ")
                                << (format_opt.has_value() ? format_opt->to_string() : "not specified");
@@ -826,6 +828,21 @@ void configureDevice(std::string serialNumber, OrbbecModelConfig const& modelCon
         buffer << service_name << ": unable to configure device " << serialNumber << " - no valid stream configuration found";
         throw std::runtime_error(buffer.str());
     }
+
+    if (stream_ir_images) {
+        try {
+            auto irStreamProfiles = my_dev->pipe->getStreamProfileList(OB_SENSOR_IR);
+            if (irStreamProfiles && irStreamProfiles->getCount() > 0) {
+                config->enableStream(irStreamProfiles->getProfile(0));
+                VIAM_SDK_LOG(info) << "[configureDevice] IR stream enabled for device " << serialNumber;
+            } else {
+                VIAM_SDK_LOG(warn) << "[configureDevice] IR stream profiles not available for device " << serialNumber;
+            }
+        } catch (const ob::Error& e) {
+            VIAM_SDK_LOG(warn) << "[configureDevice] IR stream not available: " << e.what();
+        }
+    }
+
     my_dev->config = config;
 }
 
@@ -1361,10 +1378,23 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
 
         bool should_process_color = false;
         bool should_process_depth = false;
+        bool should_process_ir = false;
+
+        std::optional<DeviceFormat> device_format_opt;
+        bool stream_ir_images = false;
+        {
+            std::lock_guard<std::mutex> lock(config_by_serial_mu());
+            if (config_by_serial().count(serial_number) == 0) {
+                throw std::runtime_error("device with serial number " + serial_number + " is not in config_by_serial");
+            }
+            device_format_opt = config_by_serial().at(serial_number).device_format;
+            stream_ir_images = config_by_serial().at(serial_number).stream_ir_images;
+        }
 
         if (filter_source_names.empty()) {
             should_process_color = true;
             should_process_depth = true;
+            should_process_ir = stream_ir_images;
         } else {
             for (const auto& name : filter_source_names) {
                 if (name == kColorSourceName) {
@@ -1373,6 +1403,9 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
                 if (name == kDepthSourceName) {
                     should_process_depth = true;
                 }
+                if (name == kIRSourceName) {
+                    should_process_ir = true;
+                }
             }
         }
 
@@ -1380,14 +1413,6 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
         std::shared_ptr<ob::Frame> color = nullptr;
         std::shared_ptr<ob::Frame> depth = nullptr;
         uint64_t nowUs = getNowUs();
-        std::optional<DeviceFormat> device_format_opt;
-        {
-            std::lock_guard<std::mutex> lock(config_by_serial_mu());
-            if (config_by_serial().count(serial_number) == 0) {
-                throw std::runtime_error("device with serial number " + serial_number + " is not in config_by_serial");
-            }
-            device_format_opt = config_by_serial().at(serial_number).device_format;
-        }
 
         if (should_process_color) {
             color = fs->getFrame(OB_FRAME_COLOR);
@@ -1407,12 +1432,32 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
                 throw std::runtime_error("[get_images] depth data is null");
             }
             auto depthVid = depth->as<ob::VideoFrame>();
+            float valueScale = depth->as<ob::DepthFrame>()->getValueScale();
 
             vsdk::Camera::raw_image depth_image;
             depth_image.source_name = kDepthSourceName;
             depth_image.mime_type = kDepthMimeTypeViamDep;
-            depth_image.bytes = encoding::encode_to_depth_raw(depthData, depthVid->getWidth(), depthVid->getHeight());
+            depth_image.bytes = encoding::encode_to_depth_raw(depthData, depthVid->getWidth(), depthVid->getHeight(), valueScale);
             response.images.emplace_back(std::move(depth_image));
+        }
+
+        if (should_process_ir) {
+            auto ir = fs->getFrame(OB_FRAME_IR);
+            if (ir == nullptr) {
+                VIAM_RESOURCE_LOG(debug) << "[get_images] IR frame not available";
+            } else {
+                unsigned char* irData = (unsigned char*)ir->getData();
+                if (irData == nullptr) {
+                    VIAM_RESOURCE_LOG(debug) << "[get_images] IR data is null";
+                } else {
+                    auto irVid = ir->as<ob::VideoFrame>();
+                    vsdk::Camera::raw_image ir_image;
+                    ir_image.source_name = kIRSourceName;
+                    ir_image.mime_type = kColorMimeTypePNG;
+                    ir_image.bytes = encoding::encode_to_gray_png(irData, irVid->getWidth(), irVid->getHeight());
+                    response.images.emplace_back(std::move(ir_image));
+                }
+            }
         }
 
         if (response.images.empty()) {
@@ -1751,7 +1796,17 @@ std::unique_ptr<orbbec::ObResourceConfig> Orbbec::configure(vsdk::Dependencies d
     } else {
         VIAM_SDK_LOG(info) << "[configure] no sensors specified in config, using defaults";
     }
-    auto native_config = std::make_unique<orbbec::ObResourceConfig>(serial_number_from_config, configuration.name(), dev_res, dev_fmt);
+    bool stream_ir_images = false;
+    if (attrs.count("stream_ir_images")) {
+        const bool* val = attrs["stream_ir_images"].get<bool>();
+        if (val) {
+            stream_ir_images = *val;
+            VIAM_SDK_LOG(info) << "[configure] stream_ir_images enabled";
+        }
+    }
+
+    auto native_config =
+        std::make_unique<orbbec::ObResourceConfig>(serial_number_from_config, configuration.name(), dev_res, dev_fmt, stream_ir_images);
     VIAM_SDK_LOG(info) << "[configure] configured: " << native_config->to_string();
     return native_config;
 }

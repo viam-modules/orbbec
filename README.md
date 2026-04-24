@@ -41,6 +41,7 @@ The following attributes are available for the Astra 2 model:
 |---------------|--------|-----------|----------------------------|
 | `serial_number` | string | **Required** | The serial number of the specific Orbbec camera to use. This number is printed on the device. The serial number of each plugged-in and available orbbec camera will be logged on module startup.  |
 |`sensors` | struct | **Optional** | The configuration of the color and depth sensors |
+| `stream_ir_images` | bool | **Optional** | When `true`, the IR sensor stream is enabled and `"infrared"` images are included in `get_images` responses. Defaults to `false`. |
 
 #### `sensor` attributes:
 | Name | Type | Inclusion | Description |
@@ -98,6 +99,7 @@ The following attributes are available for the Gemini 335Le model:
 |---------------|--------|-----------|----------------------------|
 | `serial_number` | string | **Required** | The serial number of the specific Orbbec camera to use. This number is printed on the device. The serial number of each plugged-in and available orbbec camera will be logged on module startup.  |
 |`sensors` | struct | **Optional** | The configuration of the color and depth sensors |
+| `stream_ir_images` | bool | **Optional** | When `true`, the IR sensor stream is enabled and `"infrared"` images are included in `get_images` responses. Defaults to `false`. |
 
 #### `sensor` attributes:
 | Name | Type | Inclusion | Description |
@@ -124,14 +126,15 @@ The following attributes are available for the Gemini 335Le model:
 
 ## `get_images` Source Names
 
-`get_images` supports two source names for use with `filter_source_names`:
+`get_images` supports the following source names for use with `filter_source_names`:
 
 | Source Name | MIME Type | Description |
 |-------------|-----------|-------------|
 | `color` | `image/jpeg` or `image/png` | Color image from the RGB sensor |
 | `depth` | `image/vnd.viam.dep` | Depth map from the depth sensor |
+| `infrared` | `image/png` | Grayscale IR image from the IR sensor. Only available when `stream_ir_images: true` is set in the config. |
 
-If `filter_source_names` is empty, both `color` and `depth` images are returned. If populated, only the matching source names are returned. Unrecognized names are ignored.
+If `filter_source_names` is empty, `color` and `depth` images are always returned; `infrared` is also included when `stream_ir_images` is enabled. If `filter_source_names` is populated, only the matching source names are returned. Unrecognized names are ignored.
 
 ## Attributes
 A call to get_attributes will return the camera attributes in [this struct](https://github.com/viamrobotics/viam-cpp-sdk/blob/43deea420f572e6b61b6fbd519e09b2520f05676/src/viam/sdk/components/camera.hpp#L58)
