@@ -3,22 +3,24 @@
 namespace orbbec {
 namespace encoding {
 
-std::vector<std::uint8_t> encode_to_depth_raw(std::uint8_t const* const data, std::uint32_t const width, std::uint32_t const height) {
+std::vector<std::uint8_t> encode_to_depth_raw(std::uint8_t const* const data,
+                                              std::uint32_t const width,
+                                              std::uint32_t const height,
+                                              float valueScale) {
+    // The Orbbec SDK returns raw uint16_t depth pixels whose unit depends on the sensor.
+    // getValueScale() returns the multiplier needed to convert a raw pixel to millimeters:
+    //   actual_distance_mm = raw_pixel * valueScale
+    // The Viam depth map format stores uint16_t values in millimeters, so we apply the
+    // scale and round to the nearest integer mm before encoding.
     viam::sdk::Camera::depth_map m = xt::xarray<uint16_t>::from_shape({height, width});
-    std::copy(reinterpret_cast<const uint16_t*>(data), reinterpret_cast<const uint16_t*>(data) + height * width, m.begin());
-
-    double const mmToMeterMultiplier = 0.001;
-
-    for (size_t i = 0; i < m.size(); i++) {
-        auto const rounded_value = std::lround(m[i] * mmToMeterMultiplier * 1000.0) / 1000.0;
-        // Let's make sure rounded_value is within the range of uint16_t after conversion to mm using numeric limits of depth_map
-        // If it's out of range, we throw an exception
-        if (rounded_value < 0 || rounded_value > std::numeric_limits<viam::sdk::Camera::depth_map::value_type>::max()) {
+    const uint16_t* rawData = reinterpret_cast<const uint16_t*>(data);
+    for (size_t i = 0; i < height * width; i++) {
+        long mm = std::lround(rawData[i] * static_cast<double>(valueScale));
+        if (mm < 0 || mm > std::numeric_limits<viam::sdk::Camera::depth_map::value_type>::max()) {
             throw std::out_of_range("Depth value out of range");
         }
-        m[i] = rounded_value;
+        m[i] = static_cast<uint16_t>(mm);
     }
-
     return viam::sdk::Camera::encode_depth_map(m);
 }
 
@@ -73,6 +75,56 @@ std::vector<std::uint8_t> encode_to_png(std::uint8_t const* const image_data, st
     png_write_end(png_ptr, nullptr);
 
     // Cleanup
+    png_destroy_write_struct(&png_ptr, &info_ptr);
+
+    return png_buffer;
+}
+
+std::vector<std::uint8_t> encode_to_gray_png(std::uint8_t const* const image_data, std::uint32_t const width, std::uint32_t const height) {
+    std::vector<std::uint8_t> png_buffer;
+
+    auto png_write_callback = [](png_structp png_ptr, png_bytep data, png_size_t length) {
+        auto* buffer = static_cast<std::vector<std::uint8_t>*>(png_get_io_ptr(png_ptr));
+        buffer->insert(buffer->end(), data, data + length);
+    };
+
+    png_structp png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr);
+    if (!png_ptr) {
+        throw std::runtime_error("Could not create PNG write struct");
+    }
+
+    png_infop info_ptr = png_create_info_struct(png_ptr);
+    if (!info_ptr) {
+        png_destroy_write_struct(&png_ptr, nullptr);
+        throw std::runtime_error("Could not create PNG info struct");
+    }
+
+    if (setjmp(png_jmpbuf(png_ptr))) {
+        png_destroy_write_struct(&png_ptr, &info_ptr);
+        throw std::runtime_error("Error during PNG creation");
+    }
+
+    png_set_write_fn(png_ptr, &png_buffer, png_write_callback, nullptr);
+
+    png_set_IHDR(png_ptr,
+                 info_ptr,
+                 width,
+                 height,
+                 8,
+                 PNG_COLOR_TYPE_GRAY,
+                 PNG_INTERLACE_NONE,
+                 PNG_COMPRESSION_TYPE_DEFAULT,
+                 PNG_FILTER_TYPE_DEFAULT);
+
+    png_write_info(png_ptr, info_ptr);
+
+    std::vector<png_bytep> row_pointers(height);
+    for (uint32_t y = 0; y < height; y++) {
+        row_pointers[y] = const_cast<png_bytep>(&image_data[y * width]);
+    }
+
+    png_write_image(png_ptr, row_pointers.data());
+    png_write_end(png_ptr, nullptr);
     png_destroy_write_struct(&png_ptr, &info_ptr);
 
     return png_buffer;
