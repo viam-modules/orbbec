@@ -1407,11 +1407,12 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
                 throw std::runtime_error("[get_images] depth data is null");
             }
             auto depthVid = depth->as<ob::VideoFrame>();
+            float valueScale = depth->as<ob::DepthFrame>()->getValueScale();
 
             vsdk::Camera::raw_image depth_image;
             depth_image.source_name = kDepthSourceName;
             depth_image.mime_type = kDepthMimeTypeViamDep;
-            depth_image.bytes = encoding::encode_to_depth_raw(depthData, depthVid->getWidth(), depthVid->getHeight());
+            depth_image.bytes = encoding::encode_to_depth_raw(depthData, depthVid->getWidth(), depthVid->getHeight(), valueScale);
             response.images.emplace_back(std::move(depth_image));
         }
 

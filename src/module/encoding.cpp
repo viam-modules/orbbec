@@ -3,22 +3,24 @@
 namespace orbbec {
 namespace encoding {
 
-std::vector<std::uint8_t> encode_to_depth_raw(std::uint8_t const* const data, std::uint32_t const width, std::uint32_t const height) {
+std::vector<std::uint8_t> encode_to_depth_raw(std::uint8_t const* const data,
+                                              std::uint32_t const width,
+                                              std::uint32_t const height,
+                                              float valueScale) {
+    // The Orbbec SDK returns raw uint16_t depth pixels whose unit depends on the sensor.
+    // getValueScale() returns the multiplier needed to convert a raw pixel to millimeters:
+    //   actual_distance_mm = raw_pixel * valueScale
+    // The Viam depth map format stores uint16_t values in millimeters, so we apply the
+    // scale and round to the nearest integer mm before encoding.
     viam::sdk::Camera::depth_map m = xt::xarray<uint16_t>::from_shape({height, width});
-    std::copy(reinterpret_cast<const uint16_t*>(data), reinterpret_cast<const uint16_t*>(data) + height * width, m.begin());
-
-    double const mmToMeterMultiplier = 0.001;
-
-    for (size_t i = 0; i < m.size(); i++) {
-        auto const rounded_value = std::lround(m[i] * mmToMeterMultiplier * 1000.0) / 1000.0;
-        // Let's make sure rounded_value is within the range of uint16_t after conversion to mm using numeric limits of depth_map
-        // If it's out of range, we throw an exception
-        if (rounded_value < 0 || rounded_value > std::numeric_limits<viam::sdk::Camera::depth_map::value_type>::max()) {
+    const uint16_t* rawData = reinterpret_cast<const uint16_t*>(data);
+    for (size_t i = 0; i < height * width; i++) {
+        long mm = std::lround(rawData[i] * static_cast<double>(valueScale));
+        if (mm < 0 || mm > std::numeric_limits<viam::sdk::Camera::depth_map::value_type>::max()) {
             throw std::out_of_range("Depth value out of range");
         }
-        m[i] = rounded_value;
+        m[i] = static_cast<uint16_t>(mm);
     }
-
     return viam::sdk::Camera::encode_depth_map(m);
 }
 
