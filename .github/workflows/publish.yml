@@ -20,7 +20,7 @@ jobs:
             os: macos-latest
             artifact-name: module-darwin-arm64
           - platform: linux/arm64
-            os: buildjet-8vcpu-ubuntu-2204-arm
+            os: ubuntu-22.04-arm
             container:
               image: ghcr.io/viam-modules/orbbec/viam-cpp-base-orin:0.0.1
             artifact-name: module-linux-arm64
