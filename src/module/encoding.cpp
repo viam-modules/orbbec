@@ -16,10 +16,7 @@ std::vector<std::uint8_t> encode_to_depth_raw(std::uint8_t const* const data,
     const uint16_t* rawData = reinterpret_cast<const uint16_t*>(data);
     for (size_t i = 0; i < height * width; i++) {
         long mm = std::lround(rawData[i] * static_cast<double>(valueScale));
-        if (mm < 0 || mm > std::numeric_limits<viam::sdk::Camera::depth_map::value_type>::max()) {
-            throw std::out_of_range("Depth value out of range");
-        }
-        m[i] = static_cast<uint16_t>(mm);
+        m[i] = static_cast<uint16_t>(std::clamp(mm, 0L, static_cast<long>(std::numeric_limits<uint16_t>::max())));
     }
     return viam::sdk::Camera::encode_depth_map(m);
 }
