@@ -8,7 +8,8 @@ on:
 
 jobs:
   build-module-windows:
-    runs-on: windows-latest
+    # pin instead of using windows-latest which was recently bumped to a version that breaks conan
+    runs-on: windows-2022
 
     steps:
       - name: Checkout code
