@@ -8,13 +8,7 @@ on:
 
 jobs:
   build-module-windows:
-    # Pinned to windows-2022 (Visual Studio 2022). As of ~2026-06-28 the
-    # windows-latest image became windows-2025-vs2026, which ships Visual Studio
-    # 18 "2026"; Conan then picks the "Visual Studio 18 2026" CMake generator, and
-    # abseil's build invokes a cmake that doesn't recognize it ("Could not create
-    # named generator"), breaking the build. windows-2022 keeps VS 2022, so Conan
-    # emits "Visual Studio 17 2022", which every cmake in the graph understands.
-    # This is a stopgap until the abseil recipe / SDK dep graph supports VS 18.
+    # pin instead of using windows-latest which was recently bumped to a version that breaks conan
     runs-on: windows-2022
 
     steps:
