@@ -72,7 +72,7 @@ func TestCameraServer(t *testing.T) {
 				case <-timeout:
 					t.Fatal("timed out waiting for Get image method (one image)")
 				case <-tick:
-					img, err := camera.DecodeImageFromCamera(timeoutCtx, utils.MimeTypeJPEG, nil, cam)
+					img, err := camera.DecodeImageFromCamera(timeoutCtx, cam, nil, nil)
 					if err != nil {
 						continue
 					}
@@ -91,7 +91,7 @@ func TestCameraServer(t *testing.T) {
 					t.Fatal("timed out waiting for Get images method (two images)")
 				case <-tick:
 					timeBeforeCall := time.Now()
-					images, metadata, err := cam.Images(timeoutCtx)
+					images, metadata, err := cam.Images(timeoutCtx, nil, nil)
 					if err != nil || len(images) < 2 {
 						continue
 					}
@@ -115,7 +115,12 @@ func TestCameraServer(t *testing.T) {
 							"debug": true,
 						},
 					}
-					err := cam.Reconfigure(timeoutCtx, resource.Dependencies{}, cfg)
+					builtIn, ok := cam.(resource.BuiltInResource)
+					if !ok {
+						t.Skip("camera does not implement BuiltInResource (Reconfigure)")
+						return
+					}
+					err := builtIn.BuiltInReconfigure(timeoutCtx, resource.Dependencies{}, cfg)
 					if err != nil {
 						continue
 					}
@@ -133,7 +138,7 @@ func TestCameraServer(t *testing.T) {
 				case <-timeout:
 					t.Fatal("timed out waiting for Get point cloud method")
 				case <-tick:
-					pc, err := cam.NextPointCloud(timeoutCtx)
+					pc, err := cam.NextPointCloud(timeoutCtx, nil)
 					if err != nil {
 						continue
 					}
