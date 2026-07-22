@@ -4,8 +4,8 @@ go 1.25.9
 
 require (
 	go.viam.com/rdk v1.0.0
-	go.viam.com/test v1.2.4
-	go.viam.com/utils v0.6.6
+	go.viam.com/test v1.2.5
+	go.viam.com/utils v0.8.0
 )
 
 require (
