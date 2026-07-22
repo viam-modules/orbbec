@@ -5,8 +5,8 @@ go 1.25.9
 require (
 	github.com/golang/geo v0.0.0-20230421003525-6adc56603217
 	go.viam.com/rdk v1.0.0
-	go.viam.com/test v1.2.4
-	go.viam.com/utils v0.6.6
+	go.viam.com/test v1.2.5
+	go.viam.com/utils v0.8.0
 )
 
 require (
