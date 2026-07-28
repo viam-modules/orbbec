@@ -67,6 +67,12 @@ const uint64_t maxFrameSetTimeDiffUs =
     2000;  // max time difference between frames in a frameset to be considered simultaneous, in microseconds (equal to 2 ms)
 
 // Model configurations
+//
+// The body_box / body_box_pose values are derived from the vendor mechanical drawings:
+//   Astra 2:      https://d1cd332k3pgc17.cloudfront.net/wp-content/uploads/2023/04/ORBBEC_Datasheet_Astra-2_V1.1.pdf
+//   Gemini 335Le: https://new-orbbec3d-s3.s3.amazonaws.com/wp-content/uploads/2025/03/24023151/Orbbec-Gemini-335Le-Datasheet-V1-2.pdf
+// Both use the optical frame convention the Gemini 335Le datasheet spells out in section 4.8:
+// +X to the right, +Y down, +Z out of the lens.
 namespace {
 static const OrbbecModelConfig ASTRA2_CONFIG{
     {"Orbbec Astra 2", "Orbbec Astra2"},                                                   // model_names
@@ -84,7 +90,19 @@ static const OrbbecModelConfig ASTRA2_CONFIG{
     {"RGB", "MJPG"},                                                                       // supported_color_formats
     {"Y16"},                                                                               // supported_depth_formats
     "MJPG",                                                                                // default_color_format
-    "Y16"                                                                                  // default_depth_format
+    "Y16",                                                                                 // default_depth_format
+    // Body measures 144.54 x 45.35 x 38.64mm including the mounting base, which the box covers
+    // because it is bolted to the camera.
+    {144.54, 45.35, 38.64},  // body_box
+    // x: the LDM and IR modules straddle the body symmetrically (75mm baseline), putting the body
+    //    center 37.50mm from the LDM. RGB sits 56.50mm from the LDM, so the body center is 19.00mm
+    //    towards the LDM from RGB.
+    // y: the modules sit on the body's horizontal centerline, which is 5.47mm above the center of
+    //    the box because the box also spans the mounting base hanging below the body.
+    // z: assumes the optical center lies on the front glass, which is the front face of the box.
+    //    Orbbec does not publish a start point offset for the Astra 2 the way it does for the
+    //    Gemini 335Le, so this is out by however far the sensor sits behind the glass.
+    {{19.00, 5.47, -19.32}}  // body_box_pose
 };
 
 static const OrbbecModelConfig GEMINI_335LE_CONFIG{
@@ -101,7 +119,19 @@ static const OrbbecModelConfig GEMINI_335LE_CONFIG{
     {"MJPG"},                                                                                 // supported_color_formats
     {"Y16"},                                                                                  // supported_depth_formats
     "MJPG",                                                                                   // default_color_format
-    "Y16"                                                                                     // default_depth_format
+    "Y16",                                                                                    // default_depth_format
+    // Body measures 124.02 x 29.03 x 51.20mm. The depth is taken from the right view rather than
+    // the 50mm quoted in the spec table, because the rear M12 connector protrudes 1.20mm past the
+    // housing.
+    {124.02, 29.03, 51.20},  // body_box
+    // x: the two IR modules straddle the body symmetrically (95mm baseline), putting the body
+    //    center 47.50mm from the right IR module. RGB sits 71.25mm from it, so the body center is
+    //    23.75mm towards the right IR module from RGB.
+    // y: the modules sit on the body's horizontal centerline and nothing hangs below the body, so
+    //    the box center is on the optical axis.
+    // z: datasheet section 4.9 puts the RGB start point 4.08mm behind the front glass, and the box
+    //    center is half of 51.20mm behind that same glass.
+    {{23.75, 0.00, -21.52}}  // body_box_pose
 };
 
 static const std::vector<OrbbecModelConfig> all_model_configs = {ASTRA2_CONFIG, GEMINI_335LE_CONFIG};
@@ -1775,9 +1805,10 @@ vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const v
 }
 
 std::vector<vsdk::GeometryConfig> Orbbec::get_geometries(const vsdk::ProtoStruct& extra) {
-    // see https://github.com/viam-modules/orbbec/pull/16 for explanation of geometry config values
-    // If we add support for models other than the astra 2 these values can't be hardcoded.
-    return {vsdk::GeometryConfig(vsdk::pose{-37.5, 5.5, -18.1}, vsdk::box({145, 46, 39}), "box")};
+    if (!model_config_.has_value()) {
+        throw std::runtime_error("failed to create geometries: no Orbbec model detected");
+    }
+    return {vsdk::GeometryConfig(model_config_->body_box_pose, model_config_->body_box, "box")};
 }
 
 std::unique_ptr<orbbec::ObResourceConfig> Orbbec::configure(vsdk::Dependencies dependencies, vsdk::ResourceConfig configuration) {
