@@ -2,7 +2,6 @@
 #include <memory>
 
 #include <viam/sdk/config/resource.hpp>
-#include <viam/sdk/resource/reconfigurable.hpp>
 #include <viam/sdk/services/discovery.hpp>
 
 #include <libobsensor/ObSensor.hpp>

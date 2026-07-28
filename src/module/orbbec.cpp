@@ -38,7 +38,6 @@
 #include <viam/sdk/config/resource.hpp>
 #include <viam/sdk/module/service.hpp>
 #include <viam/sdk/registry/registry.hpp>
-#include <viam/sdk/resource/reconfigurable.hpp>
 #include <viam/sdk/rpc/server.hpp>
 
 #include <libobsensor/ObSensor.hpp>
@@ -1163,81 +1162,22 @@ Orbbec::~Orbbec() {
         } else {
             prev_serial_number = config_by_serial().at(serial_number_).serial_number;
             prev_resource_name = config_by_serial().at(serial_number_).resource_name;
+            config_by_serial().erase(serial_number_);
         }
     }
     stopDevice(prev_serial_number, prev_resource_name);
+
+    // Drop any frame captured before this teardown. viam-server rebuilds the resource on a config
+    // change, so leaving one here lets the replacement instance find a frame from the previous
+    // configuration: the staleness check then reports "no recent frame: check connection" rather
+    // than the frames simply not having arrived yet (RSDK-11302). This has to run after stopDevice,
+    // which stops the pipeline, so that no further frames can land after the erase.
+    {
+        const std::lock_guard<std::mutex> lock(frame_set_by_serial_mu());
+        frame_set_by_serial().erase(serial_number_);
+    }
+
     VIAM_RESOURCE_LOG(info) << "Orbbec destructor end " << serial_number_;
-}
-
-void Orbbec::reconfigure(const vsdk::Dependencies& deps, const vsdk::ResourceConfig& cfg) {
-    VIAM_RESOURCE_LOG(info) << "[reconfigure] Orbbec reconfigure start";
-    std::string prev_serial_number;
-    std::string prev_resource_name;
-    {
-        const std::lock_guard<std::mutex> lock_serial(serial_number_mu_);
-        const std::lock_guard<std::mutex> lock(config_by_serial_mu());
-        if (config_by_serial().count(serial_number_) == 0) {
-            std::ostringstream buffer;
-            buffer << "[reconfigure] device with serial number " << serial_number_ << " is not in config_by_serial, skipping reconfigure";
-            VIAM_RESOURCE_LOG(error) << buffer.str();
-            throw std::runtime_error(buffer.str());
-        } else {
-            prev_serial_number = config_by_serial().at(serial_number_).serial_number;
-            prev_resource_name = config_by_serial().at(serial_number_).resource_name;
-        }
-    }
-    stopDevice(prev_serial_number, prev_resource_name);
-    std::string new_serial_number;
-    std::string new_resource_name;
-    {
-        auto config = configure(deps, cfg);
-        {
-            const std::lock_guard<std::mutex> lock(config_by_serial_mu());
-            config_by_serial().erase(prev_serial_number);
-            config_by_serial().insert_or_assign(config->serial_number, *config);
-        }
-        {
-            const std::lock_guard<std::mutex> lock(serial_number_mu_);
-            serial_number_ = config->serial_number;
-        }
-        new_serial_number = config->serial_number;
-        new_resource_name = config->resource_name;
-        VIAM_RESOURCE_LOG(info) << "[reconfigure] updated config_by_serial_: " << config_by_serial().at(new_serial_number).to_string();
-    }
-
-    {
-        std::lock_guard<std::mutex> lock(frame_set_by_serial_mu());
-        frame_set_by_serial().erase(prev_serial_number);
-    }
-
-    // set firmware version member variable and apply experimental config
-    {
-        std::lock_guard<std::mutex> lock_serial(serial_number_mu_);
-        std::lock_guard<std::mutex> lock(devices_by_serial_mu());
-        auto search = devices_by_serial().find(serial_number_);
-        if (search != devices_by_serial().end()) {
-            firmware_version_ = search->second->device->getDeviceInfo()->firmwareVersion();
-
-            // Detect model and set model_config_
-            std::shared_ptr<ob::DeviceInfo> deviceInfo = search->second->device->getDeviceInfo();
-            model_config_ = OrbbecModelConfig::forDevice(deviceInfo->name());
-
-            std::unique_ptr<ViamOBDevice>& my_dev = search->second;
-            applyExperimentalConfig(my_dev, cfg.attributes());
-        }
-    }
-
-    if (!model_config_.has_value()) {
-        throw std::runtime_error("Failed to detect Orbbec model configuration during reconfigure");
-    }
-
-    configureDevice(new_serial_number, model_config_.value());
-    startDevice(new_serial_number, model_config_.value());
-    {
-        std::lock_guard<std::mutex> lock(serial_by_resource_mu());
-        serial_by_resource()[new_resource_name] = new_serial_number;
-    }
-    VIAM_RESOURCE_LOG(info) << "[reconfigure] Orbbec reconfigure end";
 }
 
 vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::ProtoStruct& extra) {

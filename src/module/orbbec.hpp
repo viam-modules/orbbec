@@ -1,7 +1,6 @@
 #pragma once
 #include <viam/sdk/components/camera.hpp>
 #include <viam/sdk/config/resource.hpp>
-#include <viam/sdk/resource/reconfigurable.hpp>
 
 #include <libobsensor/ObSensor.hpp>
 
@@ -147,11 +146,14 @@ struct ViamOBDevice {
 void startOrbbecSDK(ob::Context& ctx);
 void printDeviceInfo(const std::shared_ptr<ob::DeviceInfo> info);
 
-class Orbbec final : public viam::sdk::Camera, public viam::sdk::Reconfigurable {
+// viam-server rebuilds the resource on a config change rather than calling a reconfigure method,
+// so everything a reconfigure would have done lives in the constructor and destructor. The SDK
+// destroys the old instance before constructing the replacement, so the destructor must leave the
+// device in a state the constructor can start from.
+class Orbbec final : public viam::sdk::Camera {
    public:
     Orbbec(viam::sdk::Dependencies deps, viam::sdk::ResourceConfig cfg, std::shared_ptr<ob::Context> ctx);
     ~Orbbec();
-    void reconfigure(const viam::sdk::Dependencies& deps, const viam::sdk::ResourceConfig& cfg) override;
     viam::sdk::ProtoStruct do_command(const viam::sdk::ProtoStruct& command) override;
     raw_image get_image(std::string mime_type, const viam::sdk::ProtoStruct& extra) override;
     image_collection get_images(std::vector<std::string> filter_source_names, const viam::sdk::ProtoStruct& extra) override;
