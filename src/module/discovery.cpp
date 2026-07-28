@@ -100,4 +100,11 @@ vsdk::ProtoStruct OrbbecDiscovery::do_command(const vsdk::ProtoStruct& command) 
     return vsdk::ProtoStruct{};
 }
 
+// The service holds no state of its own: what is attached is reported by discover_resources, which
+// enumerates the bus on demand. Deliberately not querying the device list here, so that polling
+// status stays cheap and cannot disturb an in-progress enumeration.
+vsdk::ProtoStruct OrbbecDiscovery::get_status() {
+    return vsdk::ProtoStruct{};
+}
+
 }  // namespace discovery

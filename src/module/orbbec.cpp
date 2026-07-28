@@ -1210,47 +1210,26 @@ Orbbec::~Orbbec() {
     VIAM_RESOURCE_LOG(info) << "Orbbec destructor end " << serial_number_;
 }
 
-vsdk::Camera::raw_image Orbbec::get_image(std::string mime_type, const vsdk::ProtoStruct& extra) {
-    try {
-        VIAM_RESOURCE_LOG(debug) << "[get_image] start";
-        std::string serial_number;
-        {
-            const std::lock_guard<std::mutex> lock(serial_number_mu_);
-            serial_number = serial_number_;
-        }
-
-        if (model_config_.has_value()) {
-            checkFirmwareVersion(firmware_version_, model_config_->min_firmware_version, model_config_->viam_model_suffix);
-        }
-
-        std::shared_ptr<ob::FrameSet> fs = nullptr;
-        {
-            std::lock_guard<std::mutex> lock(frame_set_by_serial_mu());
-            auto search = frame_set_by_serial().find(serial_number);
-            if (search == frame_set_by_serial().end()) {
-                throw std::invalid_argument("no frame yet");
-            }
-            fs = search->second;
-        }
-        std::shared_ptr<ob::Frame> color = fs->getFrame(OB_FRAME_COLOR);
-
-        std::optional<DeviceFormat> res_format_opt;
-        {
-            std::lock_guard<std::mutex> lock(config_by_serial_mu());
-            if (config_by_serial().count(serial_number) == 0) {
-                throw std::invalid_argument("device with serial number " + serial_number + " is not in config_by_serial");
-            }
-            res_format_opt = config_by_serial().at(serial_number).device_format;
-        }
-
-        validateColorFrame(color, res_format_opt, *model_config_);
-        vsdk::Camera::raw_image response = encodeColorFrame(color);
-        VIAM_RESOURCE_LOG(debug) << "[get_image] end";
-        return response;
-    } catch (const std::exception& e) {
-        VIAM_RESOURCE_LOG(error) << "[get_image] error: " << e.what();
-        throw std::runtime_error("failed to create image: " + std::string(e.what()));
+vsdk::ProtoStruct Orbbec::get_status() {
+    std::string serial_number;
+    {
+        const std::lock_guard<std::mutex> lock(serial_number_mu_);
+        serial_number = serial_number_;
     }
+
+    bool started = false;
+    {
+        const std::lock_guard<std::mutex> lock(devices_by_serial_mu());
+        auto search = devices_by_serial().find(serial_number);
+        if (search != devices_by_serial().end()) {
+            started = search->second->started;
+        }
+    }
+
+    return vsdk::ProtoStruct{{"serial_number", serial_number},
+                             {"model", model_config_.has_value() ? model_config_->viam_model_suffix : std::string{}},
+                             {"firmware_version", firmware_version_},
+                             {"streaming", started}};
 }
 
 vsdk::Camera::properties Orbbec::get_properties() {
@@ -1670,7 +1649,7 @@ vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const v
 
         std::uint8_t* colorData = (std::uint8_t*)color->getData();
         if (colorData == nullptr) {
-            throw std::runtime_error("[get_image] color data is null");
+            throw std::runtime_error("[get_point_cloud] color data is null");
         }
         std::uint32_t colorDataSize = color->dataSize();
 
