@@ -1,6 +1,8 @@
 #pragma once
+#include <viam/sdk/common/pose.hpp>
 #include <viam/sdk/components/camera.hpp>
 #include <viam/sdk/config/resource.hpp>
+#include <viam/sdk/spatialmath/geometry.hpp>
 
 #include <libobsensor/ObSensor.hpp>
 
@@ -119,6 +121,13 @@ struct OrbbecModelConfig {
     std::string default_color_format;
     std::string default_depth_format;
 
+    // Bounding box of the camera body, and the pose of that box's center. The pose is expressed
+    // in the color sensor's optical frame, since that is the frame this module reports all of its
+    // data in: get_properties returns the RGB intrinsics and the point cloud is depth-to-color
+    // aligned. The color sensor is not centered on the body, so the box center is offset from it.
+    viam::sdk::box body_box;
+    viam::sdk::pose body_box_pose;
+
     // Get config for a device name
     static std::optional<OrbbecModelConfig> forDevice(const std::string& device_name);
 
@@ -163,7 +172,6 @@ class Orbbec final : public viam::sdk::Camera {
     static std::vector<std::string> validateAstra2(viam::sdk::ResourceConfig cfg);
     static std::vector<std::string> validateGemini335Le(viam::sdk::ResourceConfig cfg);
     static std::vector<std::string> validateOrbbecModel(viam::sdk::ResourceConfig cfg, OrbbecModelConfig const& modelConfig);
-    static viam::sdk::GeometryConfig geometry;
     static viam::sdk::Model model_astra2;
     static viam::sdk::Model model_gemini_335le;
 

@@ -6,8 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/geo/r3"
 	"go.viam.com/rdk/components/camera"
 	"go.viam.com/rdk/resource"
+	"go.viam.com/rdk/spatialmath"
 	"go.viam.com/rdk/utils"
 	"go.viam.com/test"
 	"go.viam.com/utils/rpc"
@@ -160,6 +162,23 @@ func TestCameraServer(t *testing.T) {
 			test.That(t, props, test.ShouldNotBeNil)
 			test.That(t, props.SupportsPCD, test.ShouldBeTrue)
 			test.That(t, props.IntrinsicParams, test.ShouldNotBeNil)
+		})
+
+		t.Run("Get geometries method", func(t *testing.T) {
+			geometries, err := cam.Geometries(timeoutCtx, nil)
+			test.That(t, err, test.ShouldBeNil)
+			test.That(t, len(geometries), test.ShouldEqual, 1)
+
+			// The pose is the center of the camera body relative to the RGB sensor's optical
+			// center, which is the frame the module reports its data in. See the derivation on
+			// ASTRA2_CONFIG in src/module/orbbec.cpp.
+			expected, err := spatialmath.NewBox(
+				spatialmath.NewPoseFromPoint(r3.Vector{X: 19.00, Y: 5.47, Z: -19.32}),
+				r3.Vector{X: 144.54, Y: 45.35, Z: 38.64},
+				"box",
+			)
+			test.That(t, err, test.ShouldBeNil)
+			test.That(t, spatialmath.GeometriesAlmostEqual(geometries[0], expected), test.ShouldBeTrue)
 		})
 
 		t.Run("DoCommand get_device_properties", func(t *testing.T) {
