@@ -66,19 +66,23 @@ func TestCameraServer(t *testing.T) {
 		}
 		defer cam.Close(timeoutCtx)
 
-		t.Run("Get image method (one image)", func(t *testing.T) {
+		// Single-source retrieval goes through Images with a filter rather than the image API:
+		// viam-cpp-sdk removed Camera::get_image and the CameraServer no longer serves a GetImage
+		// RPC at all, so there is nothing behind DecodeImageFromCamera for this module to answer.
+		t.Run("Get images method (color only)", func(t *testing.T) {
 			timeout := time.After(testTimeoutDuration)
 			tick := time.Tick(testTickDuration)
 			for {
 				select {
 				case <-timeout:
-					t.Fatal("timed out waiting for Get image method (one image)")
+					t.Fatal("timed out waiting for Get images method (color only)")
 				case <-tick:
-					img, err := camera.DecodeImageFromCamera(timeoutCtx, cam, nil, nil)
-					if err != nil {
+					images, _, err := cam.Images(timeoutCtx, []string{"color"}, nil)
+					if err != nil || len(images) < 1 {
 						continue
 					}
-					test.That(t, img, test.ShouldNotBeNil)
+					test.That(t, len(images), test.ShouldEqual, 1)
+					test.That(t, images[0].SourceName, test.ShouldEqual, "color")
 					return
 				}
 			}
