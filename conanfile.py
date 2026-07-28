@@ -33,6 +33,11 @@ class orbbec(ConanFile):
         self.requires("libcurl/8.9.1")
         self.requires("libzip/1.11.1")
         self.requires("libpng/1.6.50")
+        # viam-cpp-sdk pulls xtensor in transitively, and at cppstd >= 17 it asks for an unbounded
+        # `xtensor/[>=0.24.3]`. That now resolves to 0.27.1, which itself requires C++20, so the
+        # graph fails to resolve at all against conancenter. Bound it until the SDK bounds its own
+        # range. Remove this once viam-cpp-sdk's _xtensor_requires() is fixed upstream.
+        self.requires("xtensor/[>=0.24.3 <0.27]", override=True)
 
     def validate(self):
         check_min_cppstd(self, 17)
