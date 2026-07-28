@@ -19,8 +19,11 @@ if [[ ${OS} == "darwin" ]]; then
   brew install cmake python@3.11 wget unzip || true
 elif  [[ ${OS} == "linux" ]]; then
     echo "Detected Linux"
-    # NOTE: this is written under the assumption that it will be built in canon
-    sudo apt -y update && sudo apt -y upgrade && sudo apt install -y cmake python3.11 python3.11-venv wget
+    # Do not pin a python minor version here. This runs both in canon (python3.11) and in the Viam
+    # cloud build image used by `viam module reload` / `viam module build`, which is Debian bullseye
+    # and has no python3.11 package at all, so pinning it fails the build outright. Conan needs
+    # >= 3.6, and the venv below is created with whatever python3 resolves to.
+    sudo apt -y update && sudo apt -y upgrade && sudo apt install -y cmake python3 python3-venv wget
 else
     echo "Unsupported OS: ${OS}"
     exit 1
