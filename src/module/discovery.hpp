@@ -2,7 +2,6 @@
 #include <memory>
 
 #include <viam/sdk/config/resource.hpp>
-#include <viam/sdk/resource/reconfigurable.hpp>
 #include <viam/sdk/services/discovery.hpp>
 
 #include <libobsensor/ObSensor.hpp>
@@ -16,6 +15,7 @@ class OrbbecDiscovery : public viam::sdk::Discovery {
                              std::shared_ptr<ob::Context> ctx);
     std::vector<viam::sdk::ResourceConfig> discover_resources(const viam::sdk::ProtoStruct& extra) override;
     viam::sdk::ProtoStruct do_command(const viam::sdk::ProtoStruct& command) override;
+    viam::sdk::ProtoStruct get_status() override;
     static viam::sdk::Model model;
 
    private:
