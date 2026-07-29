@@ -25,7 +25,8 @@ jobs:
               image: ghcr.io/viam-modules/orbbec/viam-cpp-base-orin:0.0.1
             artifact-name: module-linux-arm64
           - platform: windows/amd64
-            os: windows-latest
+            # pin instead of using windows-latest which was recently bumped to a version that breaks conan
+            os: windows-2022
             artifact-name: module-windows-amd64
 
     runs-on: ${{ matrix.os }}
