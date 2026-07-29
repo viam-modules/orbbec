@@ -3,6 +3,7 @@ module github.com/orbbec/tests
 go 1.25.9
 
 require (
+	github.com/golang/geo v0.0.0-20230421003525-6adc56603217
 	go.viam.com/rdk v1.0.0
 	go.viam.com/test v1.2.4
 	go.viam.com/utils v0.6.6
@@ -93,7 +94,6 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang-jwt/jwt/v4 v4.5.2 // indirect
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
-	github.com/golang/geo v0.0.0-20230421003525-6adc56603217 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
