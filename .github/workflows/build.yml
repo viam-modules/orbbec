@@ -36,9 +36,9 @@ jobs:
           Import-Module $env:ChocolateyInstall\helpers\chocolateyProfile.psm1
           refreshenv
 
-          conan profile detect
+          conan profile detect --force
 
-          conan remote add viamconan https://viam.jfrog.io/artifactory/api/conan/viamconan --index 0
+          conan remote add viamconan https://viam.jfrog.io/artifactory/api/conan/viamconan --index 0 --force
 
         env:
           CONAN_USER_HOME: c:/cache
@@ -102,8 +102,8 @@ jobs:
         run: |
           python3 -m venv venv && . ./venv/bin/activate
           python3 -m pip install conan
-          conan profile detect
-          conan remote add viamconan https://viam.jfrog.io/artifactory/api/conan/viamconan --index 0
+          conan profile detect --force
+          conan remote add viamconan https://viam.jfrog.io/artifactory/api/conan/viamconan --index 0 --force
 
       - name: Build package and module
         run: |
