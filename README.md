@@ -140,14 +140,14 @@ Bear in mind that the distortion parameters contained in that struct are not nam
 
 |index|parameter|
 |-----|---------|
-|  0  |   p1    |
-|  1  |   p2    |
-|  2  |   k1    |
-|  3  |   k2    |
-|  4  |   k3    |
-|  5  |   k4    |
-|  6  |   k5    |
-|  7  |   k6    |
+|  0  |   k1    |
+|  1  |   k2    |
+|  2  |   k3    |
+|  3  |   k4    |
+|  4  |   k5    |
+|  5  |   k6    |
+|  6  |   p1    |
+|  7  |   p2    |
 
 ## DoCommand
 You can use DoCommand to upgrade the firmware of your device to the required version.
