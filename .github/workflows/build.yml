@@ -18,15 +18,6 @@ jobs:
       - name: Install deps
         run: choco install -y conan git
 
-      # Skips the Conan rebuild of viam-cpp-sdk on cache hit.
-      - name: Cache Conan packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.conan2
-          key: conan-${{ runner.os }}-${{ hashFiles('conanfile.py') }}
-          restore-keys: |
-            conan-${{ runner.os }}-
-
       - name: Set up python/conan
         shell: powershell
         # Powershell will not exit on error without the line below...highly vexing.
@@ -36,9 +27,9 @@ jobs:
           Import-Module $env:ChocolateyInstall\helpers\chocolateyProfile.psm1
           refreshenv
 
-          conan profile detect --force
+          conan profile detect
 
-          conan remote add viamconan https://viam.jfrog.io/artifactory/api/conan/viamconan --index 0 --force
+          conan remote add viamconan https://viam.jfrog.io/artifactory/api/conan/viamconan --index 0
 
         env:
           CONAN_USER_HOME: c:/cache
@@ -88,22 +79,12 @@ jobs:
           apt upgrade -y
           apt install -y cmake python3.11 python3.11-venv wget
 
-      # Skips the Conan rebuild of viam-cpp-sdk on cache hit. matrix.os keeps
-      # amd64 / arm64 / macos in separate namespaces.
-      - name: Cache Conan packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.conan2
-          key: conan-${{ matrix.os }}-${{ hashFiles('conanfile.py') }}
-          restore-keys: |
-            conan-${{ matrix.os }}-
-
       - name: Set up python/conan
         run: |
           python3 -m venv venv && . ./venv/bin/activate
           python3 -m pip install conan
-          conan profile detect --force
-          conan remote add viamconan https://viam.jfrog.io/artifactory/api/conan/viamconan --index 0 --force
+          conan profile detect
+          conan remote add viamconan https://viam.jfrog.io/artifactory/api/conan/viamconan --index 0
 
       - name: Build package and module
         run: |
