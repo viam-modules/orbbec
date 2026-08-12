@@ -50,7 +50,7 @@ RUN conan profile detect
 # NOTE: If you update the `viam-cpp-sdk` dependency here, it
 # should also be updated in `bin/setup.{sh,ps1}`, and in the conanfile.py.
 RUN git clone https://github.com/viamrobotics/viam-cpp-sdk.git \
-    --branch releases/v0.38.1 --depth=1 && \
+    --branch releases/v0.39.0 --depth=1 && \
     cd viam-cpp-sdk && \
     conan create . \
     --build=missing \
