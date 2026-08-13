@@ -42,33 +42,6 @@ fi
 
 conan profile detect || echo "Conan is already installed"
 
-if [ ! -d "tmp_cpp_sdk/viam-cpp-sdk" ]; then
-  # Clone the C++ SDK repo
-  mkdir -p tmp_cpp_sdk
-  pushd tmp_cpp_sdk
-  git clone https://github.com/viamrobotics/viam-cpp-sdk.git
-  pushd viam-cpp-sdk
-else
-  pushd tmp_cpp_sdk
-  pushd viam-cpp-sdk
-fi
-
-# NOTE: If you change this version, also change it in the `conanfile.py` requirements
-# and in the Dockerfile
-git checkout releases/v0.38.1
-
-# Build the C++ SDK repo
-#
-# We want a static binary, so we turn off shared. Elect for C++17
-# compilation, since it seems some of the dependencies we pick mandate
-# it anyway.
-conan create . \
-      --build=missing \
-      -o:a "&:shared=False" \
-      -s:a build_type=Release \
-      -s:a compiler.cppstd=17
-
-# Cleanup
-popd  # viam-cpp-sdk
-popd  # tmp_cpp_sdk
-rm -rf tmp_cpp_sdk
+# Add the viam conan remote so viam-cpp-sdk (pinned in conanfile.py) resolves
+# from there instead of being cloned and built from source here.
+conan remote add viamconan https://viam.jfrog.io/artifactory/api/conan/viamconan --index 0 --force

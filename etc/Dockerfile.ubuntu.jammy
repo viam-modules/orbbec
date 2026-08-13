@@ -48,7 +48,9 @@ RUN python3 -m pip install conan
 RUN conan profile detect
 
 # NOTE: If you update the `viam-cpp-sdk` dependency here, it
-# should also be updated in `bin/setup.{sh,ps1}`, and in the conanfile.py.
+# should also be updated in the conanfile.py.
+# TODO: once the viamconan remote serves one revision per release with all
+# platform binaries, drop this source build and add the remote instead.
 RUN git clone https://github.com/viamrobotics/viam-cpp-sdk.git \
     --branch releases/v0.38.1 --depth=1 && \
     cd viam-cpp-sdk && \

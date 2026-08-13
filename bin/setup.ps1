@@ -37,33 +37,7 @@ if (-not (Test-Path $conanExe)) {
 conan profile detect
 if (!$?) { Write-Host "Conan is already installed" }
 
-# Clone the C++ SDK repo
-mkdir tmp_cpp_sdk
-Push-Location tmp_cpp_sdk
-git clone https://github.com/viamrobotics/viam-cpp-sdk.git
-Push-Location viam-cpp-sdk
-
-# NOTE: If you change this version, also change it in the `conanfile.py` requirements
-# and in dockerfile
-git checkout releases/v0.38.1
-
-# Build the C++ SDK repo.
-#
-# We want a static binary, so we turn off shared. Elect for C++17
-# compilation, since it seems some of the dependencies we pick mandate
-# it anyway. Pin to the Windows 10 1809 associated windows SDK, and
-# opt for the static compiler runtime so we don't have a dependency on
-# the VC redistributable.
-#
-# boost backtrace contains a unix only library dlfcn.h
-conan create . `
-      --build=missing `
-      -o:a "&:shared=False" `
-      -o:a "boost/*:with_stacktrace_backtrace=False" `
-      -o:a "boost/*:without_stacktrace=True" `
-      -s:a build_type=Release `
-      -s:a compiler.cppstd=17
-
-Pop-Location  # viam-cpp-sdk
-Pop-Location  # tmp_cpp_sdk
-Remove-Item -Recurse -Force tmp_cpp_sdk
+# Add the viam conan remote so viam-cpp-sdk (pinned in conanfile.py) resolves
+# from there instead of being cloned and built from source here.
+conan remote add viamconan https://viam.jfrog.io/artifactory/api/conan/viamconan --index 0 --force
+if (!$?) { throw "Failed to add viamconan remote" }
