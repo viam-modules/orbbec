@@ -22,7 +22,7 @@ jobs:
           - platform: linux/arm64
             os: ubuntu-22.04-arm
             container:
-              image: ghcr.io/viam-modules/orbbec/viam-cpp-base-orin:0.0.1
+              image: ghcr.io/viam-modules/orbbec/viam-cpp-base-orin:0.0.2
             artifact-name: module-linux-arm64
           - platform: windows/amd64
             # pin instead of using windows-latest which was recently bumped to a version that breaks conan

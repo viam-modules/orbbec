@@ -25,7 +25,7 @@ TAG_VERSION?=latest
 # Docker image
 HUB_USER := viam-modules/orbbec
 BASE_NAME := viam-cpp-base-orin
-BASE_TAG := 0.0.1
+BASE_TAG := 0.0.2
 
 .PHONY: build lint setup conan-pkg
 
