@@ -74,7 +74,9 @@ else
 	-s:a build_type=Release \
 	-s:a compiler.cppstd=17 \
 	--build=missing \
-	--build="b2/*"
+	--build="b2/*" \
+	--build="m4/*" \
+	--build="pkgconf/*"
 endif
 
 module.tar.gz: conan-pkg meta.json
