@@ -73,7 +73,8 @@ else
 	-o:a "viam-cpp-sdk/*:shared=False" \
 	-s:a build_type=Release \
 	-s:a compiler.cppstd=17 \
-	--build=missing
+	--build=missing \
+	--build="b2/*"
 endif
 
 module.tar.gz: lint conan-pkg meta.json
