@@ -19,8 +19,9 @@ if [[ ${OS} == "darwin" ]]; then
   brew install cmake python@3.11 wget unzip || true
 elif  [[ ${OS} == "linux" ]]; then
     echo "Detected Linux"
-    # NOTE: this is written under the assumption that it will be built in canon
-    sudo apt -y update && sudo apt -y upgrade && sudo apt install -y cmake python3.11 python3.11-venv wget
+    # python3 (>= 3.11) and CMake (>= 3.25, installed into the venv below) come from the
+    # build image; apt's versions on focal and bullseye are too old for viam-cpp-sdk.
+    sudo apt-get update && sudo apt-get install -y wget
 else
     echo "Unsupported OS: ${OS}"
     exit 1
@@ -37,7 +38,7 @@ fi
 # Set up conan
 if [ ! -f "./venv/bin/conan" ]; then
   echo 'installing conan'
-  python3 -m pip install conan
+  python3 -m pip install conan cmake
 fi
 
 conan profile detect || echo "Conan is already installed"
@@ -64,6 +65,7 @@ git checkout releases/v0.39.0
 # it anyway.
 conan create . \
       --build=missing \
+      --build="b2/*" \
       -o:a "&:shared=False" \
       -s:a build_type=Release \
       -s:a compiler.cppstd=17
