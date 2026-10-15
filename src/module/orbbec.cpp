@@ -1269,6 +1269,7 @@ vsdk::Camera::properties Orbbec::get_properties() {
 
         vsdk::Camera::properties p{};
         p.supports_pcd = true;
+        p.default_reference_frame = name();
         p.intrinsic_parameters.width_px = intrinsic_props.width;
         p.intrinsic_parameters.height_px = intrinsic_props.height;
         p.intrinsic_parameters.focal_x_px = intrinsic_props.fx;
