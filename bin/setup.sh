@@ -22,6 +22,13 @@ elif  [[ ${OS} == "linux" ]]; then
     # python3 (>= 3.11) and CMake (>= 3.25, installed into the venv below) come from the
     # build image; apt's versions on focal and bullseye are too old for viam-cpp-sdk.
     sudo apt-get update && sudo apt-get install -y wget
+    # Debian and Ubuntu ship ensurepip separately in pythonX.Y-venv, which some build images
+    # (e.g. rdk-devenv, used by the publish workflow) do not carry. Install it only when it is
+    # missing so images that already provide a working venv are left untouched.
+    if ! python3 -c 'import ensurepip' >/dev/null 2>&1; then
+        PY_MINOR=$(python3 -c 'import sys; print(sys.version_info.minor)')
+        sudo apt-get install -y "python3.${PY_MINOR}-venv"
+    fi
 else
     echo "Unsupported OS: ${OS}"
     exit 1
@@ -29,7 +36,10 @@ fi
 
 if [ ! -f "./venv/bin/activate" ]; then
   echo 'creating and sourcing virtual env'
-  python3 -m venv venv && source ./venv/bin/activate
+  # Kept as separate commands: under `set -e` a failure on the left of `&&` does not stop the
+  # script, which previously let a failed venv fall through to pip on the system python.
+  python3 -m venv venv
+  source ./venv/bin/activate
 else
   echo 'sourcing virtual env'
   source ./venv/bin/activate
