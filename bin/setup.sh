@@ -53,6 +53,14 @@ fi
 
 conan profile detect || echo "Conan is already installed"
 
+# Build the viam-cpp-sdk version that conanfile.py requires. Reading it from there means the
+# automated SDK bumps, which only edit conanfile.py, can't leave this script on an older version.
+SDK_VERSION=$(sed -nE 's/.*requires\("viam-cpp-sdk\/([^"]+)"\).*/\1/p' conanfile.py)
+if [[ ! "${SDK_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "Could not read a single viam-cpp-sdk version from conanfile.py (got: '${SDK_VERSION}')"
+  exit 1
+fi
+
 if [ ! -d "tmp_cpp_sdk/viam-cpp-sdk" ]; then
   # Clone the C++ SDK repo
   mkdir -p tmp_cpp_sdk
@@ -64,9 +72,7 @@ else
   pushd viam-cpp-sdk
 fi
 
-# NOTE: If you change this version, also change it in the `conanfile.py` requirements
-# and in the Dockerfile
-git checkout releases/v0.42.0
+git checkout "releases/v${SDK_VERSION}"
 
 # Build the C++ SDK repo
 #

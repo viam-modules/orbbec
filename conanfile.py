@@ -26,8 +26,8 @@ class orbbec(ConanFile):
         self.version = re.search("set\(CMAKE_PROJECT_VERSION (.+)\)", content).group(1).strip()
 
     def requirements(self):
-        # NOTE: If you update the `viam-cpp-sdk` dependency here, it
-        # should also be updated in `bin/setup.{sh,ps1}`, and in the Dockerfile.
+        # NOTE: `bin/setup.{sh,ps1}` read the viam-cpp-sdk version from the requires() call below,
+        # so keep it a plain literal. etc/Dockerfile.ubuntu.jammy pins its own copy.
         self.requires("viam-cpp-sdk/0.44.0")
         self.requires("openssl/[>=3 <4]")
         self.requires("libcurl/8.9.1")
