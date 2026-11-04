@@ -209,6 +209,16 @@ std::unordered_map<std::string, ObResourceConfig>& config_by_serial() {
 // GLOBALS END
 
 // HELPERS BEGIN
+// The color/depth formats set in the resource config, or nullopt when the model defaults apply.
+std::optional<DeviceFormat> configuredDeviceFormat(std::string const& serial_number) {
+    std::lock_guard<std::mutex> lock(config_by_serial_mu());
+    auto search = config_by_serial().find(serial_number);
+    if (search == config_by_serial().end()) {
+        throw std::runtime_error("device with serial number " + serial_number + " is not in config_by_serial");
+    }
+    return search->second.device_format;
+}
+
 void checkFirmwareVersion(const std::string version, const std::string& minFirmwareVer, const std::string& modelName) {
     int major = 0, minor = 0, patch = 0;
     int requiredMajor = 0, requiredMinor = 0, requiredPatch = 0;
@@ -992,6 +1002,9 @@ void Orbbec::validate_sensor(std::pair<std::string, viam::sdk::ProtoValue> const
     if (*height <= 0) {
         throw std::invalid_argument("sensor height must be positive");
     }
+    if (!sensor->count(kAttrFormat)) {
+        throw std::invalid_argument("sensor must contain format key");
+    }
     auto const format = sensor->at(kAttrFormat).get<std::string>();
     if (!format) {
         throw std::invalid_argument("sensor format must be a string");
@@ -1048,6 +1061,9 @@ std::vector<std::string> Orbbec::validateOrbbecModel(vsdk::ResourceConfig cfg, O
             for (auto const& sensor_pair : *sensors) {
                 validate_sensor(sensor_pair, modelConfig);
             }
+        }
+        if (!sensors->count(kColorSourceName) || !sensors->count(kDepthSourceName)) {
+            throw std::invalid_argument("sensors must contain both a color and a depth sensor, each with width, height and format");
         }
         auto color_width_uint32 =
             static_cast<std::uint32_t>(*sensors->at(kColorSourceName).get<viam::sdk::ProtoStruct>()->at(kAttrWidth).get<double>());
@@ -1385,14 +1401,7 @@ vsdk::Camera::image_collection Orbbec::get_images(std::vector<std::string> filte
         std::shared_ptr<ob::Frame> color = nullptr;
         std::shared_ptr<ob::Frame> depth = nullptr;
         uint64_t nowUs = getNowUs();
-        std::optional<DeviceFormat> device_format_opt;
-        {
-            std::lock_guard<std::mutex> lock(config_by_serial_mu());
-            if (config_by_serial().count(serial_number) == 0) {
-                throw std::runtime_error("device with serial number " + serial_number + " is not in config_by_serial");
-            }
-            device_format_opt = config_by_serial().at(serial_number).device_format;
-        }
+        std::optional<DeviceFormat> const device_format_opt = configuredDeviceFormat(serial_number);
 
         if (should_process_color) {
             color = fs->getFrame(OB_FRAME_COLOR);
@@ -1645,8 +1654,11 @@ vsdk::Camera::point_cloud Orbbec::get_point_cloud(std::string mime_type, const v
         std::shared_ptr<ob::Frame> color = fs->getFrame(OB_FRAME_COLOR);
         std::shared_ptr<ob::Frame> depth = fs->getFrame(OB_FRAME_DEPTH);
 
-        validateColorFrame(color, std::nullopt, *model_config_);
-        validateDepthFrame(depth, std::nullopt, *model_config_);
+        // Validate against the configured formats, as get_images does. Passing nullopt here checked
+        // against the model defaults, so a config with color format RGB always failed (APP-16599).
+        std::optional<DeviceFormat> const device_format_opt = configuredDeviceFormat(serial_number);
+        validateColorFrame(color, device_format_opt, *model_config_);
+        validateDepthFrame(depth, device_format_opt, *model_config_);
 
         std::uint8_t* colorData = (std::uint8_t*)color->getData();
         if (colorData == nullptr) {
