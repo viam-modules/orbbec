@@ -40,14 +40,14 @@ The following attributes are available for the Astra 2 model:
 | Name          | Type   | Inclusion | Description                |
 |---------------|--------|-----------|----------------------------|
 | `serial_number` | string | **Required** | The serial number of the specific Orbbec camera to use. This number is printed on the device. The serial number of each plugged-in and available orbbec camera will be logged on module startup.  |
-|`sensors` | struct | **Optional** | The configuration of the color and depth sensors |
+|`sensors` | struct | **Optional** | The configuration of the color and depth sensors. If set, it must contain both `color` and `depth`, each with all of the `sensor` attributes below. |
 
 #### `sensor` attributes:
 | Name | Type | Inclusion | Description |
 |------|------|-----------|-------------|
-| `height` | string | **Optional** | Native camera sensor height in pixels  |
-| `width` | string | **Optional** | Native camera sensor width in pixels |
-| `format` | string | **Optional** | Native camera format |
+| `height` | int | **Required** | Native camera sensor height in pixels  |
+| `width` | int | **Required** | Native camera sensor width in pixels |
+| `format` | string | **Required** | Native camera format |
 
 #### `sensor` formats
 | Sensor | Formats |
@@ -97,14 +97,14 @@ The following attributes are available for the Gemini 335Le model:
 | Name          | Type   | Inclusion | Description                |
 |---------------|--------|-----------|----------------------------|
 | `serial_number` | string | **Required** | The serial number of the specific Orbbec camera to use. This number is printed on the device. The serial number of each plugged-in and available orbbec camera will be logged on module startup.  |
-|`sensors` | struct | **Optional** | The configuration of the color and depth sensors |
+|`sensors` | struct | **Optional** | The configuration of the color and depth sensors. If set, it must contain both `color` and `depth`, each with all of the `sensor` attributes below. |
 
 #### `sensor` attributes:
 | Name | Type | Inclusion | Description |
 |------|------|-----------|-------------|
-| `height` | string | **Optional** | Native camera sensor height in pixels  |
-| `width` | string | **Optional** | Native camera sensor width in pixels |
-| `format` | string | **Optional** | Native camera format |
+| `height` | int | **Required** | Native camera sensor height in pixels  |
+| `width` | int | **Required** | Native camera sensor width in pixels |
+| `format` | string | **Required** | Native camera format |
 
 #### `sensor` formats
 | Sensor | Formats |
