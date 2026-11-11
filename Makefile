@@ -22,10 +22,13 @@ OUTPUT_NAME = orbbec-module$(BIN_SUFFIX)
 BIN := build-conan/build/RelWithDebInfo/orbbec-module
 TAG_VERSION?=latest
 
-# Docker image
-HUB_USER := viam-modules/orbbec
-BASE_NAME := viam-cpp-base-orin
-BASE_TAG := 0.0.1
+# macOS pins the toolchain viamconan's darwin binaries are built with, so its prebuilt packages
+# match. Elsewhere the environment's default profile is used (the build images ship one).
+ifeq ($(OS),darwin)
+	CONAN_PROFILE ?= ./etc/conan/macos.profile
+else
+	CONAN_PROFILE ?= default
+endif
 
 .PHONY: build lint setup conan-pkg
 
@@ -40,7 +43,6 @@ clean:
 
 clean-all: clean
 	rm -rf build-conan
-	rm -rf tmp_cpp_sdk
 	rm -rf venv
 	rm -f orbbec-test-bin
 	rm -f $(OUTPUT_NAME)
@@ -62,6 +64,10 @@ orbbec-test-bin:
 
 # Both the commands below need to source/activate the venv in the same line as the
 # conan call because every line of a Makefile runs in a subshell
+#
+# m4 and pkgconf build from source because conancenter's binaries need a newer glibc than the
+# 2.31 cloud build images, where libcurl compiles from source. b2 comes from viamconan, which
+# carries one built for glibc 2.31.
 conan-pkg:
 ifeq ($(OS),Windows_NT)
 # no first run on windows, remove it from meta.json
@@ -70,36 +76,26 @@ ifeq ($(OS),Windows_NT)
 else
 	test -f ./venv/bin/activate && . ./venv/bin/activate; \
 	conan create . \
+	-pr:a $(CONAN_PROFILE) \
 	-o:a "viam-cpp-sdk/*:shared=False" \
 	-s:a build_type=Release \
 	-s:a compiler.cppstd=17 \
 	--build=missing \
-	--build="b2/*" \
 	--build="m4/*" \
 	--build="pkgconf/*"
 endif
 
 module.tar.gz: conan-pkg meta.json
 ifeq ($(OS),Windows_NT)
-	cmd /C "refreshenv && IF EXIST .\venv\Scripts\activate.bat call .\venv\Scripts\activate.bat && conan install --requires=viam-orbbec/0.0.1 -o:a "viam-cpp-sdk/*:shared=False" -s:a build_type=Release -s:a compiler.cppstd=17 --deployer-package "^&" --envs-generation false"
+	cmd /C "refreshenv && IF EXIST .\venv\Scripts\activate.bat call .\venv\Scripts\activate.bat && conan install --requires=viam-orbbec/0.0.1 -o:a "viam-cpp-sdk/*:shared=False" -s:a build_type=Release -s:a compiler.cppstd=17 --lockfile-partial --deployer-package "^&" --envs-generation false"
 else
 	test -f ./venv/bin/activate && . ./venv/bin/activate; \
 	conan install --requires=viam-orbbec/0.0.1 \
+	-pr:a $(CONAN_PROFILE) \
 	-o:a "viam-cpp-sdk/*:shared=False" \
 	-s:a build_type=Release \
 	-s:a compiler.cppstd=17 \
+	--lockfile-partial \
 	--deployer-package "&" \
 	--envs-generation false
 endif
-
-image-base:
-	docker build -t $(BASE_NAME):$(BASE_TAG) \
-		--platform=linux/arm64 \
-		--memory=16g \
-		-f etc/Dockerfile.ubuntu.jammy ./
-
-# Pushes base docker image to github packages.
-# Requires docker login to ghcr.io
-push-base:
-	docker tag $(BASE_NAME):$(BASE_TAG) ghcr.io/$(HUB_USER)/$(BASE_NAME):$(BASE_TAG) && \
-	docker push ghcr.io/$(HUB_USER)/$(BASE_NAME):$(BASE_TAG)

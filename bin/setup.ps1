@@ -37,40 +37,5 @@ if (-not (Test-Path $conanExe)) {
 conan profile detect
 if (!$?) { Write-Host "Conan is already installed" }
 
-# Build the viam-cpp-sdk version that conanfile.py requires. Reading it from there means the
-# automated SDK bumps, which only edit conanfile.py, can't leave this script on an older version.
-$sdkMatch = Select-String -Path conanfile.py -Pattern 'requires\("viam-cpp-sdk/([^"]+)"\)' | Select-Object -First 1
-if (-not $sdkMatch) {
-    Write-Host "Could not read the viam-cpp-sdk version from conanfile.py"
-    exit 1
-}
-$sdkVersion = $sdkMatch.Matches[0].Groups[1].Value
-
-# Clone the C++ SDK repo
-mkdir tmp_cpp_sdk
-Push-Location tmp_cpp_sdk
-git clone https://github.com/viamrobotics/viam-cpp-sdk.git
-Push-Location viam-cpp-sdk
-
-git checkout "releases/v$sdkVersion"
-
-# Build the C++ SDK repo.
-#
-# We want a static binary, so we turn off shared. Elect for C++17
-# compilation, since it seems some of the dependencies we pick mandate
-# it anyway. Pin to the Windows 10 1809 associated windows SDK, and
-# opt for the static compiler runtime so we don't have a dependency on
-# the VC redistributable.
-#
-# boost backtrace contains a unix only library dlfcn.h
-conan create . `
-      --build=missing `
-      -o:a "&:shared=False" `
-      -o:a "boost/*:with_stacktrace_backtrace=False" `
-      -o:a "boost/*:without_stacktrace=True" `
-      -s:a build_type=Release `
-      -s:a compiler.cppstd=17
-
-Pop-Location  # viam-cpp-sdk
-Pop-Location  # tmp_cpp_sdk
-Remove-Item -Recurse -Force tmp_cpp_sdk
+# viam-cpp-sdk and its dependencies come prebuilt from viamconan, at the versions conan.lock pins.
+conan remote add viamconan https://viam.jfrog.io/artifactory/api/conan/viamconan --index 0 --force

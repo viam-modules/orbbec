@@ -25,13 +25,21 @@ if [ -f "./venv/bin/activate" ]; then
   source ./venv/bin/activate
 fi
 
+# macOS pins the toolchain viamconan's darwin binaries are built with (see the Makefile).
+PROFILE=default
+if [ "$(uname -s)" = "Darwin" ]; then
+  PROFILE=./etc/conan/macos.profile
+fi
+
 conan install . \
+      -pr:a "${PROFILE}" \
       --build=missing \
       -o:a "viam-cpp-sdk/*:shared=False" \
       -s:a build_type=Release \
       -s:a compiler.cppstd=17
 
 conan build . \
+      -pr:a "${PROFILE}" \
       --output-folder=build-conan \
       --build=none \
       -o:a "viam-cpp-sdk/*:shared=False" \
