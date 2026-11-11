@@ -28,7 +28,7 @@ class orbbec(ConanFile):
     def requirements(self):
         # NOTE: `bin/setup.{sh,ps1}` read the viam-cpp-sdk version from the requires() call below,
         # so keep it a plain literal. etc/Dockerfile.ubuntu.jammy pins its own copy.
-        self.requires("viam-cpp-sdk/0.44.0")
+        self.requires("viam-cpp-sdk/0.45.0")
         self.requires("openssl/[>=3 <4]")
         self.requires("libcurl/8.9.1")
         self.requires("libzip/1.11.1")
