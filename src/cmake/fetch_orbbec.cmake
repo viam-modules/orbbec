@@ -7,16 +7,18 @@ if (APPLE)
   set(_ob_suffix "macOS_beta")
   set(_ob_sha256 "4f0ea5ae808321fc9703c20a47e10fc79197949552ca13bef809b462bd0bde70")
 elseif (LINUX)
-    set(_ob_version "v2.4.8")
-    set(_ob_commit "ec8e3469")
-    set(_ob_suffix "linux_${CMAKE_SYSTEM_PROCESSOR}")
+    # v2.7.2 is the first release that supports the Gemini 305.
+    set(_ob_version "v2.10.6")
+    set(_ob_commit "575347c")
+    set(_ob_timestamp "202609291004")
+    set(_ob_ext "tar.gz")
 
     if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
-      set(_ob_timestamp "202507031325")
-      set(_ob_sha256 "4a42a1bfd0032389f3be00b125166013abef5fbaa0a2297493d062caa9cf4d0f")
+      set(_ob_suffix "linux_x86_64")
+      set(_ob_sha256 "23ec9f7023881cc9061bf0b4ba65735fb16c10e168fd5d62b1548c847e7ddb46")
     elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
-      set(_ob_timestamp "202507031330")
-      set(_ob_sha256 "a9abe3fb783e284eb8c43843fd0aab202246ffe40212b9f9b9fdc86566239e82")
+      set(_ob_suffix "linux_arm64")
+      set(_ob_sha256 "00fafc2b566ca98feb3ef0242143d830209b09bac5d41c557cf6ec40452c8df9")
     else()
       message(FATAL_ERROR "Unsupported arch")
     endif()
@@ -30,11 +32,15 @@ else()
     message(FATAL_ERROR "Unsupported platform")
 endif()
 
+if(NOT DEFINED _ob_ext)
+  set(_ob_ext "zip")
+endif()
+
 set(_ob_sdk_dir "OrbbecSDK_${_ob_version}_${_ob_timestamp}_${_ob_commit}_${_ob_suffix}")
 
 FetchContent_Declare(
     orbbec-sdk-release
-    URL "https://github.com/orbbec/OrbbecSDK_v2/releases/download/${_ob_version}/${_ob_sdk_dir}.zip"
+    URL "https://github.com/orbbec/OrbbecSDK_v2/releases/download/${_ob_version}/${_ob_sdk_dir}.${_ob_ext}"
     URL_HASH "SHA256=${_ob_sha256}"
 )
 
