@@ -363,9 +363,15 @@ std::vector<std::uint8_t> RGBPointsToPCD(std::shared_ptr<ob::Frame> frame, float
 
     OBColorPoint* points = (OBColorPoint*)frame->data();
     std::vector<PointXYZRGB> pcdPoints;
+    pcdPoints.reserve(numPoints);
 
     for (int i = 0; i < numPoints; i++) {
         OBColorPoint& p = points[i];
+        // Pixels with no depth reading come out of the SDK as (0, 0, 0). Drop them, as RDK does when
+        // it builds a point cloud from a depth map. They can be a large share of the cloud.
+        if (p.z == 0) {
+            continue;
+        }
         std::uint32_t r = (std::uint32_t)p.r;
         std::uint32_t g = (std::uint32_t)p.g;
         std::uint32_t b = (std::uint32_t)p.b;
