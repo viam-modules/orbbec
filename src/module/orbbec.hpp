@@ -171,9 +171,11 @@ class Orbbec final : public viam::sdk::Camera {
     std::vector<viam::sdk::GeometryConfig> get_geometries(const viam::sdk::ProtoStruct& extra) override;
     static std::vector<std::string> validateAstra2(viam::sdk::ResourceConfig cfg);
     static std::vector<std::string> validateGemini335Le(viam::sdk::ResourceConfig cfg);
+    static std::vector<std::string> validateGemini305(viam::sdk::ResourceConfig cfg);
     static std::vector<std::string> validateOrbbecModel(viam::sdk::ResourceConfig cfg, OrbbecModelConfig const& modelConfig);
     static viam::sdk::Model model_astra2;
     static viam::sdk::Model model_gemini_335le;
+    static viam::sdk::Model model_gemini_305;
 
    private:
     std::shared_ptr<ob::Context> ob_ctx_;

@@ -49,6 +49,7 @@ namespace vsdk = ::viam::sdk;
 
 vsdk::Model Orbbec::model_astra2("viam", "orbbec", "astra2");
 vsdk::Model Orbbec::model_gemini_335le("viam", "orbbec", "gemini_335le");
+vsdk::Model Orbbec::model_gemini_305("viam", "orbbec", "gemini_305");
 
 // CONSTANTS BEGIN
 
@@ -133,7 +134,48 @@ static const OrbbecModelConfig GEMINI_335LE_CONFIG{
     {{23.75, 0.00, -21.52}}  // body_box_pose
 };
 
-static const std::vector<OrbbecModelConfig> all_model_configs = {ASTRA2_CONFIG, GEMINI_335LE_CONFIG};
+// Gemini 305: https://mm.digikey.com/Volume0/opasdata/d220001/medias/docus/8888/Orbbec_Gemini-305-Datasheet.pdf
+// Every color size pairs with hardware D2C depth up to 848x530 (queried on firmware 1.0.70) and with
+// software D2C depth at 1280x800, 1280x720 (datasheet table 4-6-1).
+static const std::set<Resolution, std::greater<Resolution>> GEMINI_305_DEPTH_RESOLUTIONS = {{1280, 800},
+                                                                                            {1280, 720},
+                                                                                            {848, 530},
+                                                                                            {848, 480},
+                                                                                            {640, 480},
+                                                                                            {640, 400},
+                                                                                            {640, 360},
+                                                                                            {424, 266},
+                                                                                            {424, 240},
+                                                                                            {320, 240},
+                                                                                            {320, 200},
+                                                                                            {320, 180}};
+
+static const OrbbecModelConfig GEMINI_305_CONFIG{
+    {"Orbbec Gemini 305"},                         // model_names
+    "gemini_305",                                  // viam_model_suffix
+    {1280, 800},                                   // default_color_resolution
+    {848, 530},                                    // default_depth_resolution, the largest that supports hardware D2C
+    std::nullopt,                                  // firmware_url, Orbbec only ships Gemini 305 firmware through OrbbecViewer
+    "1.0.30",                                      // min_firmware_version, the minimum OrbbecSDK v2 lists
+    {{{1280, 800}, GEMINI_305_DEPTH_RESOLUTIONS},  // 16:10 aspect ratio
+     {{1280, 720}, GEMINI_305_DEPTH_RESOLUTIONS},  // 16:9 aspect ratio
+     {{848, 530}, GEMINI_305_DEPTH_RESOLUTIONS},   // 16:10 aspect ratio
+     {{848, 480}, GEMINI_305_DEPTH_RESOLUTIONS},   // 16:9 aspect ratio
+     {{640, 480}, GEMINI_305_DEPTH_RESOLUTIONS}},  // 4:3 aspect ratio
+    {"RGB", "MJPG"},                               // supported_color_formats
+    {"Y16"},                                       // supported_depth_formats
+    "MJPG",                                        // default_color_format
+    "Y16",                                         // default_depth_format
+    {42.00, 42.00, 23.00},                         // body_box
+    // x: the two RGB modules straddle the body symmetrically (18mm baseline), and color and depth both
+    //    originate at the left one (section 4.9), so the body center is 9.00mm to its right.
+    // y: the drawings put the lenses on the body's horizontal centerline.
+    // z: section 4.10 puts the depth start point 3.95mm behind the front glass, and the box center is
+    //    half of 23.00mm behind that same glass.
+    {{9.00, 0.00, -7.55}}  // body_box_pose
+};
+
+static const std::vector<OrbbecModelConfig> all_model_configs = {ASTRA2_CONFIG, GEMINI_335LE_CONFIG, GEMINI_305_CONFIG};
 }  // namespace
 
 std::optional<OrbbecModelConfig> OrbbecModelConfig::forDevice(const std::string& device_name) {
@@ -1091,6 +1133,15 @@ std::vector<std::string> Orbbec::validateGemini335Le(vsdk::ResourceConfig cfg) {
     return {"viam:orbbec:gemini_335le is only supported on Linux hosts"};
 #else
     return validateOrbbecModel(cfg, GEMINI_335LE_CONFIG);
+#endif
+}
+
+std::vector<std::string> Orbbec::validateGemini305(vsdk::ResourceConfig cfg) {
+#if !defined(__linux__)
+    // Only the Linux builds bundle an OrbbecSDK new enough (v2.7.2+) to recognize the Gemini 305.
+    return {"viam:orbbec:gemini_305 is only supported on Linux hosts"};
+#else
+    return validateOrbbecModel(cfg, GEMINI_305_CONFIG);
 #endif
 }
 

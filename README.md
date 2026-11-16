@@ -122,6 +122,49 @@ The following attributes are available for the Gemini 335Le model:
 | `640X480` | `640X480` |
 
 
+## Model viam:orbbec:gemini_305
+
+[Official Orbbec Gemini 305 Camera Webpage](https://www.orbbec.com/gemini-305/).
+Linux hosts only, and firmware 1.0.30 or newer.
+Orbbec ships Gemini 305 firmware through OrbbecViewer, so `update_firmware` does not support this model.
+
+### Configuration
+The following attribute template can be used to configure this model:
+
+```json
+{
+  "serial_number": "CV2B9610002G",
+  "sensors": {
+    "depth": {
+      "width": 848,
+      "height": 530,
+      "format": "Y16"
+    },
+    "color": {
+      "width": 1280,
+      "height": 800,
+      "format": "MJPG"
+    }
+  }
+}
+```
+
+The `serial_number` and `sensors` attributes are the same as for the Gemini 335Le model.
+
+#### `sensor` formats
+| Sensor | Formats |
+|--------|---------|
+| `color` | `MJPG`, `RGB` |
+| `depth` | `Y16` |
+
+#### `width`/`height` available combinations
+Every color resolution works with every depth resolution.
+Depth up to `848X530` uses hardware depth-to-color alignment; `1280X800` and `1280X720` depth fall back to software alignment.
+
+| Color | Depth |
+|-------|-------|
+| `1280X800`, `1280X720`, `848X530`, `848X480`, `640X480` | `1280X800`, `1280X720`, `848X530`, `848X480`, `640X480`, `640X400`, `640X360`, `424X266`, `424X240`, `320X240`, `320X200`, `320X180` |
+
 ## `get_images` Source Names
 
 `get_images` supports two source names for use with `filter_source_names`:
