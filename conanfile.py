@@ -28,7 +28,7 @@ class orbbec(ConanFile):
     def requirements(self):
         # NOTE: conan.lock pins the resolved versions. After changing a requirement here, run
         # bin/update-lock.sh, which reads the viam-cpp-sdk version from the line below.
-        self.requires("viam-cpp-sdk/0.45.0")
+        self.requires("viam-cpp-sdk/0.46.0")
         self.requires("openssl/[>=3 <4]")
         self.requires("libcurl/[>=8.0.0 <9]")
         self.requires("libzip/1.11.1")
