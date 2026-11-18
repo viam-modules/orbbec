@@ -10,7 +10,9 @@
 #include <memory>
 #include <mutex>
 #include <ostream>
+#include <span>
 #include <sstream>
+#include <type_traits>
 #include <vector>
 
 static const double min_distance = 1e-6;
@@ -24,24 +26,17 @@ bool validPoint(OBColorPoint p) {
 }
 
 std::vector<unsigned char> RGBPointsToPCD(std::shared_ptr<ob::Frame> frame) {
-    int numPoints = frame->dataSize() / sizeof(OBColorPoint);
+    auto pointSpan = std::span{reinterpret_cast<OBColorPoint const*>(frame->data()), frame->dataSize() / sizeof(OBColorPoint)};
 
-    OBColorPoint* points = (OBColorPoint*)frame->data();
     std::vector<PointXYZRGB> pcdPoints;
 
-    for (int i = 0; i < numPoints; i++) {
-        OBColorPoint& p = points[i];
+    for (const OBColorPoint& p : pointSpan) {
         if (validPoint(p)) {
-            unsigned int r = (unsigned int)p.r;
-            unsigned int g = (unsigned int)p.g;
-            unsigned int b = (unsigned int)p.b;
+            auto r = static_cast<unsigned int>(p.r);
+            auto g = static_cast<unsigned int>(p.g);
+            auto b = static_cast<unsigned int>(p.b);
             unsigned int rgb = (r << 16) | (g << 8) | b;
-            PointXYZRGB pt;
-            pt.x = p.x;
-            pt.y = p.y;
-            pt.z = p.z;
-            pt.rgb = rgb;
-            pcdPoints.push_back(pt);
+            pcdPoints.push_back(PointXYZRGB{p.x, p.y, p.z, rgb});
         }
     }
 
@@ -59,32 +54,14 @@ std::vector<unsigned char> RGBPointsToPCD(std::shared_ptr<ob::Frame> frame) {
     std::string headerStr = header.str();
     std::vector<unsigned char> pcdBytes;
     pcdBytes.insert(pcdBytes.end(), headerStr.begin(), headerStr.end());
-    for (auto& p : pcdPoints) {
-        unsigned char* x = (unsigned char*)&p.x;
-        unsigned char* y = (unsigned char*)&p.y;
-        unsigned char* z = (unsigned char*)&p.z;
-        unsigned char* rgb = (unsigned char*)&p.rgb;
 
-        pcdBytes.push_back(x[0]);
-        pcdBytes.push_back(x[1]);
-        pcdBytes.push_back(x[2]);
-        pcdBytes.push_back(x[3]);
+    // PointXYZRGB is trivially copyable with no padding, and vector is contiguous, so the points can be copied as bytes.
+    static_assert(std::is_trivially_copyable_v<PointXYZRGB>);
+    static_assert(sizeof(PointXYZRGB) == (3 * sizeof(float)) + sizeof(unsigned int), "PointXYZRGB has unexpected padding");
 
-        pcdBytes.push_back(y[0]);
-        pcdBytes.push_back(y[1]);
-        pcdBytes.push_back(y[2]);
-        pcdBytes.push_back(y[3]);
-
-        pcdBytes.push_back(z[0]);
-        pcdBytes.push_back(z[1]);
-        pcdBytes.push_back(z[2]);
-        pcdBytes.push_back(z[3]);
-
-        pcdBytes.push_back(rgb[0]);
-        pcdBytes.push_back(rgb[1]);
-        pcdBytes.push_back(rgb[2]);
-        pcdBytes.push_back(rgb[3]);
-    }
+    auto pointBytes = std::as_bytes(std::span{pcdPoints});
+    auto byteSpan = std::span{reinterpret_cast<unsigned char const*>(pointBytes.data()), pointBytes.size()};
+    pcdBytes.insert(pcdBytes.end(), byteSpan.begin(), byteSpan.end());
 
     std::cout << "pointcloud size: " << pcdPoints.size() << "\n";
     return pcdBytes;
@@ -254,7 +231,7 @@ void startStream(std::string serialNumber, std::shared_ptr<ob::Device> dev) {
 
             std::vector<unsigned char> data = RGBPointsToPCD(pointCloudFilter->process(align->process(frameSet)));
             std::ofstream outfile("my.pcd", std::ios::out | std::ios::binary);
-            outfile.write((const char*)&data[0], data.size());
+            outfile.write(reinterpret_cast<const char*>(data.data()), data.size());
             outfile.close();
 
             std::lock_guard<std::mutex> lock(frame_set_by_serial_mu);

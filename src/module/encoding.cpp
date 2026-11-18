@@ -1,9 +1,15 @@
 #include "encoding.hpp"
+
+#include <algorithm>
+#include <cmath>
+#include <limits>
+#include <stdexcept>
+
 #include <viam/sdk/components/camera.hpp>
 namespace orbbec {
 namespace encoding {
 
-std::vector<std::uint8_t> encode_to_depth_raw(std::uint8_t const* const data,
+std::vector<std::uint8_t> encode_to_depth_raw(std::span<std::uint8_t const> depth_bytes,
                                               std::uint32_t const width,
                                               std::uint32_t const height,
                                               float valueScale) {
@@ -12,22 +18,33 @@ std::vector<std::uint8_t> encode_to_depth_raw(std::uint8_t const* const data,
     //   actual_distance_mm = raw_pixel * valueScale
     // The Viam depth map format stores uint16_t values in millimeters, so we apply the
     // scale and round to the nearest integer mm before encoding.
-    viam::sdk::Camera::depth_map m = xt::xarray<uint16_t>::from_shape({height, width});
-    const uint16_t* rawData = reinterpret_cast<const uint16_t*>(data);
-    for (size_t i = 0; i < height * width; i++) {
-        long mm = std::lround(rawData[i] * static_cast<double>(valueScale));
-        m[i] = static_cast<uint16_t>(std::clamp(mm, 0L, static_cast<long>(std::numeric_limits<uint16_t>::max())));
+    auto rawPixels = std::span{reinterpret_cast<const uint16_t*>(depth_bytes.data()), std::size_t{height} * width};
+    if (rawPixels.size_bytes() > depth_bytes.size_bytes()) {
+        throw std::invalid_argument("depth buffer is smaller than width * height pixels");
     }
+
+    viam::sdk::Camera::depth_map m = xt::xarray<uint16_t>::from_shape({height, width});
+    std::transform(rawPixels.begin(), rawPixels.end(), m.begin(), [valueScale](uint16_t raw) {
+        long mm = std::lround(raw * static_cast<double>(valueScale));
+        return static_cast<uint16_t>(std::clamp(mm, 0L, static_cast<long>(std::numeric_limits<uint16_t>::max())));
+    });
     return viam::sdk::Camera::encode_depth_map(m);
 }
 
-std::vector<std::uint8_t> encode_to_png(std::uint8_t const* const image_data, std::uint32_t const width, std::uint32_t const height) {
+std::vector<std::uint8_t> encode_to_png(std::span<std::uint8_t const> image_data, std::uint32_t const width, std::uint32_t const height) {
+    int const RGB_CHANNELS = 3;
+    const std::size_t rowBytes = std::size_t{width} * RGB_CHANNELS;
+    if (image_data.size_bytes() < rowBytes * height) {
+        throw std::invalid_argument("image buffer is smaller than width * height RGB pixels");
+    }
+
     std::vector<std::uint8_t> png_buffer;
 
     // PNG write callback function
     auto png_write_callback = [](png_structp png_ptr, png_bytep data, png_size_t length) {
         auto* buffer = static_cast<std::vector<std::uint8_t>*>(png_get_io_ptr(png_ptr));
-        buffer->insert(buffer->end(), data, data + length);
+        auto chunk = std::span{data, length};
+        buffer->insert(buffer->end(), chunk.begin(), chunk.end());
     };
 
     // Create PNG write struct
@@ -62,10 +79,10 @@ std::vector<std::uint8_t> encode_to_png(std::uint8_t const* const image_data, st
     png_write_info(png_ptr, info_ptr);
 
     // Write image data row by row
-    int const RGB_CHANNELS = 3;
     std::vector<png_bytep> row_pointers(height);
-    for (int y = 0; y < height; y++) {
-        row_pointers[y] = const_cast<png_bytep>(&image_data[y * width * RGB_CHANNELS]);
+    for (std::size_t y = 0; y < height; y++) {
+        // libpng takes non-const rows but does not modify them when writing.
+        row_pointers[y] = const_cast<png_bytep>(image_data.subspan(y * rowBytes, rowBytes).data());
     }
 
     png_write_image(png_ptr, row_pointers.data());
