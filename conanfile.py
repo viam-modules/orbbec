@@ -35,10 +35,7 @@ class orbbec(ConanFile):
         self.requires("libpng/1.6.50")
 
     def validate(self):
-        check_min_cppstd(self, 17)
-
-    def validate(self):
-        check_min_cppstd(self, 17)
+        check_min_cppstd(self, 20)
 
     def generate(self):
         tc = CMakeToolchain(self)

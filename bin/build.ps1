@@ -24,7 +24,7 @@ conan install . `
       --build=missing `
       -o:a "viam-cpp-sdk/*:shared=False" `
       -s:a build_type=Release `
-      -s:a compiler.cppstd=17
+      -s:a compiler.cppstd=20
 
 conan build . `
       --output-folder=build-conan `
@@ -32,4 +32,4 @@ conan build . `
        -o:a "viam-cpp-sdk/*:shared=False" `
       -s:a build_type=Release `
       -s:a "&:build_type=RelWithDebInfo" `
-      -s:a compiler.cppstd=17
+      -s:a compiler.cppstd=20

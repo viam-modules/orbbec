@@ -25,8 +25,8 @@ endif()
 add_executable(orbbec-cli src/cli/main.cpp)
 add_executable(orbbec-module src/module/main.cpp src/module/orbbec.cpp src/module/discovery.cpp src/module/encoding.cpp src/module/orbbec_firmware.cpp src/module/orbbec_windows_registry.cpp)
 
-target_compile_features(orbbec-cli PRIVATE cxx_std_17)
-target_compile_features(orbbec-module PRIVATE cxx_std_17)
+target_compile_features(orbbec-cli PRIVATE cxx_std_20)
+target_compile_features(orbbec-module PRIVATE cxx_std_20)
 
 if (APPLE)
     set(CMAKE_OSX_DEPLOYMENT_TARGET "14.5")

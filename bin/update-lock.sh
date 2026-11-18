@@ -30,7 +30,7 @@ os=Linux
 compiler=gcc
 compiler.version=11
 compiler.libcxx=libstdc++11
-compiler.cppstd=17
+compiler.cppstd=20
 build_type=Release
 EOF
 cat > "${tmp}/windows" <<'EOF'
@@ -41,7 +41,7 @@ compiler=msvc
 compiler.version=194
 compiler.runtime=dynamic
 compiler.runtime_type=Release
-compiler.cppstd=17
+compiler.cppstd=20
 build_type=Release
 EOF
 
